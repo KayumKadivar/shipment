@@ -542,7 +542,7 @@ function CustomerLocationPage({
         aria-label='Customer location views'
         items={[
           { key: "detail", label: "Location Detail" },
-          { key: "group", label: "Location Group" },
+          // { key: "group", label: "Location Group" },
         ]}
         onChange={(key) => setActiveView(key as LocationView)}
       />

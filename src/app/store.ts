@@ -3,6 +3,7 @@ import appReducer from "../store/appSlice.ts";
 import productReducer from "../store/productSlice.ts";
 import accessorialsReducer from "../store/accessorialsSlice.ts";
 import customerRateReducer from "../store/customerRateSlice.ts";
+import customerLocationReducer from "../store/customerLocationSlice.ts";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     product: productReducer,
     accessorials: accessorialsReducer,
     customerRate: customerRateReducer,
+    customerLocation: customerLocationReducer,
   },
 });
 

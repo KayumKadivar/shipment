@@ -530,7 +530,7 @@ function CustomerProductPage({
         aria-label='Customer product views'
         items={[
           { key: "detail", label: "Product Details" },
-          { key: "group", label: "Product Group" },
+          // { key: "group", label: "Product Group" },
         ]}
         onChange={(key) => setActiveView(key as ProductView)}
       />
