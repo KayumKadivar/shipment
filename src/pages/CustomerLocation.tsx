@@ -33,8 +33,10 @@ import {
   type SetStateAction,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import type { AppDispatch } from "../app/store";
+import { getAllCustomerLocations } from "../store/customerLocationSlice";
 import {
-  cloneCustomerLocationSeed,
   type CustomerLocation,
   type LocationType,
 } from "./customerLocationData";
@@ -144,6 +146,7 @@ function CustomerLocationPage({
   setLocations,
 }: CustomerLocationPageProps) {
   const navigate = useNavigate();
+  const dispatch = useDispatch<AppDispatch>();
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -290,12 +293,12 @@ function CustomerLocationPage({
   };
 
   const refreshLocations = () => {
-    setLocations(cloneCustomerLocationSeed());
+    dispatch(getAllCustomerLocations(1));
     setSelectedKeys(new Set());
     setQuery("");
     setCurrentPage(1);
     setPageSize(10);
-    messageApi.success("Locations refreshed");
+    messageApi.success("Locations refreshing...");
   };
 
   const downloadCsv = () => {

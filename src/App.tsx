@@ -6,7 +6,6 @@ import { useAppSelector } from "./app/hooks.ts";
 import Navbar from "./components/Navbar.tsx";
 import Sidebar from "./components/Sidebar.tsx";
 import {
-  cloneCustomerLocationSeed,
   type CustomerLocation,
 } from "./pages/customerLocationData.ts";
 import {
@@ -53,7 +52,7 @@ function App() {
   const isAuthenticated = useAppSelector((state) => state.app.isAuthenticated);
   const [customerLocations, setCustomerLocations] = useState<
     CustomerLocation[]
-  >(cloneCustomerLocationSeed);
+  >([]);
   const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>(
     cloneCustomerProductSeed,
   );
