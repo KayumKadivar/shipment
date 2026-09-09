@@ -34,27 +34,23 @@ import {
   type SetStateAction,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import type { AppDispatch } from "../app/store";
 import {
-  cloneCustomerProductSeed,
-  type CustomerProduct,
-} from "./customerProductData";
-
-type ProductFormValues = Omit<CustomerProduct, "key">;
-type ProductView = "detail" | "group";
+  getCustomerProductByID,
+  getCustomerProducts,
+  saveCustomerProduct,
+} from "../store/customerProductSlice";
+import type {
+  CustomerProduct,
+  ProductFormValues,
+  ProductGroupSummary,
+  ProductView,
+} from "../types/customerProduct.types";
 
 interface CustomerProductPageProps {
   products: CustomerProduct[];
   setProducts: Dispatch<SetStateAction<CustomerProduct[]>>;
-}
-
-interface ProductGroupSummary {
-  key: string;
-  productGroup: string;
-  total: number;
-  active: number;
-  inactive: number;
-  hazmat: number;
-  nonHazmat: number;
 }
 
 const CSV_COLUMNS: Array<{
@@ -141,6 +137,7 @@ function CustomerProductPage({
   setProducts,
 }: CustomerProductPageProps) {
   const navigate = useNavigate();
+  const dispatch = useDispatch<AppDispatch>();
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -232,10 +229,28 @@ function CustomerProductPage({
     navigate("/customer-products/add");
   };
 
-  const openEditForm = (product: CustomerProduct) => {
-    setEditingProduct(product);
-    form.setFieldsValue(product);
-    setIsFormOpen(true);
+  const openEditForm = async (product: CustomerProduct) => {
+    try {
+      const prodId = product.productID || product.key;
+
+      messageApi.loading({ content: "Fetching product details...", key: "fetchProd" });
+
+      const response = await dispatch(
+        getCustomerProductByID({ productID: prodId })
+      ).unwrap();
+
+      messageApi.success({ content: "Details loaded", key: "fetchProd", duration: 2 });
+
+      setEditingProduct(response);
+      form.setFieldsValue(response);
+      setIsFormOpen(true);
+    } catch (error) {
+      messageApi.error({
+        content: "Failed to fetch product details from API.",
+        key: "fetchProd",
+        duration: 3,
+      });
+    }
   };
 
   const closeForm = () => {
@@ -255,6 +270,13 @@ function CustomerProductPage({
     );
     messageApi.success("Product updated");
     closeForm();
+
+    dispatch(
+      saveCustomerProduct({
+        ...values,
+        productID: editingProduct.productID,
+      })
+    );
   };
 
   const confirmDelete = () => {
@@ -275,12 +297,12 @@ function CustomerProductPage({
   };
 
   const refreshProducts = () => {
-    setProducts(cloneCustomerProductSeed());
+    dispatch(getCustomerProducts(1));
     setSelectedKeys(new Set());
     setQuery("");
     setCurrentPage(1);
     setPageSize(10);
-    messageApi.success("Products refreshed");
+    messageApi.success("Products refreshing...");
   };
 
   const downloadCsv = () => {

@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import type { LocationAccessorial } from "../pages/customerLocationData";
+import type { LocationAccessorial } from "../types/customerLocation.types";
 
 interface AccessorialsState {
   data: LocationAccessorial[];

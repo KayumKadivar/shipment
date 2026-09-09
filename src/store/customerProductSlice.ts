@@ -2,12 +2,11 @@ import {
   createAsyncThunk,
   createSlice,
 } from "@reduxjs/toolkit";
-
 import type { PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 
 import { API_BASE_URL } from "../config/apiConfig";
-import type { CustomerProduct } from "../pages/customerProductData";
+import type { CustomerProduct } from "../types/customerProduct.types";
 
 interface CustomerProductState {
   products: CustomerProduct[];
@@ -24,40 +23,70 @@ const initialState: CustomerProductState = {
 };
 
 // ============================================================
-// Save Product (POST to API)
+// Save Product (POST /api/Product/AddProduct)
 // ============================================================
 export const saveCustomerProduct = createAsyncThunk(
-  "customerProducts/saveProduct",
-  async (product: Omit<CustomerProduct, "key">, { rejectWithValue }) => {
+  "customerProduct/saveCustomerProduct",
+  async (
+    payloadData: Omit<CustomerProduct, "key"> & { clientID?: string | number },
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await fetch("http://localhost:8000/api/products", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(product),
-      });
+      const payload = {
+        clientID: payloadData.clientID || 1,
+        description: payloadData.description || "",
+        isActive: payloadData.isActive ?? true,
+        nmfc: payloadData.nmfc || "",
+        productClass: payloadData.productClass || "",
+        commodity: payloadData.commodity || "",
+        hazmat: payloadData.isHazmat ?? false,
+        hazmatContact: payloadData.hazmatContact || "",
+        length: payloadData.length || 0,
+        height: payloadData.height || 0,
+        weight: payloadData.weight || 0,
+        width: payloadData.width || 0,
+        productGroup: payloadData.productGroup || "STANDARD",
+        notes: payloadData.notes || "",
+        isApproved: payloadData.isApproved ?? true,
+      };
 
-      if (!response.ok) {
-        throw new Error("Failed to save product on server");
+      const response = await axios.post(
+        `${API_BASE_URL}/Product/AddProduct`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            accept: "text/plain",
+          },
+        }
+      );
+
+      console.log("AddProduct Response:", response.data);
+
+      if (!response.data?.isSuccess) {
+        return rejectWithValue(
+          response.data?.message || "Failed to save product."
+        );
       }
 
-      const data = await response.json();
-      return data;
+      return response.data?.data;
     } catch (error: any) {
-      return rejectWithValue(error.message || "Something went wrong");
+      console.error("AddProduct API Error:", error);
+      return rejectWithValue(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to save product."
+      );
     }
   }
 );
 
-
-
 // ============================================================
-// Get All Products
+// Get All Products (GET /api/Product/GetProducts)
 // ============================================================
 export const getCustomerProducts = createAsyncThunk<
   CustomerProduct[],
-  number,
+  string | number | undefined,
   { rejectValue: string }
 >(
   "customerProduct/getCustomerProducts",
@@ -87,63 +116,100 @@ export const getCustomerProducts = createAsyncThunk<
       const products: CustomerProduct[] = (
         response.data?.data || []
       ).map((product: any) => ({
-        key: `product-${product.productID}`,
-
+        key: String(product.productID || Date.now()),
+        productID: product.productID,
         description: product.description ?? "",
-
         isActive: product.isActive ?? false,
-
         nmfc: product.nmfc ?? "",
-
         productClass: product.productClass ?? "",
-
         commodity: product.commodity ?? "",
-
-        isHazmat: product.hazmat ?? false,
-
-        hazmatContact:
-          product.hazmatContact ?? "",
-
+        isHazmat: product.hazmat ?? product.isHazmat ?? false,
+        hazmatContact: product.hazmatContact ?? "",
         length: product.length ?? 0,
-
         height: product.height ?? 0,
-
         weight: product.weight ?? 0,
-
         width: product.width ?? 0,
-
-        productGroup:
-          product.productGroup ?? "",
-
+        productGroup: product.productGroup ?? "STANDARD",
         notes: product.notes ?? "",
-
-        isApproved:
-          product.isApproved ?? false,
+        isApproved: product.isApproved ?? false,
       }));
 
       return products;
     } catch (error: any) {
-      console.error(
-        "GetProducts API Error:",
-        error
-      );
-
-      if (error?.response) {
-        console.error(
-          "API Status:",
-          error.response.status
-        );
-
-        console.error(
-          "API Response:",
-          error.response.data
-        );
-      }
-
+      console.error("GetProducts API Error:", error);
       return rejectWithValue(
         error?.response?.data?.message ||
           error?.message ||
           "Failed to retrieve products."
+      );
+    }
+  }
+);
+
+// ============================================================
+// Get Product By ID (GET /api/Product/GetProductByID)
+// ============================================================
+export const getCustomerProductByID = createAsyncThunk<
+  CustomerProduct,
+  { productID: string | number },
+  { rejectValue: string }
+>(
+  "customerProduct/getCustomerProductByID",
+  async ({ productID }, { rejectWithValue }) => {
+    try {
+      console.log("Getting product by ID:", { ProductID: productID });
+
+      const response = await axios.get(
+        `${API_BASE_URL}/Product/GetProductByID`,
+        {
+          params: {
+            ProductID: productID,
+          },
+          headers: {
+            accept: "text/plain",
+          },
+        }
+      );
+
+      console.log("GetProductByID Response:", response.data);
+
+      if (!response.data?.isSuccess) {
+        return rejectWithValue(
+          response.data?.message || "Product could not be retrieved."
+        );
+      }
+
+      const product = response.data?.data;
+      if (!product) {
+        return rejectWithValue("Product not found.");
+      }
+
+      const mappedProduct: CustomerProduct = {
+        key: String(product.productID || productID),
+        productID: product.productID,
+        description: product.description ?? "",
+        isActive: product.isActive ?? false,
+        nmfc: product.nmfc ?? "",
+        productClass: product.productClass ?? "",
+        commodity: product.commodity ?? "",
+        isHazmat: product.hazmat ?? product.isHazmat ?? false,
+        hazmatContact: product.hazmatContact ?? "",
+        length: product.length ?? 0,
+        height: product.height ?? 0,
+        weight: product.weight ?? 0,
+        width: product.width ?? 0,
+        productGroup: product.productGroup ?? "STANDARD",
+        notes: product.notes ?? "",
+        isApproved: product.isApproved ?? false,
+      };
+
+      return mappedProduct;
+    } catch (error: any) {
+      console.error("GetProductByID API Error:", error);
+      return rejectWithValue(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to retrieve product details."
       );
     }
   }
@@ -202,55 +268,23 @@ export const searchCustomerProducts = createAsyncThunk<
       const products: CustomerProduct[] = (
         response.data?.data || []
       ).map((product: any) => ({
-        key: `product-${product.productID}`,
-
-        description:
-          product.description ?? "",
-
-        isActive:
-          product.isActive ?? false,
-
-        nmfc:
-          product.nmfc ?? "",
-
-        productClass:
-          product.productClass ?? "",
-
-        commodity:
-          product.commodity ?? "",
-
-        isHazmat:
-          product.hazmat ?? false,
-
-        hazmatContact:
-          product.hazmatContact ?? "",
-
-        length:
-          product.length ?? 0,
-
-        height:
-          product.height ?? 0,
-
-        weight:
-          product.weight ?? 0,
-
-        width:
-          product.width ?? 0,
-
-        productGroup:
-          product.productGroup ?? "",
-
-        notes:
-          product.notes ?? "",
-
-        isApproved:
-          product.isApproved ?? false,
+        key: String(product.productID || Date.now()),
+        productID: product.productID,
+        description: product.description ?? "",
+        isActive: product.isActive ?? false,
+        nmfc: product.nmfc ?? "",
+        productClass: product.productClass ?? "",
+        commodity: product.commodity ?? "",
+        isHazmat: product.hazmat ?? product.isHazmat ?? false,
+        hazmatContact: product.hazmatContact ?? "",
+        length: product.length ?? 0,
+        height: product.height ?? 0,
+        weight: product.weight ?? 0,
+        width: product.width ?? 0,
+        productGroup: product.productGroup ?? "STANDARD",
+        notes: product.notes ?? "",
+        isApproved: product.isApproved ?? false,
       }));
-
-      console.log(
-        "Mapped Search Products:",
-        products
-      );
 
       return products;
     } catch (error: any) {
@@ -258,19 +292,6 @@ export const searchCustomerProducts = createAsyncThunk<
         "GetProductByDesc API Error:",
         error
       );
-
-      if (error?.response) {
-        console.error(
-          "API Status:",
-          error.response.status
-        );
-
-        console.error(
-          "API Response:",
-          error.response.data
-        );
-      }
-
       return rejectWithValue(
         error?.response?.data?.message ||
           error?.message ||
@@ -285,19 +306,15 @@ export const searchCustomerProducts = createAsyncThunk<
 // ============================================================
 const customerProductSlice = createSlice({
   name: "customerProduct",
-
   initialState,
-
   reducers: {
     clearProducts: (state) => {
       state.products = [];
       state.error = null;
     },
-
     clearProductError: (state) => {
       state.error = null;
     },
-
     setProducts: (
       state,
       action: PayloadAction<CustomerProduct[]>
@@ -305,93 +322,99 @@ const customerProductSlice = createSlice({
       state.products = action.payload;
     },
   },
-
   extraReducers: (builder) => {
     // ========================================================
     // GET ALL PRODUCTS
     // ========================================================
-    builder.addCase(
-      getCustomerProducts.pending,
-      (state) => {
-        state.loading = true;
-        state.error = null;
+    builder.addCase(getCustomerProducts.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(getCustomerProducts.fulfilled, (state, action) => {
+      state.loading = false;
+      state.products = action.payload;
+      state.error = null;
+    });
+    builder.addCase(getCustomerProducts.rejected, (state, action) => {
+      state.loading = false;
+      state.error =
+        action.payload ||
+        action.error.message ||
+        "Failed to retrieve products.";
+    });
+
+    // ========================================================
+    // GET PRODUCT BY ID
+    // ========================================================
+    builder.addCase(getCustomerProductByID.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(getCustomerProductByID.fulfilled, (state, action) => {
+      state.loading = false;
+      const index = state.products.findIndex(
+        (p) => p.key === action.payload.key
+      );
+      if (index !== -1) {
+        state.products[index] = action.payload;
+      } else {
+        state.products.push(action.payload);
       }
-    );
+      state.error = null;
+    });
+    builder.addCase(getCustomerProductByID.rejected, (state, action) => {
+      state.loading = false;
+      state.error =
+        action.payload ||
+        action.error.message ||
+        "Failed to retrieve product details.";
+    });
 
-    builder.addCase(
-      getCustomerProducts.fulfilled,
-      (state, action) => {
-        state.loading = false;
-
-        // IMPORTANT
-        // Replace existing table data
-        state.products = action.payload;
-
-        state.error = null;
-      }
-    );
-
-    builder.addCase(
-      getCustomerProducts.rejected,
-      (state, action) => {
-        state.loading = false;
-
-        state.error =
-          action.payload ||
-          action.error.message ||
-          "Failed to retrieve products.";
-      }
-    );
+    // ========================================================
+    // SAVE PRODUCT
+    // ========================================================
+    builder.addCase(saveCustomerProduct.pending, (state) => {
+      state.saving = true;
+      state.error = null;
+    });
+    builder.addCase(saveCustomerProduct.fulfilled, (state) => {
+      state.saving = false;
+      state.error = null;
+    });
+    builder.addCase(saveCustomerProduct.rejected, (state, action) => {
+      state.saving = false;
+      state.error =
+        (action.payload as string) ||
+        action.error.message ||
+        "Failed to save product.";
+    });
 
     // ========================================================
     // SEARCH PRODUCTS
     // ========================================================
-    builder.addCase(
-      searchCustomerProducts.pending,
-      (state) => {
-        state.loading = true;
-        state.error = null;
-      }
-    );
-
-    builder.addCase(
-      searchCustomerProducts.fulfilled,
-      (state, action) => {
-        state.loading = false;
-
-        // IMPORTANT
-        // This replaces the old 3 products
-        // with search API results
-        state.products = action.payload;
-
-        state.error = null;
-      }
-    );
-
-    builder.addCase(
-      searchCustomerProducts.rejected,
-      (state, action) => {
-        state.loading = false;
-
-        state.error =
-          action.payload ||
-          action.error.message ||
-          "Failed to search products.";
-      }
-    );
+    builder.addCase(searchCustomerProducts.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(searchCustomerProducts.fulfilled, (state, action) => {
+      state.loading = false;
+      state.products = action.payload;
+      state.error = null;
+    });
+    builder.addCase(searchCustomerProducts.rejected, (state, action) => {
+      state.loading = false;
+      state.error =
+        action.payload ||
+        action.error.message ||
+        "Failed to search products.";
+    });
   },
 });
 
-// ============================================================
-// Actions
-// ============================================================
 export const {
   clearProducts,
   clearProductError,
   setProducts,
 } = customerProductSlice.actions;
 
-// ============================================================
-// Reducer
-// ============================================================
 export default customerProductSlice.reducer;

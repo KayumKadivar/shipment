@@ -12,7 +12,7 @@ import type {
   CustomerLocation,
   LocationAccessorial,
   LocationType,
-} from "./customerLocationData";
+} from "../types/customerLocation.types";
 
 type LocationFormValues = Omit<CustomerLocation, "key">;
 

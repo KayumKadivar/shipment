@@ -7,7 +7,7 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 
 import { API_BASE_URL } from "../config/apiConfig";
-import type { CustomerLocation, LocationType } from "../pages/customerLocationData";
+import type { CustomerLocation, LocationType } from "../types/customerLocation.types";
 
 interface CustomerLocationState {
   locations: CustomerLocation[];
@@ -24,11 +24,84 @@ const initialState: CustomerLocationState = {
 };
 
 // ============================================================
+// Add Location (POST API)
+// ============================================================
+export const saveCustomerLocation = createAsyncThunk(
+  "customerLocation/saveCustomerLocation",
+  async (
+    payloadData: Omit<CustomerLocation, "key"> & { clientID?: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const payload = {
+        clientID: payloadData.clientID || "1",
+        shortName: payloadData.shortName || "",
+        locationName: payloadData.locationName || "",
+        address1: payloadData.address1 || "",
+        address2: payloadData.address2 || "",
+        country: payloadData.country || "",
+        postal: payloadData.postal || "",
+        state: payloadData.state || "",
+        city: payloadData.city || "",
+        port: payloadData.port || "",
+        contactName: payloadData.contactName || "",
+        phone: payloadData.phone || "",
+        email: payloadData.email || "",
+        faxNumber: payloadData.faxNumber || "",
+        locationType: payloadData.locationType || "",
+        group: payloadData.group || "",
+        activateDate: payloadData.activateDate ? new Date(payloadData.activateDate).toISOString() : new Date().toISOString(),
+        deactivateDate: payloadData.deactivateDate ? new Date(payloadData.deactivateDate).toISOString() : new Date().toISOString(),
+        isActive: payloadData.isActive ?? true,
+        locationRef: payloadData.locationRef || "",
+        inboundAccount: payloadData.inboundAccount || "",
+        outboundAccount: payloadData.outboundAccount || "",
+        notes: payloadData.notes || "",
+        openTime: payloadData.openTime || "",
+        closeTime: payloadData.closeTime || "",
+        accessorialsList: (payloadData.accessorials || []).map((acc, index) => ({
+          accessorialsID: index,
+          accessorialsName: acc
+        }))
+      };
+
+      const response = await axios.post(
+        `${API_BASE_URL}/CustomerLocation/AddLocation`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            accept: "text/plain",
+          },
+        }
+      );
+
+      console.log("AddLocation Response:", response.data);
+
+      if (!response.data?.isSuccess) {
+        return rejectWithValue(
+          response.data?.message || "Failed to add location."
+        );
+      }
+
+      return response.data?.data;
+    } catch (error: any) {
+      console.error("AddLocation API Error:", error);
+      return rejectWithValue(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to save location."
+      );
+    }
+  }
+);
+
+// ============================================================
 // Get All Locations
 // ============================================================
 export const getAllCustomerLocations = createAsyncThunk<
   CustomerLocation[],
-  number,
+  string | number | undefined,
   { rejectValue: string }
 >(
   "customerLocation/getAllCustomerLocations",
@@ -58,7 +131,8 @@ export const getAllCustomerLocations = createAsyncThunk<
       const locations: CustomerLocation[] = (
         response.data?.data || []
       ).map((loc: any) => ({
-        key: `loc-${loc.locationID}`,
+        key: String(loc.locationID || `temp-${Date.now()}`),
+        locationID: loc.locationID,
 
         locationName: loc.locationName ?? "",
 
@@ -170,7 +244,8 @@ export const getCustomerLocationByID = createAsyncThunk<
       }
 
       const location: CustomerLocation = {
-        key: `loc-${loc.locationID}`,
+        key: String(loc.locationID || `temp-${Date.now()}`),
+        locationID: loc.locationID,
 
         locationName: loc.locationName ?? "",
 

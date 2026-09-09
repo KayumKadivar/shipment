@@ -1,9 +1,7 @@
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, Form, Input, InputNumber, Select, Switch } from "antd";
 import { useNavigate } from "react-router-dom";
-import type { CustomerProduct } from "./customerProductData";
-
-type ProductFormValues = Omit<CustomerProduct, "key">;
+import type { ProductFormValues } from "../types/customerProduct.types";
 
 interface CustomerProductAddProps {
   onCreate: (values: ProductFormValues) => void;

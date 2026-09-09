@@ -5,21 +5,16 @@ import "./App.css";
 import { useAppSelector } from "./app/hooks.ts";
 import Navbar from "./components/Navbar.tsx";
 import Sidebar from "./components/Sidebar.tsx";
-import {
-  type CustomerLocation,
-} from "./pages/customerLocationData.ts";
-import {
-  cloneCustomerProductSeed,
-  type CustomerProduct,
-} from "./pages/customerProductData.ts";
+import type { CustomerLocation } from "./types/customerLocation.types.ts";
+import type { CustomerProduct } from "./types/customerProduct.types.ts";
 import Login from "./pages/Login.tsx";
 import AppRouter from "./router/index.tsx";
 import { login, logout } from "./store/appSlice.ts";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "./app/store";
 import { fetchAccessorials } from "./store/accessorialsSlice";
-import { saveCustomerProduct } from "./store/customerProductSlice.ts";
-import { getAllCustomerLocations } from "./store/customerLocationSlice.ts";
+import { getCustomerProducts, saveCustomerProduct } from "./store/customerProductSlice.ts";
+import { getAllCustomerLocations, saveCustomerLocation } from "./store/customerLocationSlice.ts";
 
 const { Content } = Layout;
 
@@ -53,14 +48,17 @@ function App() {
   const [customerLocations, setCustomerLocations] = useState<
     CustomerLocation[]
   >([]);
-  const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>(
-    cloneCustomerProductSeed,
-  );
+  const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>([]);
   const [messageApi, messageContext] = message.useMessage();
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
 
-  const reduxCustomerLocations = useAppSelector((state) => state.customerLocation.locations);
+  const reduxCustomerLocations = useAppSelector(
+    (state) => state.customerLocation?.locations ?? []
+  );
+  const reduxCustomerProducts = useAppSelector(
+    (state) => state.customerProduct?.products ?? []
+  );
 
   useEffect(() => {
     if (reduxCustomerLocations.length > 0) {
@@ -69,10 +67,16 @@ function App() {
   }, [reduxCustomerLocations]);
 
   useEffect(() => {
+    if (reduxCustomerProducts.length > 0) {
+      setCustomerProducts(reduxCustomerProducts);
+    }
+  }, [reduxCustomerProducts]);
+
+  useEffect(() => {
     if (isAuthenticated) {
       dispatch(fetchAccessorials());
       dispatch(getAllCustomerLocations("qe"));
-      // dispatch(getAllCustomerLocations(user.clientId));).
+      dispatch(getCustomerProducts(1));
     }
   }, [isAuthenticated, dispatch]);
 
@@ -87,38 +91,36 @@ function App() {
     navigate("/shipments", { replace: true });
   };
 
-  const handleCreateLocation = (values: Omit<CustomerLocation, "key">) => {
-    setCustomerLocations((current) => [
-      { ...values, key: `loc-${Date.now()}` },
-      ...current,
-    ]);
-    navigate("/customer-location");
-    messageApi.success("Location added");
+  const handleCreateLocation = async (values: Omit<CustomerLocation, "key">) => {
+    try {
+      const apiResult = await dispatch(saveCustomerLocation(values)).unwrap();
+      const newId = apiResult?.locationID || Date.now();
+
+      setCustomerLocations((current) => [
+        { ...values, key: String(newId), locationID: newId },
+        ...current,
+      ]);
+      navigate("/customer-location");
+      messageApi.success("Location added successfully");
+    } catch (error) {
+      messageApi.error(`API Error: ${error}`);
+    }
   };
 
   const handleCreateProduct = async (values: Omit<CustomerProduct, "key">) => {
     try {
-      // Hit localhost API via Redux Toolkit
-      await dispatch(saveCustomerProduct(values)).unwrap();
+      const apiResult = await dispatch(saveCustomerProduct(values)).unwrap();
+      const newId = apiResult?.productID || Date.now();
       
-      // Update local state and UI
       setCustomerProducts((current) => [
-        { ...values, key: `product-${Date.now()}` },
+        { ...values, key: String(newId), productID: newId },
         ...current,
       ]);
+      dispatch(getCustomerProducts(1));
       navigate("/customer-products");
       messageApi.success("Product saved and added successfully");
     } catch (error) {
-      // Even if API fails, update UI for demo purposes or show error.
-      // Assuming we want to show error but still add it locally if it's a demo
       messageApi.error(`API Error: ${error}`);
-      
-      // Remove or keep the local fallback depending on your actual need:
-      setCustomerProducts((current) => [
-        { ...values, key: `product-${Date.now()}` },
-        ...current,
-      ]);
-      navigate("/customer-products");
     }
   };
 

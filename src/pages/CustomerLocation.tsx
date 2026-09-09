@@ -35,11 +35,11 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../app/store";
-import { getAllCustomerLocations } from "../store/customerLocationSlice";
-import {
-  type CustomerLocation,
-  type LocationType,
-} from "./customerLocationData";
+import { getAllCustomerLocations, getCustomerLocationByID } from "../store/customerLocationSlice";
+import type {
+  CustomerLocation,
+  LocationType,
+} from "../types/customerLocation.types";
 
 type LocationFormValues = Omit<CustomerLocation, "key">;
 type LocationView = "detail" | "group";
@@ -248,10 +248,22 @@ function CustomerLocationPage({
     navigate("/customer-location/add");
   };
 
-  const openEditForm = (location: CustomerLocation) => {
-    setEditingLocation(location);
-    form.setFieldsValue(location);
-    setIsFormOpen(true);
+  const openEditForm = async (location: CustomerLocation) => {
+    try {
+      const locId = location.locationID || location.key;
+      
+      messageApi.loading({ content: 'Fetching location details...', key: 'fetchLoc' });
+      
+      const response = await dispatch(getCustomerLocationByID({ locationID: locId })).unwrap();
+      
+      messageApi.success({ content: 'Details loaded', key: 'fetchLoc', duration: 2 });
+      
+      setEditingLocation(response);
+      form.setFieldsValue(response);
+      setIsFormOpen(true);
+    } catch (error) {
+      messageApi.error({ content: 'Failed to fetch location details from API.', key: 'fetchLoc', duration: 3 });
+    }
   };
 
   const closeForm = () => {
