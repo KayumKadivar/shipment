@@ -35,9 +35,10 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
+import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import {
-  getCustomerProductByID,
+  getCustomerProductByDesc,
   getCustomerProducts,
   saveCustomerProduct,
 } from "../store/customerProductSlice";
@@ -138,6 +139,9 @@ function CustomerProductPage({
 }: CustomerProductPageProps) {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
+  const { loading } = useAppSelector(
+    (state) => state.customerProduct
+  );
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -231,12 +235,13 @@ function CustomerProductPage({
 
   const openEditForm = async (product: CustomerProduct) => {
     try {
-      const prodId = product.productID || product.key;
-
       messageApi.loading({ content: "Fetching product details...", key: "fetchProd" });
 
       const response = await dispatch(
-        getCustomerProductByID({ productID: prodId })
+        getCustomerProductByDesc({
+          clientID: "1",
+          description: product.description,
+        })
       ).unwrap();
 
       messageApi.success({ content: "Details loaded", key: "fetchProd", duration: 2 });
@@ -245,11 +250,9 @@ function CustomerProductPage({
       form.setFieldsValue(response);
       setIsFormOpen(true);
     } catch (error) {
-      messageApi.error({
-        content: "Failed to fetch product details from API.",
-        key: "fetchProd",
-        duration: 3,
-      });
+      setEditingProduct(product);
+      form.setFieldsValue(product);
+      setIsFormOpen(true);
     }
   };
 
@@ -302,7 +305,7 @@ function CustomerProductPage({
     setQuery("");
     setCurrentPage(1);
     setPageSize(10);
-    messageApi.success("Products refreshing...");
+    messageApi.success("Products refreshed");
   };
 
   const downloadCsv = () => {
@@ -621,6 +624,7 @@ function CustomerProductPage({
         {activeView === "detail" ? (
           <>
             <Table<CustomerProduct>
+              loading={loading}
               columns={columns}
               dataSource={visibleProducts}
               pagination={false}

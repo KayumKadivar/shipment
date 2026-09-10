@@ -33,7 +33,7 @@ export const saveCustomerProduct = createAsyncThunk(
   ) => {
     try {
       const payload = {
-        clientID: payloadData.clientID || 1,
+        clientID: String(payloadData.clientID || "1"),
         description: payloadData.description || "",
         isActive: payloadData.isActive ?? true,
         nmfc: payloadData.nmfc || "",
@@ -96,10 +96,11 @@ export const getCustomerProducts = createAsyncThunk<
         `${API_BASE_URL}/Product/GetProducts`,
         {
           params: {
-            ClientID: clientID || 1,
+            ClientID: String(clientID || "1"),
           },
           headers: {
-            accept: "text/plain",
+            "Content-Type": "application/json",
+            accept: "application/json, text/plain, */*",
           },
         }
       );
@@ -147,23 +148,27 @@ export const getCustomerProducts = createAsyncThunk<
 );
 
 // ============================================================
-// Get Product By ID (GET /api/Product/GetProductByID)
+// Get Product By Description (GET /api/Product/GetProductByDesc)
 // ============================================================
-export const getCustomerProductByID = createAsyncThunk<
+export const getCustomerProductByDesc = createAsyncThunk<
   CustomerProduct,
-  { productID: string | number },
+  { clientID?: string | number; description: string },
   { rejectValue: string }
 >(
-  "customerProduct/getCustomerProductByID",
-  async ({ productID }, { rejectWithValue }) => {
+  "customerProduct/getCustomerProductByDesc",
+  async ({ clientID, description }, { rejectWithValue }) => {
     try {
-      console.log("Getting product by ID:", { ProductID: productID });
+      console.log("Getting product by description:", {
+        ClientID: clientID,
+        Description: description,
+      });
 
       const response = await axios.get(
-        `${API_BASE_URL}/Product/GetProductByID`,
+        `${API_BASE_URL}/Product/GetProductByDesc`,
         {
           params: {
-            ProductID: productID,
+            ClientID: clientID || "1",
+            Description: description,
           },
           headers: {
             accept: "text/plain",
@@ -171,7 +176,7 @@ export const getCustomerProductByID = createAsyncThunk<
         }
       );
 
-      console.log("GetProductByID Response:", response.data);
+      console.log("GetProductByDesc Response:", response.data);
 
       if (!response.data?.isSuccess) {
         return rejectWithValue(
@@ -179,33 +184,33 @@ export const getCustomerProductByID = createAsyncThunk<
         );
       }
 
-      const product = response.data?.data;
-      if (!product) {
-        return rejectWithValue("Product not found.");
+      const prod = response.data?.data;
+      if (!prod) {
+        return rejectWithValue("Product data not found.");
       }
 
       const mappedProduct: CustomerProduct = {
-        key: String(product.productID || productID),
-        productID: product.productID,
-        description: product.description ?? "",
-        isActive: product.isActive ?? false,
-        nmfc: product.nmfc ?? "",
-        productClass: product.productClass ?? "",
-        commodity: product.commodity ?? "",
-        isHazmat: product.hazmat ?? product.isHazmat ?? false,
-        hazmatContact: product.hazmatContact ?? "",
-        length: product.length ?? 0,
-        height: product.height ?? 0,
-        weight: product.weight ?? 0,
-        width: product.width ?? 0,
-        productGroup: product.productGroup ?? "STANDARD",
-        notes: product.notes ?? "",
-        isApproved: product.isApproved ?? false,
+        key: String(prod.productID || Date.now()),
+        productID: prod.productID,
+        description: prod.description ?? "",
+        isActive: prod.isActive ?? false,
+        nmfc: prod.nmfc ?? "",
+        productClass: prod.productClass ?? "",
+        commodity: prod.commodity ?? "",
+        isHazmat: prod.hazmat ?? false,
+        hazmatContact: prod.hazmatContact ?? "",
+        length: prod.length ?? 0,
+        height: prod.height ?? 0,
+        weight: prod.weight ?? 0,
+        width: prod.width ?? 0,
+        productGroup: prod.productGroup ?? "STANDARD",
+        notes: prod.notes ?? "",
+        isApproved: prod.isApproved ?? true,
       };
 
       return mappedProduct;
     } catch (error: any) {
-      console.error("GetProductByID API Error:", error);
+      console.error("GetProductByDesc API Error:", error);
       return rejectWithValue(
         error?.response?.data?.message ||
           error?.message ||
@@ -214,6 +219,9 @@ export const getCustomerProductByID = createAsyncThunk<
     }
   }
 );
+
+// Alias for backwards compatibility
+export const getCustomerProductByID = getCustomerProductByDesc;
 
 // ============================================================
 // Search Products By Description
@@ -248,7 +256,8 @@ export const searchCustomerProducts = createAsyncThunk<
             Description: description,
           },
           headers: {
-            accept: "text/plain",
+            "Content-Type": "application/json",
+            accept: "application/json, text/plain, */*",
           },
         }
       );
@@ -344,25 +353,23 @@ const customerProductSlice = createSlice({
     });
 
     // ========================================================
-    // GET PRODUCT BY ID
+    // GET PRODUCT BY DESC
     // ========================================================
-    builder.addCase(getCustomerProductByID.pending, (state) => {
+    builder.addCase(getCustomerProductByDesc.pending, (state) => {
       state.loading = true;
       state.error = null;
     });
-    builder.addCase(getCustomerProductByID.fulfilled, (state, action) => {
+    builder.addCase(getCustomerProductByDesc.fulfilled, (state, action) => {
       state.loading = false;
       const index = state.products.findIndex(
-        (p) => p.key === action.payload.key
+        (p) => p.productID === action.payload.productID || p.description === action.payload.description
       );
       if (index !== -1) {
         state.products[index] = action.payload;
-      } else {
-        state.products.push(action.payload);
       }
       state.error = null;
     });
-    builder.addCase(getCustomerProductByID.rejected, (state, action) => {
+    builder.addCase(getCustomerProductByDesc.rejected, (state, action) => {
       state.loading = false;
       state.error =
         action.payload ||

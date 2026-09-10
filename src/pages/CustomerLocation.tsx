@@ -304,13 +304,22 @@ function CustomerLocationPage({
     });
   };
 
-  const refreshLocations = () => {
-    dispatch(getAllCustomerLocations(1));
-    setSelectedKeys(new Set());
-    setQuery("");
-    setCurrentPage(1);
-    setPageSize(10);
-    messageApi.success("Locations refreshing...");
+  const refreshLocations = async () => {
+    messageApi.loading({ content: "Fetching locations from server...", key: "refreshLoc" });
+    try {
+      await dispatch(getAllCustomerLocations(1)).unwrap();
+      setSelectedKeys(new Set());
+      setQuery("");
+      setCurrentPage(1);
+      setPageSize(10);
+      messageApi.success({ content: "Locations refreshed successfully", key: "refreshLoc" });
+    } catch (err: any) {
+      messageApi.error({
+        content: `Network Error: ${err || "Cannot connect to server"}`,
+        key: "refreshLoc",
+        duration: 4,
+      });
+    }
   };
 
   const downloadCsv = () => {
