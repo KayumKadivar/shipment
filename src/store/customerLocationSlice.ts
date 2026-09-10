@@ -57,8 +57,8 @@ export const saveCustomerLocation = createAsyncThunk(
         inboundAccount: payloadData.inboundAccount || "",
         outboundAccount: payloadData.outboundAccount || "",
         notes: payloadData.notes || "",
-        openTime: payloadData.openTime || "",
-        closeTime: payloadData.closeTime || "",
+        openTime: payloadData.openTime && payloadData.openTime.trim() !== "" ? payloadData.openTime.trim() : null,
+        closeTime: payloadData.closeTime && payloadData.closeTime.trim() !== "" ? payloadData.closeTime.trim() : null,
         accessorialsList: (payloadData.accessorials || []).map((acc, index) => ({
           accessorialsID: index,
           accessorialsName: acc
@@ -111,10 +111,11 @@ export const getAllCustomerLocations = createAsyncThunk<
         `${API_BASE_URL}/CustomerLocation/GetAllLocation`,
         {
           params: {
-            ClientID: clientID || 1,
+            ClientID: String(clientID || "1"),
           },
           headers: {
-            accept: "text/plain",
+            "Content-Type": "application/json",
+            accept: "application/json, text/plain, */*",
           },
         }
       );
@@ -414,6 +415,25 @@ const customerLocationSlice = createSlice({
           "Failed to retrieve location.";
       }
     );
+
+    // ========================================================
+    // SAVE LOCATION
+    // ========================================================
+    builder.addCase(saveCustomerLocation.pending, (state) => {
+      state.saving = true;
+      state.error = null;
+    });
+    builder.addCase(saveCustomerLocation.fulfilled, (state) => {
+      state.saving = false;
+      state.error = null;
+    });
+    builder.addCase(saveCustomerLocation.rejected, (state, action) => {
+      state.saving = false;
+      state.error =
+        (action.payload as string) ||
+        action.error.message ||
+        "Failed to save location.";
+    });
   },
 });
 

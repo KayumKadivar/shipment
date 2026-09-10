@@ -61,21 +61,17 @@ function App() {
   );
 
   useEffect(() => {
-    if (reduxCustomerLocations.length > 0) {
-      setCustomerLocations(reduxCustomerLocations);
-    }
+    setCustomerLocations(reduxCustomerLocations);
   }, [reduxCustomerLocations]);
 
   useEffect(() => {
-    if (reduxCustomerProducts.length > 0) {
-      setCustomerProducts(reduxCustomerProducts);
-    }
+    setCustomerProducts(reduxCustomerProducts);
   }, [reduxCustomerProducts]);
 
   useEffect(() => {
     if (isAuthenticated) {
       dispatch(fetchAccessorials());
-      dispatch(getAllCustomerLocations("qe"));
+      dispatch(getAllCustomerLocations(1));
       dispatch(getCustomerProducts(1));
     }
   }, [isAuthenticated, dispatch]);
@@ -93,13 +89,8 @@ function App() {
 
   const handleCreateLocation = async (values: Omit<CustomerLocation, "key">) => {
     try {
-      const apiResult = await dispatch(saveCustomerLocation(values)).unwrap();
-      const newId = apiResult?.locationID || Date.now();
-
-      setCustomerLocations((current) => [
-        { ...values, key: String(newId), locationID: newId },
-        ...current,
-      ]);
+      await dispatch(saveCustomerLocation(values)).unwrap();
+      dispatch(getAllCustomerLocations(1));
       navigate("/customer-location");
       messageApi.success("Location added successfully");
     } catch (error) {
@@ -109,13 +100,7 @@ function App() {
 
   const handleCreateProduct = async (values: Omit<CustomerProduct, "key">) => {
     try {
-      const apiResult = await dispatch(saveCustomerProduct(values)).unwrap();
-      const newId = apiResult?.productID || Date.now();
-      
-      setCustomerProducts((current) => [
-        { ...values, key: String(newId), productID: newId },
-        ...current,
-      ]);
+      await dispatch(saveCustomerProduct(values)).unwrap();
       dispatch(getCustomerProducts(1));
       navigate("/customer-products");
       messageApi.success("Product saved and added successfully");

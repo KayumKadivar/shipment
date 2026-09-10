@@ -34,6 +34,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
+import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import { getAllCustomerLocations, getCustomerLocationByID } from "../store/customerLocationSlice";
 import type {
@@ -147,6 +148,9 @@ function CustomerLocationPage({
 }: CustomerLocationPageProps) {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
+  const { loading } = useAppSelector(
+    (state) => state.customerLocation
+  );
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -635,6 +639,7 @@ function CustomerLocationPage({
         {activeView === "detail" ? (
           <>
             <Table<CustomerLocation>
+              loading={loading}
               columns={columns}
               dataSource={visibleLocations}
               pagination={false}
