@@ -1,5 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type { LocationAccessorial } from "../types/customerLocation.types";
+import axios from "axios";
+import { API_BASE_URL } from "../config/apiConfig";
 
 interface AccessorialsState {
   data: LocationAccessorial[];
@@ -13,41 +15,18 @@ const initialState: AccessorialsState = {
   error: null,
 };
 
-// Simulated API call function
-const fetchAccessorialsAPI = async (): Promise<LocationAccessorial[]> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([
-        "Blind Shipment",
-        "Call Before Delivery",
-        "Call Before Pickup",
-        "Delivery Appointment",
-        "Guaranteed By 5PM",
-        "Inside Delivery",
-        "Inside Pick Up",
-        "Liftgate Delivery",
-        "Liftgate Pickup",
-        "Limited Access Delivery",
-        "Limited Access Pickup",
-        "Notify Before Delivery",
-        "Protect From Freeze",
-        "Residential Delivery",
-        "Residential Pick Up",
-        "Sort and Segregate",
-        "Trade Show Delivery",
-        "Trade Show Pickup",
-        "Hazmat",
-        "White Glove Service",
-      ]);
-    }, 500);
-  });
-};
-
 export const fetchAccessorials = createAsyncThunk(
   "accessorials/fetchAccessorials",
-  async () => {
-    const response = await fetchAccessorialsAPI();
-    return response;
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/Accessorials/GetAccessorials?ClientID=ads`);
+      if (response.data && response.data.isSuccess) {
+        return response.data.data as LocationAccessorial[];
+      }
+      return rejectWithValue(response.data?.message || "Failed to fetch accessorials");
+    } catch (error: any) {
+      return rejectWithValue(error?.response?.data?.message || error.message || "Failed to fetch accessorials");
+    }
   }
 );
 

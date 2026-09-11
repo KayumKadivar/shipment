@@ -20,9 +20,9 @@ const Accessorials: React.FC = () => {
       <Row gutter={[12, 12]}>
         {accessorialsList.map((item) => {
           return (
-            <Col span={12} key={item}>
+            <Col span={12} key={item.accessorialID}>
               <div>
-                <Checkbox>{item}
+                <Checkbox>{item.accessorialName}
                 </Checkbox>
               </div>
             </Col>

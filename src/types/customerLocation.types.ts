@@ -1,26 +1,9 @@
 export type LocationType = "All" | "Origin" | "Destination" | "Bill to";
 
-export type LocationAccessorial =
-  | "Blind Shipment"
-  | "Call Before Delivery"
-  | "Call Before Pickup"
-  | "Delivery Appointment"
-  | "Guaranteed By 5PM"
-  | "Inside Delivery"
-  | "Inside Pick Up"
-  | "Liftgate Delivery"
-  | "Liftgate Pickup"
-  | "Limited Access Delivery"
-  | "Limited Access Pickup"
-  | "Notify Before Delivery"
-  | "Protect From Freeze"
-  | "Residential Delivery"
-  | "Residential Pick Up"
-  | "Sort and Segregate"
-  | "Trade Show Delivery"
-  | "Trade Show Pickup"
-  | "Hazmat"
-  | "White Glove Service";
+export interface LocationAccessorial {
+  accessorialID: number;
+  accessorialName: string;
+}
 
 export interface CustomerLocation {
   key: string;
@@ -50,5 +33,5 @@ export interface CustomerLocation {
   notes?: string;
   openTime?: string;
   closeTime?: string;
-  accessorials?: LocationAccessorial[];
+  accessorials?: any;
 }

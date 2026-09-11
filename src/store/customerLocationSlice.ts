@@ -26,13 +26,18 @@ const initialState: CustomerLocationState = {
 // ============================================================
 // Add Location (POST API)
 // ============================================================
+import type { RootState } from "../app/store";
+
 export const saveCustomerLocation = createAsyncThunk(
   "customerLocation/saveCustomerLocation",
   async (
     payloadData: Omit<CustomerLocation, "key"> & { clientID?: string },
-    { rejectWithValue }
+    { rejectWithValue, getState }
   ) => {
     try {
+      const state = getState() as RootState;
+      const allAccessorials = state.accessorials.data;
+
       const payload = {
         clientID: payloadData.clientID || "1",
         shortName: payloadData.shortName || "",
@@ -59,10 +64,13 @@ export const saveCustomerLocation = createAsyncThunk(
         notes: payloadData.notes || "",
         openTime: payloadData.openTime && payloadData.openTime.trim() !== "" ? payloadData.openTime.trim() : null,
         closeTime: payloadData.closeTime && payloadData.closeTime.trim() !== "" ? payloadData.closeTime.trim() : null,
-        accessorialsList: (payloadData.accessorials || []).map((acc, index) => ({
-          accessorialsID: index,
-          accessorialsName: acc
-        }))
+        accessorialsList: (payloadData.accessorials || []).map((acc) => {
+          const matched = allAccessorials.find(a => a.accessorialName === acc);
+          return {
+            accessorialsID: matched ? matched.accessorialID : 0,
+            accessorialsName: acc
+          };
+        })
       };
 
       const response = await axios.post(

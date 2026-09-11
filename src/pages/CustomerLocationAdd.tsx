@@ -8,9 +8,9 @@ import {
   Switch,
 } from "antd";
 import { useNavigate } from "react-router-dom";
+import { useAppSelector } from "../app/hooks";
 import type {
   CustomerLocation,
-  LocationAccessorial,
   LocationType,
 } from "../types/customerLocation.types";
 
@@ -22,28 +22,7 @@ interface CustomerLocationAddProps {
 
 const CLIENT_NAME = "INLAND TRANSPORT, INC.";
 
-const ACCESSORIALS: LocationAccessorial[] = [
-  "Blind Shipment",
-  "Call Before Delivery",
-  "Call Before Pickup",
-  "Delivery Appointment",
-  "Guaranteed By 5PM",
-  "Inside Delivery",
-  "Inside Pick Up",
-  "Liftgate Delivery",
-  "Liftgate Pickup",
-  "Limited Access Delivery",
-  "Limited Access Pickup",
-  "Notify Before Delivery",
-  "Protect From Freeze",
-  "Residential Delivery",
-  "Residential Pick Up",
-  "Sort and Segregate",
-  "Trade Show Delivery",
-  "Trade Show Pickup",
-  "Hazmat",
-  "White Glove Service",
-];
+
 
 const LOCATION_TYPES: LocationType[] = [
   "All",
@@ -86,6 +65,7 @@ function getToday() {
 function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const navigate = useNavigate();
   const [form] = Form.useForm<LocationFormValues>();
+  const accessorialsList = useAppSelector((state) => state.accessorials.data);
 
   const initialValues: Partial<LocationFormValues> = {
     locationName: "",
@@ -302,9 +282,9 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
           <div className='add-location-card__body'>
             <Form.Item name='accessorials' noStyle>
               <Checkbox.Group className='add-location-accessorial-grid'>
-                {ACCESSORIALS.map((accessorial) => (
-                  <Checkbox key={accessorial} value={accessorial}>
-                    {accessorial}
+                {accessorialsList.map((accessorial) => (
+                  <Checkbox key={accessorial.accessorialID} value={accessorial.accessorialName}>
+                    {accessorial.accessorialName}
                   </Checkbox>
                 ))}
               </Checkbox.Group>
