@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import inlandLogo from "../assets/inland1.png";
 import nicoLogo from "../assets/nico1.png";
+import { useAppDispatch, useAppSelector } from "../app/hooks";
+import { loginUser } from "../store/appSlice";
 
 type LoginProps = {
   onLogin: () => void;
@@ -16,6 +18,9 @@ function Login({ onLogin }: LoginProps) {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const loginTimerRef = useRef<number | null>(null);
 
+  const dispatch = useAppDispatch();
+  const isSubmitting = useAppSelector((state) => state.app.loading);
+
   useEffect(() => {
     return () => {
       if (loginTimerRef.current !== null) {
@@ -24,23 +29,40 @@ function Login({ onLogin }: LoginProps) {
     };
   }, []);
 
-  const handleLoginSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (isLoggingIn) {
+    if (isSubmitting || isLoggingIn) {
       return;
     }
 
-    if (username === "Test" && password === "Test123") {
-      setLoginError("");
+    if (!username.trim() || !password) {
+      setLoginError("Please enter both username and password.");
+      return;
+    }
+
+    setLoginError("");
+
+    try {
+      await dispatch(
+        loginUser({
+          username: username.trim(),
+          password,
+        })
+      ).unwrap();
+
+      // Show sync animation screen after successful API login
       setIsLoggingIn(true);
       loginTimerRef.current = window.setTimeout(() => {
         onLogin();
-      }, 3000);
-      return;
+      }, 2000);
+    } catch (error: any) {
+      setLoginError(
+        typeof error === "string"
+          ? error
+          : "Login failed. Please check your credentials."
+      );
     }
-
-    setLoginError("Invalid username or password. Please try again.");
   };
 
   if (isLoggingIn) {
@@ -94,7 +116,7 @@ function Login({ onLogin }: LoginProps) {
               placeholder='Enter username'
               autoComplete='username'
               value={username}
-              disabled={isLoggingIn}
+              disabled={isSubmitting}
               onChange={(event) => setUsername(event.target.value)}
             />
           </label>
@@ -109,7 +131,7 @@ function Login({ onLogin }: LoginProps) {
               placeholder='Enter password'
               autoComplete='current-password'
               value={password}
-              disabled={isLoggingIn}
+              disabled={isSubmitting}
               onChange={(event) => setPassword(event.target.value)}
               iconRender={(visible) =>
                 visible ? <EyeTwoTone /> : <EyeInvisibleOutlined />
@@ -126,10 +148,10 @@ function Login({ onLogin }: LoginProps) {
             type='primary'
             htmlType='submit'
             size='large'
-            loading={isLoggingIn}
-            disabled={isLoggingIn}
+            loading={isSubmitting}
+            disabled={isSubmitting}
             block>
-            {isLoggingIn ? "Logging in" : "Continue"}
+            {isSubmitting ? "Logging in..." : "Continue"}
           </Button>
 
           <div className='login-divider'>

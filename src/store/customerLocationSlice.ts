@@ -64,7 +64,7 @@ export const saveCustomerLocation = createAsyncThunk(
         notes: payloadData.notes || "",
         openTime: payloadData.openTime && payloadData.openTime.trim() !== "" ? payloadData.openTime.trim() : null,
         closeTime: payloadData.closeTime && payloadData.closeTime.trim() !== "" ? payloadData.closeTime.trim() : null,
-        accessorialsList: (payloadData.accessorials || []).map((acc) => {
+        accessorialsList: (payloadData.accessorials || []).map((acc: any) => {
           const matched = allAccessorials.find(a => a.accessorialName === acc);
           return {
             accessorialsID: matched ? matched.accessorialID : 0,
