@@ -6,7 +6,7 @@ import {
 import type { PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 
-import { API_BASE_URL } from "../config/apiConfig";
+import { API_BASE_URL, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import type { CustomerLocation, LocationType } from "../types/customerLocation.types";
 
 interface CustomerLocationState {
@@ -105,30 +105,52 @@ export const saveCustomerLocation = createAsyncThunk(
 );
 
 // ============================================================
-// Get All Locations
+// Get All Locations (GET /api/Location/GetLocationsByClientCode/{clientCode})
 // ============================================================
+export interface GetLocationsParams {
+  clientCode?: string;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
 export const getAllCustomerLocations = createAsyncThunk<
   CustomerLocation[],
-  string | number | undefined,
+  GetLocationsParams | string | number | undefined,
   { rejectValue: string }
 >(
   "customerLocation/getAllCustomerLocations",
-  async (clientID, { rejectWithValue }) => {
+  async (params, { rejectWithValue }) => {
     try {
+      let clientCode = DEFAULT_CLIENT_CODE;
+      let pageNumber = 1;
+      let pageSize = 100;
+
+      if (typeof params === "object" && params !== null) {
+        if (params.clientCode) clientCode = params.clientCode;
+        if (params.pageNumber !== undefined) pageNumber = params.pageNumber;
+        if (params.pageSize !== undefined) pageSize = params.pageSize;
+      } else if (typeof params === "string" && isNaN(Number(params))) {
+        clientCode = params;
+      }
+
+      const token = localStorage.getItem("authToken");
+
       const response = await axios.get(
-        `${API_BASE_URL}/CustomerLocation/GetAllLocation`,
+        `${API_BASE_URL}/Location/GetLocationsByClientCode/${encodeURIComponent(clientCode)}`,
         {
           params: {
-            ClientID: String(clientID || "1"),
+            pageNumber,
+            pageSize,
           },
           headers: {
             "Content-Type": "application/json",
             accept: "application/json, text/plain, */*",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         }
       );
 
-      console.log("GetAllLocation Response:", response.data);
+      console.log("GetLocationsByClientCode Response:", response.data);
 
       if (!response.data?.isSuccess) {
         return rejectWithValue(
@@ -139,59 +161,46 @@ export const getAllCustomerLocations = createAsyncThunk<
 
       const locations: CustomerLocation[] = (
         response.data?.data || []
-      ).map((loc: any) => ({
-        key: String(loc.locationID || `temp-${Date.now()}`),
-        locationID: loc.locationID,
-
-        locationName: loc.locationName ?? "",
-
-        isActive: loc.isActive ?? false,
-
-        address1: loc.address1 ?? "",
-
-        address2: loc.address2 ?? "",
-
-        country: loc.country ?? "",
-
-        state: loc.state ?? "",
-
-        city: loc.city ?? "",
-
-        postal: loc.postal ?? "",
-
-        contactName: loc.contactName ?? "",
-
-        phone: loc.phone ?? "",
-
-        email: loc.email ?? "",
-
-        activateDate: loc.activateDate ?? "",
-
-        deactivateDate: loc.deactivateDate ?? "",
-
-        group: loc.group ?? "STANDARD",
-
-        locationType: (loc.locationType as LocationType) ?? "All",
-      }));
+      ).map((loc: any) => {
+        const id = loc.locationId ?? loc.locationID;
+        return {
+          key: String(id || `loc-${Math.random()}`),
+          locationId: id,
+          locationID: id,
+          locationName: loc.locationName ?? "",
+          isActive: loc.isActive ?? true,
+          address1: loc.address1 ?? "",
+          address2: loc.address2 ?? "",
+          country: loc.countryCode ?? loc.country ?? "",
+          countryCode: loc.countryCode ?? loc.country ?? "",
+          state: loc.stateCode ?? loc.state ?? "",
+          stateCode: loc.stateCode ?? loc.state ?? "",
+          city: loc.city ?? "",
+          postal: loc.zipCode ?? loc.postal ?? "",
+          zipCode: loc.zipCode ?? loc.postal ?? "",
+          clientCode: loc.clientCode ?? clientCode,
+          contactName: loc.contactName ?? loc.createdBy ?? "",
+          phone: loc.phone ?? "",
+          email: loc.email ?? "",
+          activateDate: loc.createdDate
+            ? new Date(loc.createdDate).toLocaleDateString()
+            : loc.activateDate ?? "",
+          deactivateDate: loc.deactivateDate ?? "",
+          createdBy: loc.createdBy ?? "",
+          createdDate: loc.createdDate ?? "",
+          modifiedBy: loc.modifiedBy ?? "",
+          modifiedDate: loc.modifiedDate ?? "",
+          group: loc.group ?? "STANDARD",
+          locationType: (loc.locationType as LocationType) ?? "All",
+        };
+      });
 
       return locations;
     } catch (error: any) {
       console.error(
-        "GetAllLocation API Error:",
+        "GetLocationsByClientCode API Error:",
         error
       );
-
-      if (error?.response) {
-        console.error(
-          "API Status:",
-          error.response.status
-        );
-
-        console.error(
-          "API Response:",
-          error.response.data
-        );
-      }
 
       return rejectWithValue(
         error?.response?.data?.message ||

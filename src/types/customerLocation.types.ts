@@ -14,6 +14,7 @@ export interface LocationAccessorial {
 
 export interface CustomerLocation {
   key: string;
+  locationId?: number;
   locationID?: number;
   locationName: string;
   shortName?: string;
@@ -21,9 +22,17 @@ export interface CustomerLocation {
   address1: string;
   address2: string;
   country: string;
+  countryCode?: string;
   state: string;
+  stateCode?: string;
   city: string;
   postal: string;
+  zipCode?: string;
+  clientCode?: string;
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
   contactName: string;
   phone: string;
   phoneExtension?: string;
