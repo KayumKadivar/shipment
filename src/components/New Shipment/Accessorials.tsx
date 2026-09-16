@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { Card, Input, Checkbox, Row, Col, Form, Spin, Empty } from 'antd';
+import { Card, Input, Checkbox, Row, Col, Form, Spin, Empty, Button } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { useSelector } from 'react-redux';
-import type { RootState } from '../../app/store';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { toggleAccessorial, clearSelectedAccessorials } from '../../store/accessorialsSlice';
+import './newshipment.css';
 
 const Accessorials: React.FC = () => {
-  const { data: accessorialsList, loading } = useSelector((state: RootState) => state.accessorials);
+  const dispatch = useAppDispatch();
+  const { data: accessorialsList, selectedAccessorialIds = [], loading } = useAppSelector(
+    (state) => state.accessorials
+  );
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredList = accessorialsList.filter((item) => {
@@ -15,10 +19,32 @@ const Accessorials: React.FC = () => {
 
   return (
     <Card 
-      title="Accessorials" 
+      title={
+        <div className="accessorials-title-wrap">
+          <span className="accessorials-title-text">Accessorials</span>
+          {selectedAccessorialIds.length > 0 && (
+            <span className="accessorials-count-tag">
+              {selectedAccessorialIds.length}
+            </span>
+          )}
+        </div>
+      }
+      extra={
+        selectedAccessorialIds.length > 0 ? (
+          <Button 
+            type="link" 
+            size="small" 
+            danger 
+            className="accessorials-clear-btn"
+            onClick={() => dispatch(clearSelectedAccessorials())}
+          >
+            Clear all
+          </Button>
+        ) : null
+      }
       className="accessorials-panel"
     >
-      <Form.Item>
+      <Form.Item className="accessorials-search-item">
         <Input 
           placeholder="Search accessorials..." 
           prefix={<SearchOutlined />}
@@ -27,26 +53,33 @@ const Accessorials: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </Form.Item>
+
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '24px' }}>
+        <div className="accessorials-loading-wrap">
           <Spin tip="Loading accessorials..." />
         </div>
       ) : filteredList.length === 0 ? (
         <Empty description="No accessorials found" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
-        <Row gutter={[12, 12]}>
-          {filteredList.map((item) => {
-            return (
-              <Col span={12} key={item.accessorialID}>
-                <div>
-                  <Checkbox value={item.accessorialID}>
-                    {item.accessorialName || item.description || item.accesorialCode}
-                  </Checkbox>
-                </div>
-              </Col>
-            );
-          })}
-        </Row>
+        <div className="accessorials-list-container">
+          <Row gutter={[12, 12]}>
+            {filteredList.map((item) => {
+              const isChecked = selectedAccessorialIds.includes(item.accessorialID);
+              return (
+                <Col span={12} key={item.accessorialID}>
+                  <div>
+                    <Checkbox 
+                      checked={isChecked}
+                      onChange={() => dispatch(toggleAccessorial(item.accessorialID))}
+                    >
+                      {item.accessorialName || item.description || item.accesorialCode}
+                    </Checkbox>
+                  </div>
+                </Col>
+              );
+            })}
+          </Row>
+        </div>
       )}
     </Card>
   );

@@ -1,16 +1,18 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import type { LocationAccessorial } from "../types/customerLocation.types";
 import axios from "axios";
 import { API_BASE_URL, SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 
 interface AccessorialsState {
   data: LocationAccessorial[];
+  selectedAccessorialIds: number[];
   loading: boolean;
   error: string | null;
 }
 
 const initialState: AccessorialsState = {
   data: [],
+  selectedAccessorialIds: [],
   loading: false,
   error: null,
 };
@@ -56,7 +58,24 @@ export const fetchAccessorials = createAsyncThunk(
 const accessorialsSlice = createSlice({
   name: "accessorials",
   initialState,
-  reducers: {},
+  reducers: {
+    toggleAccessorial: (state, action: PayloadAction<number>) => {
+      const id = action.payload;
+      if (state.selectedAccessorialIds.includes(id)) {
+        state.selectedAccessorialIds = state.selectedAccessorialIds.filter(
+          (item) => item !== id
+        );
+      } else {
+        state.selectedAccessorialIds.push(id);
+      }
+    },
+    setSelectedAccessorials: (state, action: PayloadAction<number[]>) => {
+      state.selectedAccessorialIds = action.payload;
+    },
+    clearSelectedAccessorials: (state) => {
+      state.selectedAccessorialIds = [];
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchAccessorials.pending, (state) => {
@@ -66,6 +85,15 @@ const accessorialsSlice = createSlice({
       .addCase(fetchAccessorials.fulfilled, (state, action) => {
         state.loading = false;
         state.data = action.payload;
+        // Keep pre-selected items if isSelect is true on any item and none were manually selected yet
+        if (state.selectedAccessorialIds.length === 0) {
+          const preselected = action.payload
+            .filter((item) => item.isSelect === true)
+            .map((item) => item.accessorialID);
+          if (preselected.length > 0) {
+            state.selectedAccessorialIds = preselected;
+          }
+        }
       })
       .addCase(fetchAccessorials.rejected, (state, action) => {
         state.loading = false;
@@ -74,4 +102,5 @@ const accessorialsSlice = createSlice({
   },
 });
 
+export const { toggleAccessorial, setSelectedAccessorials, clearSelectedAccessorials } = accessorialsSlice.actions;
 export default accessorialsSlice.reducer;
