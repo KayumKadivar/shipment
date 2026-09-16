@@ -3,6 +3,13 @@ export type LocationType = "All" | "Origin" | "Destination" | "Bill to";
 export interface LocationAccessorial {
   accessorialID: number;
   accessorialName: string;
+  clientID?: number;
+  accesorialCode?: string;
+  description?: string;
+  status?: boolean;
+  accesorialGroupID?: number;
+  isSystem?: boolean;
+  isSelect?: boolean;
 }
 
 export interface CustomerLocation {

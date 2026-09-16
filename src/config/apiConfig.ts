@@ -2,6 +2,7 @@ import axios from "axios";
 
 export const API_BASE_URL = "https://localhost:7068/api";
 export const SRV_TOKEN = "335D6759802A4DBEB41CD6D68AB3024D";
+export const DEFAULT_CLIENT_CODE = "DEVTS";
 
 // Automatically attach Bearer token to all outgoing axios requests if available
 axios.interceptors.request.use(
