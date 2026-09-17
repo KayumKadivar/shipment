@@ -1,14 +1,14 @@
 import { SaveOutlined } from "@ant-design/icons";
 import {
   Button,
-  Checkbox,
+  // Checkbox,
   Form,
   Input,
   Select,
   Switch,
 } from "antd";
 import { useNavigate } from "react-router-dom";
-import { useAppSelector } from "../app/hooks";
+// import { useAppSelector } from "../app/hooks";
 import type {
   CustomerLocation,
   LocationType,
@@ -65,7 +65,7 @@ function getToday() {
 function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const navigate = useNavigate();
   const [form] = Form.useForm<LocationFormValues>();
-  const accessorialsList = useAppSelector((state) => state.accessorials.data);
+  // const accessorialsList = useAppSelector((state) => state.accessorials.data);
 
   const initialValues: Partial<LocationFormValues> = {
     locationName: "",
@@ -277,7 +277,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
           </section>
         </div>
 
-        <section className='add-location-card add-location-accessorials' aria-labelledby='accessorials-title'>
+        {/* <section className='add-location-card add-location-accessorials' aria-labelledby='accessorials-title'>
           <h1 id='accessorials-title'>Accessorials</h1>
           <div className='add-location-card__body'>
             <Form.Item name='accessorials' noStyle>
@@ -290,7 +290,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
               </Checkbox.Group>
             </Form.Item>
           </div>
-        </section>
+        </section> */}
 
         {actions("bottom")}
       </Form>

@@ -36,7 +36,7 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
-import { getAllCustomerLocations, getCustomerLocationByID, updateCustomerLocation } from "../store/customerLocationSlice";
+import { getAllCustomerLocations, getCustomerLocationByID, updateCustomerLocation, deleteCustomerLocations } from "../store/customerLocationSlice";
 import type {
   CustomerLocation,
   LocationType,
@@ -314,12 +314,34 @@ function CustomerLocationPage({
       content: `${selectedKeys.size} location${selectedKeys.size === 1 ? "" : "s"} will be removed from this demo.`,
       okText: "Delete",
       okButtonProps: { danger: true },
-      onOk: () => {
-        setLocations((current) =>
-          current.filter((location) => !selectedKeys.has(location.key)),
-        );
-        setSelectedKeys(new Set());
-        messageApi.success("Selected locations deleted");
+      onOk: async () => {
+        try {
+          messageApi.loading({ content: 'Deleting...', key: 'deleteLoc' });
+          
+          const idsToDelete: number[] = [];
+          selectedKeys.forEach(key => {
+            const loc = locations.find(l => l.key === key);
+            if (loc && loc.locationID) {
+               idsToDelete.push(Number(loc.locationID));
+            } else if (loc && (loc as any).locationId) {
+               idsToDelete.push(Number((loc as any).locationId));
+            } else if (!isNaN(Number(key))) {
+               idsToDelete.push(Number(key)); // Fallback if key is the ID
+            }
+          });
+
+          if (idsToDelete.length > 0) {
+             await dispatch(deleteCustomerLocations(idsToDelete)).unwrap();
+          }
+
+          setLocations((current) =>
+            current.filter((location) => !selectedKeys.has(location.key)),
+          );
+          setSelectedKeys(new Set());
+          messageApi.success({ content: "Selected locations deleted", key: 'deleteLoc' });
+        } catch (error: any) {
+           messageApi.error({ content: error || "Failed to delete locations", key: 'deleteLoc' });
+        }
       },
     });
   };

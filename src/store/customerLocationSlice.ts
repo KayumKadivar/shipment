@@ -64,13 +64,13 @@ export const saveCustomerLocation = createAsyncThunk(
         notes: payloadData.notes || "",
         openTime: payloadData.openTime && payloadData.openTime.trim() !== "" ? payloadData.openTime.trim() : null,
         closeTime: payloadData.closeTime && payloadData.closeTime.trim() !== "" ? payloadData.closeTime.trim() : null,
-        accessorialsList: (payloadData.accessorials || []).map((acc: any) => {
-          const matched = allAccessorials.find(a => a.accessorialName === acc);
-          return {
-            accessorialsID: matched ? matched.accessorialID : 0,
-            accessorialsName: acc
-          };
-        })
+        // accessorialsList: (payloadData.accessorials || []).map((acc: any) => {
+        //   const matched = allAccessorials.find(a => a.accessorialName === acc);
+        //   return {
+        //     accessorialsID: matched ? matched.accessorialID : 0,
+        //     accessorialsName: acc
+        //   };
+        // })
       };
 
       const response = await axios.post(
@@ -158,6 +158,47 @@ export const updateCustomerLocation = createAsyncThunk(
     }
   }
 );
+
+// ============================================================
+// Delete Multiple Locations (DELETE API)
+// ============================================================
+export const deleteCustomerLocations = createAsyncThunk<
+  number[],
+  number[],
+  { rejectValue: string }
+>(
+  "customerLocation/deleteCustomerLocations",
+  async (locationIds: number[], { rejectWithValue }) => {
+    try {
+      const response = await axios.delete(
+        `${API_BASE_URL}/Location/DeleteMultiple`,
+        {
+          data: locationIds, // Axios DELETE requests send body in 'data'
+          headers: {
+            "Content-Type": "application/json",
+            accept: "text/plain",
+          },
+        }
+      );
+
+      console.log("DeleteMultiple Response:", response.data);
+
+      if (!response.data?.isSuccess && response.data?.message) {
+         return rejectWithValue(response.data?.message || "Failed to delete locations.");
+      }
+
+      return locationIds;
+    } catch (error: any) {
+      console.error("DeleteMultiple API Error:", error);
+      return rejectWithValue(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to delete locations."
+      );
+    }
+  }
+);
+
 // ============================================================
 // Get All Locations (GET /api/Location/GetLocationsByClientCode/{clientCode})
 // ============================================================
