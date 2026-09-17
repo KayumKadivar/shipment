@@ -20,12 +20,13 @@ import {
   Switch,
   Table,
   Tabs,
-  Tag,
+  // Tag,
   Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -36,7 +37,7 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
-import { getAllCustomerLocations, getCustomerLocationByID, updateCustomerLocation, deleteCustomerLocations } from "../store/customerLocationSlice";
+import { getAllCustomerLocations, getCustomerLocationByID, updateCustomerLocation, deleteCustomerLocations, fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import type {
   CustomerLocation,
   LocationType,
@@ -148,7 +149,7 @@ function CustomerLocationPage({
 }: CustomerLocationPageProps) {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { loading } = useAppSelector(
+  const { loading, clients } = useAppSelector(
     (state) => state.customerLocation
   );
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -163,6 +164,12 @@ function CustomerLocationPage({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [messageApi, messageContext] = message.useMessage();
   const [modalApi, modalContext] = Modal.useModal();
+
+  const [selectedClientCode, setSelectedClientCode] = useState<string>("DEVTS");
+
+  useEffect(() => {
+    dispatch(fetchClientsAndSubclients());
+  }, [dispatch]);
 
   const filteredLocations = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -527,7 +534,7 @@ function CustomerLocationPage({
     },
     { title: "Phone", dataIndex: "phone", width: 128, render: emptyText },
     { title: "Email", dataIndex: "email", width: 150, render: emptyText },
-    { title: "Activate Date", dataIndex: "activateDate", width: 126, render: emptyText },
+    /* { title: "Activate Date", dataIndex: "activateDate", width: 126, render: emptyText },
     {
       title: "Deactivate Date",
       dataIndex: "deactivateDate",
@@ -544,7 +551,7 @@ function CustomerLocationPage({
           {locationType}
         </Tag>
       ),
-    },
+    }, */
   ];
 
   const groupColumns: ColumnsType<GroupSummary> = [
@@ -616,7 +623,21 @@ function CustomerLocationPage({
       <div className='customer-location-controls'>
         <div className='location-client-row'>
           <span>Client:</span>
-          <Button icon={<UserOutlined />}>INLAND TRANSPORT, INC.</Button>
+          <Select
+            value={selectedClientCode}
+            onChange={setSelectedClientCode}
+            style={{ minWidth: 250 }}
+            options={clients.map(client => ({
+              label: (
+                <span>
+                  <UserOutlined style={{ marginRight: 8 }} />
+                  {client.clientName}
+                </span>
+              ),
+              value: client.clientCode
+            }))}
+            loading={clients.length === 0}
+          />
         </div>
         <div className='location-toolbar'>
           <div className='location-toolbar__left'>
@@ -796,7 +817,7 @@ function CustomerLocationPage({
               rules={[{ type: "email", message: "Enter a valid email address" }]}>
               <Input />
             </Form.Item>
-            <Form.Item label='Group' name='group'>
+            {/* <Form.Item label='Group' name='group'>
               <Input />
             </Form.Item>
             <Form.Item label='Activate date' name='activateDate'>
@@ -814,7 +835,7 @@ function CustomerLocationPage({
                   (value) => ({ value, label: value }),
                 )}
               />
-            </Form.Item>
+            </Form.Item> */}
           </div>
         </Form>
       </Modal>

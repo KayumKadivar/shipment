@@ -6,11 +6,12 @@ import {
 import type { PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 
-import { API_BASE_URL, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
+import { API_BASE_URL, DEFAULT_CLIENT_CODE, SRV_TOKEN } from "../config/apiConfig";
 import type { CustomerLocation, LocationType } from "../types/customerLocation.types";
 
 interface CustomerLocationState {
   locations: CustomerLocation[];
+  clients: { clientName: string; clientCode: string }[];
   loading: boolean;
   saving: boolean;
   error: string | null;
@@ -18,25 +19,67 @@ interface CustomerLocationState {
 
 const initialState: CustomerLocationState = {
   locations: [],
+  clients: [],
   loading: false,
   saving: false,
   error: null,
 };
 
 // ============================================================
+// Fetch Clients and Subclients (GET API)
+// ============================================================
+export const fetchClientsAndSubclients = createAsyncThunk(
+  "customerLocation/fetchClientsAndSubclients",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/GetClientAndSubclientWithProfiles`, {
+        params: {
+          srvToken: SRV_TOKEN,
+          clientCode: DEFAULT_CLIENT_CODE
+        }
+      });
+      
+      if (!response.data?.isSuccess || !response.data?.data) {
+        return rejectWithValue("Failed to fetch clients.");
+      }
+
+      const mainClient = {
+        clientName: response.data.data.clientName,
+        clientCode: response.data.data.clientCode
+      };
+      
+      const subClients = response.data.data.subClients?.map((s: any) => ({
+        clientName: s.clientName,
+        clientCode: s.clientCode
+      })) || [];
+      
+      return [mainClient, ...subClients];
+    } catch (error: any) {
+      console.error("FetchClients API Error:", error);
+      return rejectWithValue(
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to fetch clients."
+      );
+    }
+  }
+);
+
+// ============================================================
 // Add Location (POST API)
 // ============================================================
-import type { RootState } from "../app/store";
+// import type { RootState } from "../app/store";
 
 export const saveCustomerLocation = createAsyncThunk(
   "customerLocation/saveCustomerLocation",
   async (
     payloadData: Omit<CustomerLocation, "key"> & { clientID?: string },
-    { rejectWithValue, getState }
+    { rejectWithValue }
+    // { rejectWithValue, getState }
   ) => {
     try {
-      const state = getState() as RootState;
-      const allAccessorials = state.accessorials.data;
+      // const state = getState() as RootState;
+      // const allAccessorials = state.accessorials.data;
 
       const payload = {
         clientID: payloadData.clientID || "1",
@@ -53,15 +96,15 @@ export const saveCustomerLocation = createAsyncThunk(
         phone: payloadData.phone || "",
         email: payloadData.email || "",
         faxNumber: payloadData.faxNumber || "",
-        locationType: payloadData.locationType || "",
-        group: payloadData.group || "",
-        activateDate: payloadData.activateDate ? new Date(payloadData.activateDate).toISOString() : new Date().toISOString(),
-        deactivateDate: payloadData.deactivateDate ? new Date(payloadData.deactivateDate).toISOString() : new Date().toISOString(),
+        // locationType: payloadData.locationType || "",
+        // group: payloadData.group || "",
+        // activateDate: payloadData.activateDate ? new Date(payloadData.activateDate).toISOString() : new Date().toISOString(),
+        // deactivateDate: payloadData.deactivateDate ? new Date(payloadData.deactivateDate).toISOString() : new Date().toISOString(),
         isActive: payloadData.isActive ?? true,
-        locationRef: payloadData.locationRef || "",
-        inboundAccount: payloadData.inboundAccount || "",
-        outboundAccount: payloadData.outboundAccount || "",
-        notes: payloadData.notes || "",
+        // locationRef: payloadData.locationRef || "",
+        // inboundAccount: payloadData.inboundAccount || "",
+        // outboundAccount: payloadData.outboundAccount || "",
+        // notes: payloadData.notes || "",
         openTime: payloadData.openTime && payloadData.openTime.trim() !== "" ? payloadData.openTime.trim() : null,
         closeTime: payloadData.closeTime && payloadData.closeTime.trim() !== "" ? payloadData.closeTime.trim() : null,
         // accessorialsList: (payloadData.accessorials || []).map((acc: any) => {
@@ -130,7 +173,7 @@ export const updateCustomerLocation = createAsyncThunk(
         modifiedDate: new Date().toISOString()
       };
 
-      const response = await axios.post(
+      const response = await axios.put(
         `${API_BASE_URL}/Location`,
         payload,
         {
@@ -542,6 +585,26 @@ const customerLocationSlice = createSlice({
         (action.payload as string) ||
         action.error.message ||
         "Failed to save location.";
+    });
+
+    // ========================================================
+    // FETCH CLIENTS
+    // ========================================================
+    builder.addCase(fetchClientsAndSubclients.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(fetchClientsAndSubclients.fulfilled, (state, action) => {
+      state.loading = false;
+      state.clients = action.payload;
+      state.error = null;
+    });
+    builder.addCase(fetchClientsAndSubclients.rejected, (state, action) => {
+      state.loading = false;
+      state.error =
+        (action.payload as string) ||
+        action.error.message ||
+        "Failed to fetch clients.";
     });
   },
 });

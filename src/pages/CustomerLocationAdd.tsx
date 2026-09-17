@@ -219,7 +219,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
           <section className='add-location-card' aria-labelledby='location-settings-title'>
             <h1 id='location-settings-title'>Location Settings</h1>
             <div className='add-location-card__body'>
-              <Form.Item
+              {/* <Form.Item
                 label='Location Type'
                 name='locationType'
                 required
@@ -241,13 +241,13 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
 
               <Form.Item className='add-location-field--medium' label='Deactivate Date' name='deactivateDate'>
                 <Input placeholder='MM / DD / YYYY' inputMode='numeric' />
-              </Form.Item>
+              </Form.Item> */}
 
               <Form.Item label='Is Active' name='isActive' valuePropName='checked'>
                 <Switch checkedChildren='Active' unCheckedChildren='Inactive' />
               </Form.Item>
 
-              <Form.Item label='Location Ref.' name='locationRef'>
+              {/* <Form.Item label='Location Ref.' name='locationRef'>
                 <Input placeholder='Reference code' />
               </Form.Item>
 
@@ -264,7 +264,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                   rows={3}
                   placeholder='Location notes or special instructions...'
                 />
-              </Form.Item>
+              </Form.Item> */}
 
               <Form.Item className='add-location-field--medium' label='Open Time' name='openTime'>
                 <Select placeholder='-- Select --' allowClear options={TIME_OPTIONS} />
