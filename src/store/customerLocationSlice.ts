@@ -105,6 +105,60 @@ export const saveCustomerLocation = createAsyncThunk(
 );
 
 // ============================================================
+// Update Location (POST API)
+// ============================================================
+export const updateCustomerLocation = createAsyncThunk(
+  "customerLocation/updateCustomerLocation",
+  async (
+    payloadData: Partial<CustomerLocation> & { locationId: string | number },
+    { rejectWithValue }
+  ) => {
+    try {
+      const payload = {
+        locationId: payloadData.locationId,
+        locationName: payloadData.locationName || "",
+        address1: payloadData.address1 || "",
+        address2: payloadData.address2 || "",
+        city: payloadData.city || "",
+        stateCode: payloadData.state || "",
+        countryCode: payloadData.country || "",
+        zipCode: payloadData.postal || "",
+        clientCode: DEFAULT_CLIENT_CODE,
+        createdBy: "",
+        createdDate: new Date().toISOString(),
+        modifiedBy: "",
+        modifiedDate: new Date().toISOString()
+      };
+
+      const response = await axios.post(
+        `${API_BASE_URL}/Location`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            accept: "text/plain",
+          },
+        }
+      );
+
+      console.log("UpdateLocation Response:", response.data);
+
+      if (!response.data?.isSuccess && response.data?.message) {
+      
+      }
+
+      return payloadData;
+    } catch (error: any) {
+      console.error("UpdateLocation API Error:", error);
+      return rejectWithValue(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to update location."
+      );
+    }
+  }
+);
+// ============================================================
 // Get All Locations (GET /api/Location/GetLocationsByClientCode/{clientCode})
 // ============================================================
 export interface GetLocationsParams {
@@ -270,13 +324,13 @@ export const getCustomerLocationByID = createAsyncThunk<
 
         address2: loc.address2 ?? "",
 
-        country: loc.country ?? "",
+        country: loc.countryCode ?? loc.country ?? "",
 
-        state: loc.state ?? "",
+        state: loc.stateCode ?? loc.state ?? "",
 
         city: loc.city ?? "",
 
-        postal: loc.postal ?? "",
+        postal: loc.zipCode ?? loc.postal ?? "",
 
         contactName: loc.contactName ?? "",
 

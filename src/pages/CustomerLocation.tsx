@@ -36,7 +36,7 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
-import { getAllCustomerLocations, getCustomerLocationByID } from "../store/customerLocationSlice";
+import { getAllCustomerLocations, getCustomerLocationByID, updateCustomerLocation } from "../store/customerLocationSlice";
 import type {
   CustomerLocation,
   LocationType,
@@ -277,18 +277,34 @@ function CustomerLocationPage({
   };
 
   const saveLocation = async () => {
-    const values = await form.validateFields();
-    if (!editingLocation) return;
+    try {
+      const values = await form.validateFields();
+      if (!editingLocation) return;
 
-    setLocations((current) =>
-      current.map((location) =>
-        location.key === editingLocation.key
-          ? { ...location, ...values }
-          : location,
-      ),
-    );
-    messageApi.success("Location updated");
-    closeForm();
+      messageApi.loading({ content: 'Saving changes...', key: 'saveLoc' });
+
+      
+      const locId = editingLocation.locationID || (editingLocation as any).locationId || editingLocation.key;
+
+      const payload = {
+        ...values,
+        locationId: locId,
+      };
+
+      await dispatch(updateCustomerLocation(payload)).unwrap();
+
+      setLocations((current) =>
+        current.map((location) =>
+          location.key === editingLocation.key
+            ? { ...location, ...values }
+            : location,
+        ),
+      );
+      messageApi.success({ content: "Location updated successfully", key: 'saveLoc', duration: 2 });
+      closeForm();
+    } catch (error: any) {
+      messageApi.error({ content: error || "Failed to save changes", key: 'saveLoc', duration: 3 });
+    }
   };
 
   const confirmDelete = () => {
