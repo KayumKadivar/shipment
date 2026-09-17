@@ -123,7 +123,7 @@ export const getAllCustomerLocations = createAsyncThunk<
     try {
       let clientCode = DEFAULT_CLIENT_CODE;
       let pageNumber = 1;
-      let pageSize = 100;
+      let pageSize = 10;
 
       if (typeof params === "object" && params !== null) {
         if (params.clientCode) clientCode = params.clientCode;
@@ -233,13 +233,10 @@ export const getCustomerLocationByID = createAsyncThunk<
       );
 
       const response = await axios.get(
-        `${API_BASE_URL}/CustomerLocation/GetLocationByID`,
+        `${API_BASE_URL}/Location/${locationID}`,
         {
-          params: {
-            LocationID: locationID,
-          },
           headers: {
-            accept: "text/plain",
+            accept: "application/json, text/plain, */*",
           },
         }
       );
@@ -262,8 +259,8 @@ export const getCustomerLocationByID = createAsyncThunk<
       }
 
       const location: CustomerLocation = {
-        key: String(loc.locationID || `temp-${Date.now()}`),
-        locationID: loc.locationID,
+        key: String(loc.locationId || loc.locationID || `temp-${Date.now()}`),
+        locationID: loc.locationId || loc.locationID,
 
         locationName: loc.locationName ?? "",
 
