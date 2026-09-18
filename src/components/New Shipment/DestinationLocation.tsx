@@ -1,13 +1,30 @@
 import React from 'react';
-import { Card, Form, Input, Select, Row, Col, Button } from 'antd';
+import { Card, Form, Input, Row, Col, Button, Select } from 'antd';
+import CountrySelect from '../../components/CountrySelect';
+import { usePostalLookup } from '../../hooks/usePostalLookup';
 
 const DestinationLocation: React.FC = () => {
+  const [form] = Form.useForm();
+  const { lookupPostal, loadingPostal } = usePostalLookup();
+
+  const handlePostalBlur = async () => {
+    const postal = form.getFieldValue("postal");
+    const country = form.getFieldValue("country") || "USA";
+    const result = await lookupPostal(postal, country);
+    if (result) {
+      form.setFieldsValue({
+        city: result.city,
+        state: result.state,
+      });
+    }
+  };
+
   return (
     <Card 
       title="Destination Location" 
       extra={<Button type="link" className="add-master-btn add-line-btn">+ Add to Master</Button>}
     >
-      <Form layout="vertical">
+      <Form layout="vertical" form={form} initialValues={{ country: "USA" }}>
         <Form.Item label="Company Name">
           <Input placeholder="Company name" />
         </Form.Item>
@@ -19,10 +36,8 @@ const DestinationLocation: React.FC = () => {
         </Form.Item>
         <Row gutter={[12, 12]}>
           <Col xs={24} md={16}>
-            <Form.Item label="Country">
-              <Select defaultValue="US">
-                <Select.Option value="US">United States Of America</Select.Option>
-              </Select>
+            <Form.Item label="Country" name="country">
+              <CountrySelect />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
@@ -32,13 +47,18 @@ const DestinationLocation: React.FC = () => {
           </Col>
         </Row>
         <Row gutter={[12, 12]}>
-          <Col xs={24} md={16}>
-            <Form.Item label="Postal / ZIP">
-              <Input placeholder="ZIP" />
+          <Col xs={24} md={8}>
+            <Form.Item label="Postal / ZIP" name="postal">
+              <Input placeholder="ZIP" onBlur={handlePostalBlur} disabled={loadingPostal} />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
-            <Form.Item label="State">
+            <Form.Item label="City" name="city">
+              <Input placeholder="City" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={8}>
+            <Form.Item label="State" name="state">
               <Input placeholder="ST" />
             </Form.Item>
           </Col>

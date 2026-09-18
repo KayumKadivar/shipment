@@ -10,6 +10,8 @@ import {
   UploadOutlined,
   UserOutlined,
 } from "@ant-design/icons";
+import CountrySelect from "../components/CountrySelect";
+import { usePostalLookup } from "../hooks/usePostalLookup";
 import {
   Button,
   Checkbox,
@@ -165,6 +167,7 @@ function CustomerLocationPage({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [messageApi, messageContext] = message.useMessage();
   const [modalApi, modalContext] = Modal.useModal();
+  const { lookupPostal, loadingPostal } = usePostalLookup();
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
     () => sessionStorage.getItem("customerLocation_selectedClientCode") || ""
@@ -365,6 +368,18 @@ function CustomerLocationPage({
         }
       },
     });
+  };
+
+  const handlePostalBlur = async () => {
+    const postal = form.getFieldValue("postal");
+    const country = form.getFieldValue("country") || "USA";
+    const result = await lookupPostal(postal, country);
+    if (result) {
+      form.setFieldsValue({
+        city: result.city,
+        state: result.state,
+      });
+    }
   };
 
   const refreshLocations = async () => {
@@ -804,7 +819,7 @@ function CustomerLocationPage({
               label='Country'
               name='country'
               rules={[{ required: true, message: "Enter a country" }]}>
-              <Input />
+              <CountrySelect />
             </Form.Item>
             <Form.Item
               label='State'
@@ -822,7 +837,7 @@ function CustomerLocationPage({
               label='Postal code'
               name='postal'
               rules={[{ required: true, message: "Enter a postal code" }]}>
-              <Input />
+              <Input onBlur={handlePostalBlur} disabled={loadingPostal} />
             </Form.Item>
             <Form.Item label='Contact name' name='contactName'>
               <Input />

@@ -6,8 +6,11 @@ import {
   Input,
   Select,
   Switch,
+  message,
 } from "antd";
 import { useNavigate, useLocation } from "react-router-dom";
+import CountrySelect from "../components/CountrySelect";
+import { usePostalLookup } from "../hooks/usePostalLookup";
 // import { useAppSelector } from "../app/hooks";
 import type {
   CustomerLocation,
@@ -66,6 +69,22 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const location = useLocation();
   const clientName = location.state?.clientName || CLIENT_NAME;
   const [form] = Form.useForm<LocationFormValues>();
+  const [messageApi, contextHolder] = message.useMessage();
+  const { lookupPostal, loadingPostal } = usePostalLookup();
+
+  // Handle postal code blur
+  const handlePostalBlur = async () => {
+    const postal = form.getFieldValue("postal");
+    const country = form.getFieldValue("countryCode") || "USA";
+    const result = await lookupPostal(postal, country);
+    if (result) {
+      form.setFieldsValue({
+        city: result.city,
+        state: result.state,
+      });
+    }
+  };
+
   // const accessorialsList = useAppSelector((state) => state.accessorials.data);
 
   const initialValues: Partial<LocationFormValues> = {
@@ -74,7 +93,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
     isActive: true,
     address1: "",
     address2: "",
-    country: "United States Of America",
+    countryCode: "USA",
     state: "",
     city: "",
     postal: "",
@@ -110,6 +129,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
 
   return (
     <section className='add-location-page'>
+      {contextHolder}
       <Form<LocationFormValues>
         form={form}
         className='add-location-form'
@@ -153,15 +173,11 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 <Input placeholder='Suite, dock, unit...' />
               </Form.Item>
 
-              <Form.Item label='Country' name='country'>
-                <Select
-                  options={[
-                    {
-                      value: "United States Of America",
-                      label: "United States Of America",
-                    },
-                  ]}
-                />
+              <Form.Item
+                name='countryCode'
+                label='Country'
+                rules={[{ required: true, message: "Country is required" }]}>
+                <CountrySelect />
               </Form.Item>
 
               <Form.Item
@@ -170,7 +186,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 name='postal'
                 required
                 rules={[{ required: true, message: "Enter the ZIP or postal code" }]}>
-                <Input placeholder='ZIP / Postal' />
+                <Input placeholder='ZIP / Postal' onBlur={handlePostalBlur} />
               </Form.Item>
 
               <Form.Item className='add-location-field--compact' label='State' name='state'>

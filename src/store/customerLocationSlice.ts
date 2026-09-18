@@ -41,8 +41,22 @@ export const fetchClientsAndSubclients = createAsyncThunk(
         }
       });
       
+      if (Array.isArray(response.data)) {
+        return response.data.map((c: any) => ({
+          clientName: c.clientName || c.profileCode || "",
+          clientCode: c.clientCode || c.profileCode || ""
+        }));
+      }
+
       if (!response.data?.isSuccess || !response.data?.data) {
         return rejectWithValue("Failed to fetch clients.");
+      }
+
+      if (Array.isArray(response.data.data)) {
+        return response.data.data.map((c: any) => ({
+          clientName: c.clientName || c.profileCode || "",
+          clientCode: c.clientCode || c.profileCode || ""
+        }));
       }
 
       const mainClient = {
@@ -89,9 +103,9 @@ export const saveCustomerLocation = createAsyncThunk(
         address1: payloadData.address1 || "",
         address2: payloadData.address2 || "",
         city: payloadData.city || "",
-        stateCode: payloadData.state || "",
-        countryCode: payloadData.country || "",
-        zipCode: payloadData.postal || "",
+        stateCode: payloadData.stateCode || payloadData.state || "",
+        countryCode: payloadData.countryCode || payloadData.country || "",
+        zipCode: payloadData.zipCode || payloadData.postal || "",
         clientCode: sessionStorage.getItem("customerLocation_selectedClientCode") || DEFAULT_CLIENT_CODE,
         contactName: payloadData.contactName || "",
         contactPhone: payloadData.phone || "",

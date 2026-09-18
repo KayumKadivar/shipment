@@ -10,9 +10,25 @@ const initialState: AppState = {
   isAuthenticated: Boolean(savedToken),
   token: savedToken,
   username: savedUsername,
+  countries: [],
   loading: false,
   error: null,
 };
+
+export const fetchCountries = createAsyncThunk(
+  "app/fetchCountries",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/Countries`);
+      if (response.data && response.data.isSuccess) {
+        return response.data.data;
+      }
+      return rejectWithValue("Failed to fetch countries");
+    } catch (error: any) {
+      return rejectWithValue(error.message || "Failed to fetch countries");
+    }
+  }
+);
 
 export const loginUser = createAsyncThunk<
   { token: string; username: string },
@@ -105,6 +121,9 @@ const appSlice = createSlice({
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Login failed";
+      })
+      .addCase(fetchCountries.fulfilled, (state, action) => {
+        state.countries = action.payload;
       });
   },
 });

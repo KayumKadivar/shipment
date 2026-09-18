@@ -4,9 +4,11 @@ import {
   PlusOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Button, Checkbox, Input, Select } from "antd";
+import { Button, Checkbox, Input, Select, Tag, Tooltip } from "antd";
+import CountrySelect from "../components/CountrySelect";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePostalLookup } from "../hooks/usePostalLookup";
 
 type ItemField =
   | "units"
@@ -110,6 +112,20 @@ function QuoteLocationCard({
   zipLabel: string;
   includeDate?: boolean;
 }) {
+  const [postal, setPostal] = useState("");
+  const [country, setCountry] = useState("USA");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const { lookupPostal, loadingPostal } = usePostalLookup();
+
+  const handlePostalBlur = async () => {
+    const result = await lookupPostal(postal, country);
+    if (result) {
+      setCity(result.city);
+      setState(result.state);
+    }
+  };
+
   return (
     <section className='new-quote-card quote-location-card'>
       <header className='new-quote-card__header'>
@@ -127,13 +143,27 @@ function QuoteLocationCard({
         ) : null}
         <label className='new-quote-field'>
           <span>{zipLabel}</span>
-          <Input defaultValue='02854' aria-label={zipLabel} />
+          <Input 
+            value={postal} 
+            onChange={e => setPostal(e.target.value)}
+            onBlur={handlePostalBlur}
+            disabled={loadingPostal}
+            aria-label={zipLabel} 
+          />
+        </label>
+        <label className='new-quote-field'>
+          <span>City</span>
+          <Input value={city} onChange={e => setCity(e.target.value)} aria-label={`${title} city`} />
+        </label>
+        <label className='new-quote-field'>
+          <span>State</span>
+          <Input value={state} onChange={e => setState(e.target.value)} aria-label={`${title} state`} />
         </label>
         <label className='new-quote-field'>
           <span>Country</span>
-          <Select
-            defaultValue='United States'
-            options={countryOptions}
+          <CountrySelect
+            value={country}
+            onChange={(val: string) => setCountry(val)}
             aria-label={`${title} country`}
           />
         </label>

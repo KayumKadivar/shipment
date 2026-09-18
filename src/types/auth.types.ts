@@ -14,6 +14,7 @@ export interface AppState {
   isAuthenticated: boolean;
   token: string | null;
   username: string | null;
+  countries: any[];
   loading: boolean;
   error: string | null;
 }

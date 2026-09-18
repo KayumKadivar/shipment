@@ -9,7 +9,7 @@ import type { CustomerLocation } from "./types/customerLocation.types.ts";
 import type { CustomerProduct } from "./types/customerProduct.types.ts";
 import Login from "./pages/Login.tsx";
 import AppRouter from "./router/index.tsx";
-import { login, logout } from "./store/appSlice.ts";
+import { login, logout, fetchCountries } from "./store/appSlice.ts";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "./app/store";
 import { fetchAccessorials } from "./store/accessorialsSlice";
@@ -73,6 +73,7 @@ function App() {
       dispatch(fetchAccessorials());
       dispatch(getAllCustomerLocations(1));
       dispatch(getCustomerProducts(1));
+      dispatch(fetchCountries());
     }
   }, [isAuthenticated, dispatch]);
 
