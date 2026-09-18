@@ -66,22 +66,22 @@ const CSV_COLUMNS: Array<{
   header: string;
   key: keyof Omit<CustomerLocation, "key">;
 }> = [
-    { header: "Location Name", key: "locationName" },
-    { header: "Active", key: "isActive" },
-    { header: "Address 1", key: "address1" },
-    { header: "Address 2", key: "address2" },
-    { header: "Country", key: "country" },
-    { header: "State", key: "state" },
-    { header: "City", key: "city" },
-    { header: "Postal", key: "postal" },
-    { header: "Contact Name", key: "contactName" },
-    { header: "Phone", key: "phone" },
-    { header: "Email", key: "email" },
-    { header: "Activate Date", key: "activateDate" },
-    { header: "Deactivate Date", key: "deactivateDate" },
-    { header: "Group", key: "group" },
-    { header: "Location Type", key: "locationType" },
-  ];
+  { header: "Location Name", key: "locationName" },
+  { header: "Active", key: "isActive" },
+  { header: "Address 1", key: "address1" },
+  { header: "Address 2", key: "address2" },
+  { header: "Country", key: "country" },
+  { header: "State", key: "state" },
+  { header: "City", key: "city" },
+  { header: "Postal", key: "postal" },
+  { header: "Contact Name", key: "contactName" },
+  { header: "Phone", key: "phone" },
+  { header: "Email", key: "email" },
+  { header: "Activate Date", key: "activateDate" },
+  { header: "Deactivate Date", key: "deactivateDate" },
+  { header: "Group", key: "group" },
+  { header: "Location Type", key: "locationType" },
+];
 
 const requiredCsvHeaders = [
   "Location Name",
@@ -186,6 +186,7 @@ function CustomerLocationPage({
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedQuery(query);
+      setCurrentPage(1); // Reset to page 1 on new search
     }, 500);
     return () => clearTimeout(handler);
   }, [query]);
@@ -202,14 +203,12 @@ function CustomerLocationPage({
     }
   }, [dispatch, selectedClientCode, debouncedQuery, currentPage, pageSize]);
 
-  // Remove local filtering, just use locations directly from Redux
+  // Locations are filtered and paginated from the backend
   const filteredLocations = locations;
+  const visibleLocations = locations;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const activePage = Math.min(currentPage, totalPages);
-  // Locations are already paginated by the backend, no slice needed
-  const visibleLocations = locations;
-
 
   const groups = useMemo<GroupSummary[]>(() => {
     const grouped = new Map<string, GroupSummary>();
@@ -277,13 +276,13 @@ function CustomerLocationPage({
   const openEditForm = async (location: CustomerLocation) => {
     try {
       const locId = location.locationID || location.key;
-
+      
       messageApi.loading({ content: 'Fetching location details...', key: 'fetchLoc' });
-
+      
       const response = await dispatch(getCustomerLocationByID({ locationID: locId })).unwrap();
-
+      
       messageApi.success({ content: 'Details loaded', key: 'fetchLoc', duration: 2 });
-
+      
       setEditingLocation(response);
       form.setFieldsValue(response);
       setIsFormOpen(true);
@@ -305,7 +304,7 @@ function CustomerLocationPage({
 
       messageApi.loading({ content: 'Saving changes...', key: 'saveLoc' });
 
-
+      
       const locId = editingLocation.locationID || (editingLocation as any).locationId || editingLocation.key;
 
       const payload = {
@@ -339,21 +338,21 @@ function CustomerLocationPage({
       onOk: async () => {
         try {
           messageApi.loading({ content: 'Deleting...', key: 'deleteLoc' });
-
+          
           const idsToDelete: number[] = [];
           selectedKeys.forEach(key => {
             const loc = locations.find(l => l.key === key);
             if (loc && loc.locationID) {
-              idsToDelete.push(Number(loc.locationID));
+               idsToDelete.push(Number(loc.locationID));
             } else if (loc && (loc as any).locationId) {
-              idsToDelete.push(Number((loc as any).locationId));
+               idsToDelete.push(Number((loc as any).locationId));
             } else if (!isNaN(Number(key))) {
-              idsToDelete.push(Number(key)); // Fallback if key is the ID
+               idsToDelete.push(Number(key)); // Fallback if key is the ID
             }
           });
 
           if (idsToDelete.length > 0) {
-            await dispatch(deleteCustomerLocations(idsToDelete)).unwrap();
+             await dispatch(deleteCustomerLocations(idsToDelete)).unwrap();
           }
 
           setLocations((current) =>
@@ -362,7 +361,7 @@ function CustomerLocationPage({
           setSelectedKeys(new Set());
           messageApi.success({ content: "Selected locations deleted", key: 'deleteLoc' });
         } catch (error: any) {
-          messageApi.error({ content: error || "Failed to delete locations", key: 'deleteLoc' });
+           messageApi.error({ content: error || "Failed to delete locations", key: 'deleteLoc' });
         }
       },
     });

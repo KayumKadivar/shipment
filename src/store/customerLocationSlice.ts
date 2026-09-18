@@ -50,10 +50,10 @@ export const fetchClientsAndSubclients = createAsyncThunk(
         clientCode: response.data.data.clientCode
       };
       
-      const subClients = response.data.data.subClients?.map((s: any) => ({
-        clientName: s.clientName,
-        clientCode: s.clientCode
-      })) || [];
+      const subClients = (response.data.data.subClients || response.data.data.profiles || []).map((s: any) => ({
+        clientName: s.clientName || s.profileCode || "",
+        clientCode: s.clientCode || s.profileCode || ""
+      }));
       
       return [mainClient, ...subClients];
     } catch (error: any) {
@@ -261,24 +261,43 @@ export const getAllCustomerLocations = createAsyncThunk<
 
       const token = localStorage.getItem("authToken");
 
-      const payload = {
-        clientCode,
-        searchText,
-        pageNumber,
-        pageSize
-      };
+      let response;
 
-      const response = await axios.post(
-        `${API_BASE_URL}/Location/SearchLocations`,
-        payload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            accept: "application/json, text/plain, */*",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }
-      );
+      if (searchText && searchText.trim() !== "") {
+        const payload = {
+          clientCode,
+          searchText,
+          pageNumber,
+          pageSize
+        };
+
+        response = await axios.post(
+          `${API_BASE_URL}/Location/SearchLocations`,
+          payload,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              accept: "application/json, text/plain, */*",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
+      } else {
+        response = await axios.get(
+          `${API_BASE_URL}/Location/GetLocationsByClientCode/${encodeURIComponent(clientCode)}`,
+          {
+            params: {
+              pageNumber,
+              pageSize,
+            },
+            headers: {
+              "Content-Type": "application/json",
+              accept: "application/json, text/plain, */*",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
+      }
 
       console.log("GetLocationsByClientCode Response:", response.data);
 
@@ -507,8 +526,11 @@ const customerLocationSlice = createSlice({
       getAllCustomerLocations.fulfilled,
       (state, action) => {
         state.loading = false;
+
+        
         state.locations = action.payload.locations;
         state.totalCount = action.payload.totalCount;
+
         state.error = null;
       }
     );
