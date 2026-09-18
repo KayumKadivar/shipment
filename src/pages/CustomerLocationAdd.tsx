@@ -7,11 +7,11 @@ import {
   Select,
   Switch,
 } from "antd";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 // import { useAppSelector } from "../app/hooks";
 import type {
   CustomerLocation,
-  LocationType,
+  // LocationType,
 } from "../types/customerLocation.types";
 
 type LocationFormValues = Omit<CustomerLocation, "key">;
@@ -23,24 +23,23 @@ interface CustomerLocationAddProps {
 const CLIENT_NAME = "INLAND TRANSPORT, INC.";
 
 
+// const LOCATION_TYPES: LocationType[] = [
+//   "All",
+//   "Origin",
+//   "Destination",
+//   "Bill to",
+// ];
 
-const LOCATION_TYPES: LocationType[] = [
-  "All",
-  "Origin",
-  "Destination",
-  "Bill to",
-];
-
-const GROUP_OPTIONS = [
-  "STANDARD",
-  "COLD CHAIN",
-  "DISTRIBUTION",
-  "INTERNAL",
-  "MIDWEST",
-  "PORTS",
-  "SOUTHEAST",
-  "WEST COAST",
-];
+// const GROUP_OPTIONS = [
+//   "STANDARD",
+//   "COLD CHAIN",
+//   "DISTRIBUTION",
+//   "INTERNAL",
+//   "MIDWEST",
+//   "PORTS",
+//   "SOUTHEAST",
+//   "WEST COAST",
+// ];
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
   const hour = Math.floor(index / 2);
@@ -64,6 +63,8 @@ function getToday() {
 
 function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const clientName = location.state?.clientName || CLIENT_NAME;
   const [form] = Form.useForm<LocationFormValues>();
   // const accessorialsList = useAppSelector((state) => state.accessorials.data);
 
@@ -125,12 +126,12 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
             <h1 id='location-information-title'>Location Information</h1>
             <div className='add-location-card__body'>
               <Form.Item label='Client'>
-                <Input value={CLIENT_NAME} readOnly />
+                <Input value={clientName} readOnly />
               </Form.Item>
 
-              <Form.Item label='Short Name' name='shortName'>
+              {/* <Form.Item label='Short Name' name='shortName'>
                 <Input placeholder='Short name or alias' />
-              </Form.Item>
+              </Form.Item> */}
 
               <Form.Item
                 label='Location Name'
@@ -184,9 +185,9 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 <Input placeholder='City' />
               </Form.Item>
 
-              <Form.Item className='add-location-field--compact' label='Port' name='port'>
+              {/* <Form.Item className='add-location-field--compact' label='Port' name='port'>
                 <Input placeholder='Port (optional)' />
-              </Form.Item>
+              </Form.Item> */}
 
               <Form.Item label='Contact Name' name='contactName'>
                 <Input placeholder='Contact person' />
@@ -210,9 +211,9 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 <Input placeholder='email@company.com' />
               </Form.Item>
 
-              <Form.Item className='add-location-field--medium' label='Fax Number' name='faxNumber'>
+              {/* <Form.Item className='add-location-field--medium' label='Fax Number' name='faxNumber'>
                 <Input placeholder='Fax number' />
-              </Form.Item>
+              </Form.Item> */}
             </div>
           </section>
 

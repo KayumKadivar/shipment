@@ -66,22 +66,22 @@ const CSV_COLUMNS: Array<{
   header: string;
   key: keyof Omit<CustomerLocation, "key">;
 }> = [
-  { header: "Location Name", key: "locationName" },
-  { header: "Active", key: "isActive" },
-  { header: "Address 1", key: "address1" },
-  { header: "Address 2", key: "address2" },
-  { header: "Country", key: "country" },
-  { header: "State", key: "state" },
-  { header: "City", key: "city" },
-  { header: "Postal", key: "postal" },
-  { header: "Contact Name", key: "contactName" },
-  { header: "Phone", key: "phone" },
-  { header: "Email", key: "email" },
-  { header: "Activate Date", key: "activateDate" },
-  { header: "Deactivate Date", key: "deactivateDate" },
-  { header: "Group", key: "group" },
-  { header: "Location Type", key: "locationType" },
-];
+    { header: "Location Name", key: "locationName" },
+    { header: "Active", key: "isActive" },
+    { header: "Address 1", key: "address1" },
+    { header: "Address 2", key: "address2" },
+    { header: "Country", key: "country" },
+    { header: "State", key: "state" },
+    { header: "City", key: "city" },
+    { header: "Postal", key: "postal" },
+    { header: "Contact Name", key: "contactName" },
+    { header: "Phone", key: "phone" },
+    { header: "Email", key: "email" },
+    { header: "Activate Date", key: "activateDate" },
+    { header: "Deactivate Date", key: "deactivateDate" },
+    { header: "Group", key: "group" },
+    { header: "Location Type", key: "locationType" },
+  ];
 
 const requiredCsvHeaders = [
   "Location Name",
@@ -149,11 +149,12 @@ function CustomerLocationPage({
 }: CustomerLocationPageProps) {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { loading, clients } = useAppSelector(
+  const { loading, clients, totalCount } = useAppSelector(
     (state) => state.customerLocation
   );
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [activeView, setActiveView] = useState<LocationView>("detail");
@@ -165,40 +166,49 @@ function CustomerLocationPage({
   const [messageApi, messageContext] = message.useMessage();
   const [modalApi, modalContext] = Modal.useModal();
 
-  const [selectedClientCode, setSelectedClientCode] = useState<string>("DEVTS");
+  const [selectedClientCode, setSelectedClientCode] = useState<string>(
+    () => sessionStorage.getItem("customerLocation_selectedClientCode") || ""
+  );
 
   useEffect(() => {
     dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
 
-  const filteredLocations = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return locations;
+  useEffect(() => {
+    if (clients.length > 0) {
+      const isClientValid = clients.some(c => c.clientCode === selectedClientCode);
+      if (!isClientValid) {
+        setSelectedClientCode(clients[0].clientCode);
+      }
+    }
+  }, [clients, selectedClientCode]);
 
-    return locations.filter((location) =>
-      [
-        location.locationName,
-        location.address1,
-        location.address2,
-        location.city,
-        location.state,
-        location.postal,
-        location.contactName,
-        location.phone,
-        location.email,
-        location.group,
-        location.locationType,
-      ].some((value) => value.toLowerCase().includes(needle)),
-    );
-  }, [locations, query]);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [query]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredLocations.length / pageSize));
+  useEffect(() => {
+    if (selectedClientCode) {
+      sessionStorage.setItem("customerLocation_selectedClientCode", selectedClientCode);
+      dispatch(getAllCustomerLocations({
+        clientCode: selectedClientCode,
+        searchText: debouncedQuery,
+        pageNumber: currentPage,
+        pageSize: pageSize
+      }));
+    }
+  }, [dispatch, selectedClientCode, debouncedQuery, currentPage, pageSize]);
+
+  // Remove local filtering, just use locations directly from Redux
+  const filteredLocations = locations;
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const activePage = Math.min(currentPage, totalPages);
-  const pageStart = (activePage - 1) * pageSize;
-  const visibleLocations = filteredLocations.slice(
-    pageStart,
-    pageStart + pageSize,
-  );
+  // Locations are already paginated by the backend, no slice needed
+  const visibleLocations = locations;
 
 
   const groups = useMemo<GroupSummary[]>(() => {
@@ -256,19 +266,24 @@ function CustomerLocationPage({
   };
 
   const openAddForm = () => {
-    navigate("/customer-location/add");
+    const selectedClient = clients.find(c => c.clientCode === selectedClientCode);
+    navigate("/customer-location/add", {
+      state: {
+        clientName: selectedClient?.clientName || "INLAND TRANSPORT, INC."
+      }
+    });
   };
 
   const openEditForm = async (location: CustomerLocation) => {
     try {
       const locId = location.locationID || location.key;
-      
+
       messageApi.loading({ content: 'Fetching location details...', key: 'fetchLoc' });
-      
+
       const response = await dispatch(getCustomerLocationByID({ locationID: locId })).unwrap();
-      
+
       messageApi.success({ content: 'Details loaded', key: 'fetchLoc', duration: 2 });
-      
+
       setEditingLocation(response);
       form.setFieldsValue(response);
       setIsFormOpen(true);
@@ -290,7 +305,7 @@ function CustomerLocationPage({
 
       messageApi.loading({ content: 'Saving changes...', key: 'saveLoc' });
 
-      
+
       const locId = editingLocation.locationID || (editingLocation as any).locationId || editingLocation.key;
 
       const payload = {
@@ -324,21 +339,21 @@ function CustomerLocationPage({
       onOk: async () => {
         try {
           messageApi.loading({ content: 'Deleting...', key: 'deleteLoc' });
-          
+
           const idsToDelete: number[] = [];
           selectedKeys.forEach(key => {
             const loc = locations.find(l => l.key === key);
             if (loc && loc.locationID) {
-               idsToDelete.push(Number(loc.locationID));
+              idsToDelete.push(Number(loc.locationID));
             } else if (loc && (loc as any).locationId) {
-               idsToDelete.push(Number((loc as any).locationId));
+              idsToDelete.push(Number((loc as any).locationId));
             } else if (!isNaN(Number(key))) {
-               idsToDelete.push(Number(key)); // Fallback if key is the ID
+              idsToDelete.push(Number(key)); // Fallback if key is the ID
             }
           });
 
           if (idsToDelete.length > 0) {
-             await dispatch(deleteCustomerLocations(idsToDelete)).unwrap();
+            await dispatch(deleteCustomerLocations(idsToDelete)).unwrap();
           }
 
           setLocations((current) =>
@@ -347,7 +362,7 @@ function CustomerLocationPage({
           setSelectedKeys(new Set());
           messageApi.success({ content: "Selected locations deleted", key: 'deleteLoc' });
         } catch (error: any) {
-           messageApi.error({ content: error || "Failed to delete locations", key: 'deleteLoc' });
+          messageApi.error({ content: error || "Failed to delete locations", key: 'deleteLoc' });
         }
       },
     });
@@ -356,7 +371,12 @@ function CustomerLocationPage({
   const refreshLocations = async () => {
     messageApi.loading({ content: "Fetching locations from server...", key: "refreshLoc" });
     try {
-      await dispatch(getAllCustomerLocations(1)).unwrap();
+      await dispatch(getAllCustomerLocations({
+        clientCode: selectedClientCode,
+        searchText: debouncedQuery,
+        pageNumber: 1,
+        pageSize: pageSize
+      })).unwrap();
       setSelectedKeys(new Set());
       setQuery("");
       setCurrentPage(1);
@@ -568,8 +588,8 @@ function CustomerLocationPage({
     { title: "Bill To", dataIndex: "billTo", width: 110, align: "center" },
   ];
 
-  const shownStart = filteredLocations.length ? pageStart + 1 : 0;
-  const shownEnd = Math.min(pageStart + pageSize, filteredLocations.length);
+  const shownStart = totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const shownEnd = Math.min(currentPage * pageSize, totalCount);
 
   return (
     <section className='customer-locations-page'>
@@ -710,7 +730,7 @@ function CustomerLocationPage({
             />
             <div className='customer-location-footer'>
               <span>
-                Showing {shownStart}-{shownEnd} of <strong>{filteredLocations.length}</strong>{" "}
+                Showing {shownStart}-{shownEnd} of <strong>{totalCount}</strong>{" "}
                 Customer Locations
               </span>
               <div className='customer-location-pagination'>

@@ -12,6 +12,7 @@ import type { CustomerLocation, LocationType } from "../types/customerLocation.t
 interface CustomerLocationState {
   locations: CustomerLocation[];
   clients: { clientName: string; clientCode: string }[];
+  totalCount: number;
   loading: boolean;
   saving: boolean;
   error: string | null;
@@ -20,6 +21,7 @@ interface CustomerLocationState {
 const initialState: CustomerLocationState = {
   locations: [],
   clients: [],
+  totalCount: 0,
   loading: false,
   saving: false,
   error: null,
@@ -82,42 +84,25 @@ export const saveCustomerLocation = createAsyncThunk(
       // const allAccessorials = state.accessorials.data;
 
       const payload = {
-        clientID: payloadData.clientID || "1",
-        shortName: payloadData.shortName || "",
+        locationId: 0,
         locationName: payloadData.locationName || "",
         address1: payloadData.address1 || "",
         address2: payloadData.address2 || "",
-        country: payloadData.country || "",
-        postal: payloadData.postal || "",
-        state: payloadData.state || "",
         city: payloadData.city || "",
-        port: payloadData.port || "",
+        stateCode: payloadData.state || "",
+        countryCode: payloadData.country || "",
+        zipCode: payloadData.postal || "",
+        clientCode: sessionStorage.getItem("customerLocation_selectedClientCode") || DEFAULT_CLIENT_CODE,
         contactName: payloadData.contactName || "",
-        phone: payloadData.phone || "",
-        email: payloadData.email || "",
-        faxNumber: payloadData.faxNumber || "",
-        // locationType: payloadData.locationType || "",
-        // group: payloadData.group || "",
-        // activateDate: payloadData.activateDate ? new Date(payloadData.activateDate).toISOString() : new Date().toISOString(),
-        // deactivateDate: payloadData.deactivateDate ? new Date(payloadData.deactivateDate).toISOString() : new Date().toISOString(),
-        isActive: payloadData.isActive ?? true,
-        // locationRef: payloadData.locationRef || "",
-        // inboundAccount: payloadData.inboundAccount || "",
-        // outboundAccount: payloadData.outboundAccount || "",
-        // notes: payloadData.notes || "",
+        contactPhone: payloadData.phone || "",
+        contactEmail: payloadData.email || "",
         openTime: payloadData.openTime && payloadData.openTime.trim() !== "" ? payloadData.openTime.trim() : null,
         closeTime: payloadData.closeTime && payloadData.closeTime.trim() !== "" ? payloadData.closeTime.trim() : null,
-        // accessorialsList: (payloadData.accessorials || []).map((acc: any) => {
-        //   const matched = allAccessorials.find(a => a.accessorialName === acc);
-        //   return {
-        //     accessorialsID: matched ? matched.accessorialID : 0,
-        //     accessorialsName: acc
-        //   };
-        // })
+        isActive: payloadData.isActive ?? true
       };
 
       const response = await axios.post(
-        `${API_BASE_URL}/CustomerLocation/AddLocation`,
+        `${API_BASE_URL}/Location`,
         payload,
         {
           headers: {
@@ -247,12 +232,13 @@ export const deleteCustomerLocations = createAsyncThunk<
 // ============================================================
 export interface GetLocationsParams {
   clientCode?: string;
+  searchText?: string;
   pageNumber?: number;
   pageSize?: number;
 }
 
 export const getAllCustomerLocations = createAsyncThunk<
-  CustomerLocation[],
+  { locations: CustomerLocation[], totalCount: number },
   GetLocationsParams | string | number | undefined,
   { rejectValue: string }
 >(
@@ -260,11 +246,13 @@ export const getAllCustomerLocations = createAsyncThunk<
   async (params, { rejectWithValue }) => {
     try {
       let clientCode = DEFAULT_CLIENT_CODE;
+      let searchText = "";
       let pageNumber = 1;
       let pageSize = 10;
 
       if (typeof params === "object" && params !== null) {
         if (params.clientCode) clientCode = params.clientCode;
+        if (params.searchText !== undefined) searchText = params.searchText;
         if (params.pageNumber !== undefined) pageNumber = params.pageNumber;
         if (params.pageSize !== undefined) pageSize = params.pageSize;
       } else if (typeof params === "string" && isNaN(Number(params))) {
@@ -273,13 +261,17 @@ export const getAllCustomerLocations = createAsyncThunk<
 
       const token = localStorage.getItem("authToken");
 
-      const response = await axios.get(
-        `${API_BASE_URL}/Location/GetLocationsByClientCode/${encodeURIComponent(clientCode)}`,
+      const payload = {
+        clientCode,
+        searchText,
+        pageNumber,
+        pageSize
+      };
+
+      const response = await axios.post(
+        `${API_BASE_URL}/Location/SearchLocations`,
+        payload,
         {
-          params: {
-            pageNumber,
-            pageSize,
-          },
           headers: {
             "Content-Type": "application/json",
             accept: "application/json, text/plain, */*",
@@ -297,9 +289,17 @@ export const getAllCustomerLocations = createAsyncThunk<
         );
       }
 
-      const locations: CustomerLocation[] = (
-        response.data?.data || []
-      ).map((loc: any) => {
+      let rawData = response.data?.data || [];
+      let totalCount = 0;
+      
+      if (!Array.isArray(rawData) && rawData.items) {
+        totalCount = rawData.totalCount || rawData.totalRecords || rawData.items.length;
+        rawData = rawData.items;
+      } else if (Array.isArray(rawData)) {
+        totalCount = response.data?.totalCount || response.data?.totalRecords || rawData.length;
+      }
+
+      const locations: CustomerLocation[] = rawData.map((loc: any) => {
         const id = loc.locationId ?? loc.locationID;
         return {
           key: String(id || `loc-${Math.random()}`),
@@ -333,7 +333,7 @@ export const getAllCustomerLocations = createAsyncThunk<
         };
       });
 
-      return locations;
+      return { locations, totalCount };
     } catch (error: any) {
       console.error(
         "GetLocationsByClientCode API Error:",
@@ -475,6 +475,7 @@ const customerLocationSlice = createSlice({
   reducers: {
     clearLocations: (state) => {
       state.locations = [];
+      state.totalCount = 0;
       state.error = null;
     },
 
@@ -506,11 +507,8 @@ const customerLocationSlice = createSlice({
       getAllCustomerLocations.fulfilled,
       (state, action) => {
         state.loading = false;
-
-        // IMPORTANT
-        // Replace existing table data
-        state.locations = action.payload;
-
+        state.locations = action.payload.locations;
+        state.totalCount = action.payload.totalCount;
         state.error = null;
       }
     );
