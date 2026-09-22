@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Form, Input, Row, Col, Button, Select } from 'antd';
+import { Card, Form, Input, Row, Col, Button } from 'antd';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 

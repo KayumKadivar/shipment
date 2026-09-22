@@ -27,6 +27,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -38,10 +39,12 @@ import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import {
-  getCustomerProductByDesc,
+  getCustomerProductByID,
   getCustomerProducts,
-  saveCustomerProduct,
+  updateCustomerProduct,
+  deleteCustomerProducts,
 } from "../store/customerProductSlice";
+import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import type {
   CustomerProduct,
   ProductFormValues,
@@ -139,11 +142,15 @@ function CustomerProductPage({
 }: CustomerProductPageProps) {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { loading } = useAppSelector(
+  const { loading, totalCount } = useAppSelector(
     (state) => state.customerProduct
+  );
+  const { clients } = useAppSelector(
+    (state) => state.customerLocation
   );
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [activeView, setActiveView] = useState<ProductView>("detail");
@@ -155,27 +162,59 @@ function CustomerProductPage({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [messageApi, messageContext] = message.useMessage();
   const [modalApi, modalContext] = Modal.useModal();
+  
+  const [selectedClientCode, setSelectedClientCode] = useState<string>(
+    () => sessionStorage.getItem("customerProduct_selectedClientCode") || ""
+  );
 
-  const filteredProducts = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return products;
+  useEffect(() => {
+    dispatch(fetchClientsAndSubclients());
+  }, [dispatch]);
 
-    return products.filter((product) =>
-      [
-        product.description,
-        product.nmfc,
-        product.productClass,
-        product.commodity,
-        product.hazmatContact,
-        product.productGroup,
-      ].some((value) => value.toLowerCase().includes(needle)),
-    );
-  }, [products, query]);
+  useEffect(() => {
+    if (clients.length > 0) {
+      const isClientValid = clients.some(c => c.clientCode === selectedClientCode);
+      if (!isClientValid) {
+        const defaultClient = clients[0].clientCode;
+        setSelectedClientCode(defaultClient);
+        sessionStorage.setItem("customerProduct_selectedClientCode", defaultClient);
+      }
+    }
+  }, [clients, selectedClientCode]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  // Update session storage when user changes client manually
+  const handleClientChange = (value: string) => {
+    setSelectedClientCode(value);
+    sessionStorage.setItem("customerProduct_selectedClientCode", value);
+    setCurrentPage(1); // Reset page on client change
+  };
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      const trimmedQuery = query.trim();
+      if (trimmedQuery.length >= 3 || trimmedQuery.length === 0) {
+        setDebouncedQuery(trimmedQuery);
+        setCurrentPage(1); // Reset to page 1 on new search
+      }
+    }, 600);
+    return () => clearTimeout(handler);
+  }, [query]);
+
+  useEffect(() => {
+    if (!selectedClientCode) return; // wait until client is selected
+    dispatch(getCustomerProducts({
+      clientCode: selectedClientCode,
+      searchText: debouncedQuery,
+      pageNumber: currentPage,
+      pageSize: pageSize
+    }));
+  }, [dispatch, selectedClientCode, debouncedQuery, currentPage, pageSize]);
+
+  const filteredProducts = products;
+  const visibleProducts = products;
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const activePage = Math.min(currentPage, totalPages);
-  const pageStart = (activePage - 1) * pageSize;
-  const visibleProducts = filteredProducts.slice(pageStart, pageStart + pageSize);
 
 
   const groupSummaries = useMemo<ProductGroupSummary[]>(() => {
@@ -230,7 +269,12 @@ function CustomerProductPage({
   };
 
   const openAddForm = () => {
-    navigate("/customer-products/add");
+    const selectedClient = clients.find(c => c.clientCode === selectedClientCode);
+    navigate("/customer-products/add", {
+      state: {
+        clientName: selectedClient?.clientName || "INLAND TRANSPORT, INC."
+      }
+    });
   };
 
   const openEditForm = async (product: CustomerProduct) => {
@@ -238,10 +282,7 @@ function CustomerProductPage({
       messageApi.loading({ content: "Fetching product details...", key: "fetchProd" });
 
       const response = await dispatch(
-        getCustomerProductByDesc({
-          clientID: "1",
-          description: product.description,
-        })
+        getCustomerProductByID(product.productID!)
       ).unwrap();
 
       messageApi.success({ content: "Details loaded", key: "fetchProd", duration: 2 });
@@ -275,9 +316,9 @@ function CustomerProductPage({
     closeForm();
 
     dispatch(
-      saveCustomerProduct({
+      updateCustomerProduct({
         ...values,
-        productID: editingProduct.productID,
+        productID: Number(editingProduct.productID),
       })
     );
   };
@@ -289,22 +330,46 @@ function CustomerProductPage({
       content: `${selectedKeys.size} product${selectedKeys.size === 1 ? "" : "s"} will be removed from this demo.`,
       okText: "Delete",
       okButtonProps: { danger: true },
-      onOk: () => {
-        setProducts((current) =>
-          current.filter((product) => !selectedKeys.has(product.key)),
-        );
-        setSelectedKeys(new Set());
-        messageApi.success("Selected products deleted");
+      onOk: async () => {
+        try {
+          messageApi.loading({ content: "Deleting products...", key: "deleteProd" });
+          
+          const productIdsToDelete = products
+            .filter((p) => selectedKeys.has(p.key) && p.productID !== undefined)
+            .map((p) => p.productID as number);
+
+          if (productIdsToDelete.length > 0) {
+            await dispatch(deleteCustomerProducts(productIdsToDelete)).unwrap();
+          }
+
+          dispatch(getCustomerProducts({
+            clientCode: selectedClientCode,
+            searchText: debouncedQuery,
+            pageNumber: currentPage,
+            pageSize: pageSize
+          }));
+
+          setSelectedKeys(new Set());
+          messageApi.success({ content: "Selected products deleted", key: "deleteProd" });
+        } catch (error: any) {
+          messageApi.error({ content: `Failed to delete products: ${error}`, key: "deleteProd" });
+        }
       },
     });
   };
 
   const refreshProducts = () => {
-    dispatch(getCustomerProducts(1));
-    setSelectedKeys(new Set());
     setQuery("");
+    setDebouncedQuery("");
     setCurrentPage(1);
     setPageSize(10);
+    setSelectedKeys(new Set());
+    dispatch(getCustomerProducts({
+      clientCode: selectedClientCode,
+      searchText: "",
+      pageNumber: 1,
+      pageSize: 10
+    }));
     messageApi.success("Products refreshed");
   };
 
@@ -508,8 +573,8 @@ function CustomerProductPage({
     { title: "Non-Hazmat", dataIndex: "nonHazmat", width: 140, align: "center" },
   ];
 
-  const shownStart = filteredProducts.length ? pageStart + 1 : 0;
-  const shownEnd = Math.min(pageStart + pageSize, filteredProducts.length);
+  const shownStart = totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const shownEnd = Math.min(currentPage * pageSize, totalCount);
 
   return (
     <section className='customer-products-page'>
@@ -563,7 +628,21 @@ function CustomerProductPage({
       <div className='customer-product-controls'>
         <div className='product-client-row'>
           <span>Client:</span>
-          <Button icon={<UserOutlined />}>INLAND TRANSPORT, INC.</Button>
+          <Select
+            value={selectedClientCode}
+            onChange={handleClientChange}
+            style={{ minWidth: 250 }}
+            options={clients.map(client => ({
+              label: (
+                <span>
+                  <UserOutlined style={{ marginRight: 8 }} />
+                  {client.clientName}
+                </span>
+              ),
+              value: client.clientCode
+            }))}
+            loading={clients.length === 0}
+          />
         </div>
         <div className='product-toolbar'>
           <div className='product-toolbar__left'>
@@ -575,7 +654,6 @@ function CustomerProductPage({
               aria-label='Search customer products'
               onChange={(event) => {
                 setQuery(event.target.value);
-                setCurrentPage(1);
               }}
             />
             <Button icon={<ReloadOutlined />} onClick={refreshProducts}>
@@ -636,7 +714,7 @@ function CustomerProductPage({
             />
             <div className='customer-product-footer'>
               <span>
-                Showing {shownStart}-{shownEnd} of <strong>{filteredProducts.length}</strong>{" "}
+                Showing {shownStart}-{shownEnd} of <strong>{totalCount}</strong>{" "}
                 Products
               </span>
               <div className='customer-product-pagination'>

@@ -1,6 +1,6 @@
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, Form, Input, InputNumber, Select, Switch } from "antd";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import type { ProductFormValues } from "../types/customerProduct.types";
 
 interface CustomerProductAddProps {
@@ -30,6 +30,9 @@ const PRODUCT_CLASSES = [
 
 function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const clientName = location.state?.clientName || "INLAND TRANSPORT, INC.";
+  
   const [form] = Form.useForm<ProductFormValues>();
   const isHazmat = Form.useWatch("isHazmat", form) ?? false;
 
@@ -75,7 +78,7 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
             <h1 id='product-details-title'>Product Details</h1>
             <div className='add-location-card__body'>
               <Form.Item label='Client'>
-                <Input value='INLAND TRANSPORT, INC.' readOnly />
+                <Input value={clientName} readOnly />
               </Form.Item>
 
               <Form.Item

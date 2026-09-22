@@ -13,8 +13,8 @@ import { login, logout, fetchCountries } from "./store/appSlice.ts";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "./app/store";
 import { fetchAccessorials } from "./store/accessorialsSlice";
-import { getCustomerProducts, saveCustomerProduct } from "./store/customerProductSlice.ts";
-import { getAllCustomerLocations, saveCustomerLocation } from "./store/customerLocationSlice.ts";
+import { saveCustomerProduct } from "./store/customerProductSlice.ts";
+import { saveCustomerLocation } from "./store/customerLocationSlice.ts";
 
 const { Content } = Layout;
 
@@ -71,8 +71,6 @@ function App() {
   useEffect(() => {
     if (isAuthenticated) {
       dispatch(fetchAccessorials());
-      dispatch(getAllCustomerLocations(1));
-      dispatch(getCustomerProducts(1));
       dispatch(fetchCountries());
     }
   }, [isAuthenticated, dispatch]);
@@ -91,7 +89,6 @@ function App() {
   const handleCreateLocation = async (values: Omit<CustomerLocation, "key">) => {
     try {
       await dispatch(saveCustomerLocation(values)).unwrap();
-      dispatch(getAllCustomerLocations(1));
       navigate("/customer-location");
       messageApi.success("Location added successfully");
     } catch (error) {
@@ -102,7 +99,6 @@ function App() {
   const handleCreateProduct = async (values: Omit<CustomerProduct, "key">) => {
     try {
       await dispatch(saveCustomerProduct(values)).unwrap();
-      dispatch(getCustomerProducts(1));
       navigate("/customer-products");
       messageApi.success("Product saved and added successfully");
     } catch (error) {

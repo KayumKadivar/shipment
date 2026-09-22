@@ -9,6 +9,7 @@ import {
   message,
 } from "antd";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useRef } from "react";
 import CountrySelect from "../components/CountrySelect";
 import { usePostalLookup } from "../hooks/usePostalLookup";
 // import { useAppSelector } from "../app/hooks";
@@ -69,19 +70,30 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const location = useLocation();
   const clientName = location.state?.clientName || CLIENT_NAME;
   const [form] = Form.useForm<LocationFormValues>();
-  const [messageApi, contextHolder] = message.useMessage();
-  const { lookupPostal, loadingPostal } = usePostalLookup();
+  const [, contextHolder] = message.useMessage();
+  const { lookupPostal } = usePostalLookup();
+  const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Handle postal code blur
-  const handlePostalBlur = async () => {
-    const postal = form.getFieldValue("postal");
-    const country = form.getFieldValue("countryCode") || "USA";
-    const result = await lookupPostal(postal, country);
-    if (result) {
-      form.setFieldsValue({
-        city: result.city,
-        state: result.state,
-      });
+  // Handle postal code change with debounce
+  const handlePostalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const postal = e.target.value;
+    
+    if (zipTimeoutRef.current) {
+      clearTimeout(zipTimeoutRef.current);
+    }
+
+    // Typical US ZIP is 5 digits. Wait for at least 3-5 chars before fetching
+    if (postal.length >= 5) {
+      zipTimeoutRef.current = setTimeout(async () => {
+        const country = form.getFieldValue("countryCode") || "USA";
+        const result = await lookupPostal(postal, country);
+        if (result) {
+          form.setFieldsValue({
+            city: result.city,
+            state: result.state,
+          });
+        }
+      }, 600); // 600ms debounce
     }
   };
 
@@ -186,7 +198,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 name='postal'
                 required
                 rules={[{ required: true, message: "Enter the ZIP or postal code" }]}>
-                <Input placeholder='ZIP / Postal' onBlur={handlePostalBlur} />
+                <Input placeholder='ZIP / Postal' onChange={handlePostalChange} />
               </Form.Item>
 
               <Form.Item className='add-location-field--compact' label='State' name='state'>

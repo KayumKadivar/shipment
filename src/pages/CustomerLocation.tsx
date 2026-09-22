@@ -188,9 +188,12 @@ function CustomerLocationPage({
 
   useEffect(() => {
     const handler = setTimeout(() => {
-      setDebouncedQuery(query);
-      setCurrentPage(1); // Reset to page 1 on new search
-    }, 500);
+      const trimmedQuery = query.trim();
+      if (trimmedQuery.length >= 3 || trimmedQuery.length === 0) {
+        setDebouncedQuery(trimmedQuery);
+        setCurrentPage(1);
+      }
+    }, 600);
     return () => clearTimeout(handler);
   }, [query]);
 
@@ -683,7 +686,6 @@ function CustomerLocationPage({
               aria-label='Search customer locations'
               onChange={(event) => {
                 setQuery(event.target.value);
-                setCurrentPage(1);
               }}
             />
             <Button icon={<ReloadOutlined />} onClick={refreshLocations}>

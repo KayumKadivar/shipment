@@ -4,7 +4,7 @@ import {
   PlusOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Button, Checkbox, Input, Select, Tag, Tooltip } from "antd";
+import { Button, Checkbox, Input, Select } from "antd";
 import CountrySelect from "../components/CountrySelect";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -78,7 +78,7 @@ const accessorialOptions = [
   "Trade Show Pickup",
 ];
 
-const countryOptions = [{ value: "United States", label: "United States" }];
+
 const handlingUnitOptions = ["Pallet", "Crate", "Carton", "Drum", "Piece"].map(
   (value) => ({ value, label: value }),
 );
