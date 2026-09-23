@@ -24,7 +24,6 @@ interface CustomerLocationAddProps {
   onCreate: (values: LocationFormValues) => void;
 }
 
-const CLIENT_NAME = "INLAND TRANSPORT, INC.";
 
 
 // const LOCATION_TYPES: LocationType[] = [
@@ -68,7 +67,7 @@ function getToday() {
 function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const clientName = location.state?.clientName || CLIENT_NAME;
+  const clientName = location.state?.clientName || "";
   const [form] = Form.useForm<LocationFormValues>();
   const [, contextHolder] = message.useMessage();
   const { lookupPostal } = usePostalLookup();

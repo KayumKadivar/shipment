@@ -272,7 +272,7 @@ function CustomerProductPage({
     const selectedClient = clients.find(c => c.clientCode === selectedClientCode);
     navigate("/customer-products/add", {
       state: {
-        clientName: selectedClient?.clientName || "INLAND TRANSPORT, INC."
+        clientName: selectedClient?.clientName || ""
       }
     });
   };
@@ -781,6 +781,18 @@ function CustomerProductPage({
             </Form.Item>
             <Form.Item label='Product class' name='productClass'>
               <Input />
+            </Form.Item>
+            <Form.Item label='Pallets' name='pallets'>
+              <Input />
+            </Form.Item>
+            <Form.Item label='Package Group' name='packageGroup'>
+              <Select
+                options={[
+                  { value: "Bag", label: "Bag" },
+                  { value: "Drum", label: "Drum" },
+                  { value: "Pallet", label: "Pallet" },
+                ]}
+              />
             </Form.Item>
             <Form.Item label='Commodity' name='commodity'>
               <Input />

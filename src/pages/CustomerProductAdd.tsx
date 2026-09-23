@@ -31,7 +31,7 @@ const PRODUCT_CLASSES = [
 function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const clientName = location.state?.clientName || "INLAND TRANSPORT, INC.";
+  const clientName = location.state?.clientName || "";
   
   const [form] = Form.useForm<ProductFormValues>();
   const isHazmat = Form.useWatch("isHazmat", form) ?? false;
@@ -51,6 +51,8 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
     productGroup: "STANDARD",
     notes: "",
     isApproved: true,
+    pallets: "",
+    packageGroup: undefined,
   };
 
   return (
@@ -111,6 +113,22 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
                     value,
                     label: value,
                   }))}
+                />
+              </Form.Item>
+
+              <Form.Item label='Pallets' name='pallets'>
+                <Input placeholder='Enter pallets' />
+              </Form.Item>
+
+              <Form.Item label='Package Group' name='packageGroup'>
+                <Select
+                  allowClear
+                  placeholder='-- Select --'
+                  options={[
+                    { value: "Bag", label: "Bag" },
+                    { value: "Drum", label: "Drum" },
+                    { value: "Pallet", label: "Pallet" },
+                  ]}
                 />
               </Form.Item>
 

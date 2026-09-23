@@ -15,6 +15,8 @@ export interface CustomerProduct {
   productGroup: string;
   notes?: string;
   isApproved?: boolean;
+  pallets?: string;
+  packageGroup?: string;
 }
 
 export type ProductFormValues = Omit<CustomerProduct, "key">;

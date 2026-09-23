@@ -274,7 +274,7 @@ function CustomerLocationPage({
     const selectedClient = clients.find(c => c.clientCode === selectedClientCode);
     navigate("/customer-location/add", {
       state: {
-        clientName: selectedClient?.clientName || "INLAND TRANSPORT, INC."
+        clientName: selectedClient?.clientName || ""
       }
     });
   };

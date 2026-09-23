@@ -40,11 +40,11 @@ export const saveCustomerProduct = createAsyncThunk(
         productClass: payloadData.productClass || "",
         productNMFC: payloadData.nmfc || "",
         weight: payloadData.weight || 0,
-        pallets: 0,
+        pallets: Number(payloadData.pallets) || 0,
         isHazmat: payloadData.isHazmat ?? false,
         hazmatClass: "",
         hazmatUN: "",
-        packagingGroup: "",
+        packagingGroup: payloadData.packageGroup || "",
         clientCode: sessionStorage.getItem("customerProduct_selectedClientCode") || "1",
         length: payloadData.length || 0,
         height: payloadData.height || 0,
@@ -99,11 +99,11 @@ export const updateCustomerProduct = createAsyncThunk(
         productClass: payloadData.productClass || "",
         productNMFC: payloadData.nmfc || "",
         weight: payloadData.weight || 0,
-        pallets: 0,
+        pallets: Number(payloadData.pallets) || 0,
         isHazmat: payloadData.isHazmat ?? false,
         hazmatClass: "",
         hazmatUN: "",
-        packagingGroup: "",
+        packagingGroup: payloadData.packageGroup || "",
         clientCode: sessionStorage.getItem("customerProduct_selectedClientCode") || "1",
         length: payloadData.length || 0,
         height: payloadData.height || 0,
@@ -235,6 +235,8 @@ export const getCustomerProducts = createAsyncThunk<
         productGroup: product.productGroup ?? "STANDARD",
         notes: product.notes ?? "",
         isApproved: product.isApproved ?? false,
+        pallets: String(product.pallets ?? ""),
+        packageGroup: product.packagingGroup ?? "",
       }));
 
       const totalCount = response.data?.totalCount ?? response.data?.TotalCount ?? products.length;
@@ -310,6 +312,8 @@ export const getCustomerProductByDesc = createAsyncThunk<
         productGroup: prod.productGroup ?? "STANDARD",
         notes: prod.notes ?? "",
         isApproved: prod.isApproved ?? true,
+        pallets: String(prod.pallets ?? ""),
+        packageGroup: prod.packagingGroup ?? "",
       };
 
       return mappedProduct;
@@ -416,6 +420,8 @@ export const getCustomerProductByID = createAsyncThunk<
         productGroup: prod.productGroup ?? "STANDARD",
         notes: prod.notes ?? "",
         isApproved: prod.isApproved ?? true,
+        pallets: String(prod.pallets ?? ""),
+        packageGroup: prod.packagingGroup ?? "",
       };
 
       return mappedProduct;
@@ -498,6 +504,8 @@ export const searchCustomerProducts = createAsyncThunk<
         productGroup: product.productGroup ?? "STANDARD",
         notes: product.notes ?? "",
         isApproved: product.isApproved ?? false,
+        pallets: String(product.pallets ?? ""),
+        packageGroup: product.packagingGroup ?? "",
       }));
 
       return products;
