@@ -3,24 +3,23 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/apiConfig';
 import { useAppSelector } from '../app/hooks';
 
-interface PostalResult {
+export interface PostalResult {
   city: string;
   state: string;
+  postalCode?: string;
 }
 
 export function usePostalLookup() {
   const [loadingPostal, setLoadingPostal] = useState(false);
   const countries = useAppSelector(state => state.app.countries || []);
 
-  const lookupPostal = useCallback(async (postalCode: string, countryCode: string): Promise<PostalResult | null> => {
-    if (!postalCode || !countryCode || countries.length === 0) return null;
+  const searchPostals = useCallback(async (postalCode: string, countryCode: string): Promise<PostalResult[]> => {
+    if (!postalCode || !countryCode || countries.length === 0) return [];
 
     setLoadingPostal(true);
     try {
       const country = countries.find((c: any) => c.countryCode === countryCode);
-      if (!country) {
-        return null;
-      }
+      if (!country) return [];
 
       const response = await axios.get(`${API_BASE_URL}/Postals/GetPostalsByPostalCodeAndCountryId`, {
         params: {
@@ -29,21 +28,26 @@ export function usePostalLookup() {
         }
       });
 
-      if (response.data && response.data.isSuccess && response.data.data && response.data.data.length > 0) {
-        const data = response.data.data[0];
-        return {
+      if (response.data && response.data.isSuccess && response.data.data && Array.isArray(response.data.data)) {
+        return response.data.data.map((data: any) => ({
           city: data.cityName,
           state: data.stateCode?.trim() || "",
-        };
+          postalCode: data.postalCode || postalCode,
+        }));
       }
-      return null;
+      return [];
     } catch (error) {
       console.error("Failed to lookup postal code", error);
-      return null;
+      return [];
     } finally {
       setLoadingPostal(false);
     }
   }, [countries]);
 
-  return { lookupPostal, loadingPostal };
+  const lookupPostal = useCallback(async (postalCode: string, countryCode: string): Promise<PostalResult | null> => {
+    const results = await searchPostals(postalCode, countryCode);
+    return results.length > 0 ? results[0] : null;
+  }, [searchPostals]);
+
+  return { lookupPostal, searchPostals, loadingPostal };
 }

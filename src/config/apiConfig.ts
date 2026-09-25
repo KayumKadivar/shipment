@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API_BASE_URL = "/api";
+export const API_BASE_URL = import.meta.env.DEV ? "/api" : "https://nico-api.nicedesert-4da8ecd2.centralus.azurecontainerapps.io/api";
 export const SRV_TOKEN = "335D6759802A4DBEB41CD6D68AB3024D";
 export const DEFAULT_CLIENT_CODE = "DEVTS";
 

@@ -7,9 +7,11 @@ import {
   Select,
   Switch,
   message,
+  AutoComplete,
+  Spin,
 } from "antd";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import CountrySelect from "../components/CountrySelect";
 import { usePostalLookup } from "../hooks/usePostalLookup";
 // import { useAppSelector } from "../app/hooks";
@@ -23,8 +25,6 @@ type LocationFormValues = Omit<CustomerLocation, "key">;
 interface CustomerLocationAddProps {
   onCreate: (values: LocationFormValues) => void;
 }
-
-
 
 // const LOCATION_TYPES: LocationType[] = [
 //   "All",
@@ -70,29 +70,91 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const clientName = location.state?.clientName || "";
   const [form] = Form.useForm<LocationFormValues>();
   const [, contextHolder] = message.useMessage();
-  const { lookupPostal } = usePostalLookup();
+  const { searchPostals, loadingPostal } = usePostalLookup();
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
 
-  // Handle postal code change with debounce
-  const handlePostalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const postal = e.target.value;
-    
+  // Handle postal code search with debounce
+  const handleSearchPostal = (value: string) => {
     if (zipTimeoutRef.current) {
       clearTimeout(zipTimeoutRef.current);
     }
 
-    // Typical US ZIP is 5 digits. Wait for at least 3-5 chars before fetching
-    if (postal.length >= 5) {
+    if (value.length >= 3) {
       zipTimeoutRef.current = setTimeout(async () => {
         const country = form.getFieldValue("countryCode") || "USA";
-        const result = await lookupPostal(postal, country);
-        if (result) {
-          form.setFieldsValue({
-            city: result.city,
-            state: result.state,
-          });
+        const results = await searchPostals(value, country);
+        if (results && results.length > 0) {
+          // Filter to avoid duplicates based on postal code + city
+          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || value}|${r.city}|${r.state}`)))
+            .map(str => {
+              const [p, c, s] = str.split('|');
+              return { postalCode: p, city: c, state: s };
+            });
+
+          setPostalOptions(
+            uniqueResults.map((r, idx) => ({
+              value: r.postalCode,
+              label: `${r.postalCode} - ${r.city}, ${r.state}`,
+              city: r.city,
+              state: r.state,
+              key: `postal-${idx}`
+            }))
+          );
+        } else {
+          setPostalOptions([]);
         }
       }, 600); // 600ms debounce
+    } else {
+      setPostalOptions([]);
+    }
+  };
+
+  const handleSelectPostal = (value: string, option: any) => {
+    form.setFieldsValue({
+      postal: value,
+      city: option.city,
+      state: option.state,
+    });
+  };
+
+  const handlePostalBlur = async () => {
+    const postal = form.getFieldValue("postal");
+    if (!postal || postal.length < 3) return;
+
+    // Optional: if you want to avoid a duplicate call if debounce is pending
+    if (zipTimeoutRef.current) {
+      clearTimeout(zipTimeoutRef.current);
+    }
+
+    const country = form.getFieldValue("countryCode") || "USA";
+    const results = await searchPostals(postal, country);
+    
+    if (results && results.length === 1) {
+      form.setFieldsValue({
+        postal: results[0].postalCode || postal,
+        city: results[0].city,
+        state: results[0].state,
+      });
+      // Clear options since we auto-selected
+      setPostalOptions([]);
+    } else if (results && results.length > 1) {
+      // If there are multiple, update the options in case they come back to it
+      const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || postal}|${r.city}|${r.state}`)))
+        .map(str => {
+          const [p, c, s] = str.split('|');
+          return { postalCode: p, city: c, state: s };
+        });
+
+      setPostalOptions(
+        uniqueResults.map((r, idx) => ({
+          value: r.postalCode,
+          label: `${r.postalCode} - ${r.city}, ${r.state}`,
+          city: r.city,
+          state: r.state,
+          key: `postal-${idx}`
+        }))
+      );
     }
   };
 
@@ -197,7 +259,14 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 name='postal'
                 required
                 rules={[{ required: true, message: "Enter the ZIP or postal code" }]}>
-                <Input placeholder='ZIP / Postal' onChange={handlePostalChange} />
+                <AutoComplete
+                  options={postalOptions}
+                  onSearch={handleSearchPostal}
+                  onSelect={handleSelectPostal}
+                  onBlur={handlePostalBlur}
+                  placeholder='ZIP / Postal'
+                  notFoundContent={loadingPostal ? <Spin size="small" /> : null}
+                />
               </Form.Item>
 
               <Form.Item className='add-location-field--compact' label='State' name='state'>
