@@ -22,9 +22,10 @@ import {
   Switch,
   Table,
   Tabs,
-  // Tag,
   Typography,
   message,
+  AutoComplete,
+  Spin,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -167,7 +168,9 @@ function CustomerLocationPage({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [messageApi, messageContext] = message.useMessage();
   const [modalApi, modalContext] = Modal.useModal();
-  const { lookupPostal, loadingPostal } = usePostalLookup();
+  const { searchPostals, loadingPostal } = usePostalLookup();
+  const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
     () => sessionStorage.getItem("customerLocation_selectedClientCode") || ""
@@ -373,15 +376,82 @@ function CustomerLocationPage({
     });
   };
 
+  const handleSearchPostal = (value: string) => {
+    if (zipTimeoutRef.current) {
+      clearTimeout(zipTimeoutRef.current);
+    }
+
+    if (value.length >= 3) {
+      zipTimeoutRef.current = setTimeout(async () => {
+        const country = form.getFieldValue("country") || "USA";
+        const results = await searchPostals(value, country);
+        if (results && results.length > 0) {
+          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || value}|${r.city}|${r.state}`)))
+            .map(str => {
+              const [p, c, s] = str.split('|');
+              return { postalCode: p, city: c, state: s };
+            });
+
+          setPostalOptions(
+            uniqueResults.map((r, idx) => ({
+              value: r.postalCode,
+              label: `${r.postalCode} - ${r.city}, ${r.state}`,
+              city: r.city,
+              state: r.state,
+              key: `postal-${idx}`
+            }))
+          );
+        } else {
+          setPostalOptions([]);
+        }
+      }, 600);
+    } else {
+      setPostalOptions([]);
+    }
+  };
+
+  const handleSelectPostal = (value: string, option: any) => {
+    form.setFieldsValue({
+      postal: value,
+      city: option.city,
+      state: option.state,
+    });
+  };
+
   const handlePostalBlur = async () => {
     const postal = form.getFieldValue("postal");
+    if (!postal || postal.length < 3) return;
+
+    if (zipTimeoutRef.current) {
+      clearTimeout(zipTimeoutRef.current);
+    }
+
     const country = form.getFieldValue("country") || "USA";
-    const result = await lookupPostal(postal, country);
-    if (result) {
+    const results = await searchPostals(postal, country);
+    
+    if (results && results.length === 1) {
       form.setFieldsValue({
-        city: result.city,
-        state: result.state,
+        postal: results[0].postalCode || postal,
+        city: results[0].city,
+        state: results[0].state,
       });
+      setPostalOptions([]);
+    } else if (results && results.length > 1) {
+      const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || postal}|${r.city}|${r.state}`)))
+        .map(str => {
+          const [p, c, s] = str.split('|');
+          return { postalCode: p, city: c, state: s };
+        });
+
+      setPostalOptions(
+        uniqueResults.map((r, idx) => ({
+          value: r.postalCode,
+          label: `${r.postalCode} - ${r.city}, ${r.state}`,
+          city: r.city,
+          state: r.state,
+          key: `postal-${idx}`
+        }))
+      );
     }
   };
 
@@ -814,7 +884,10 @@ function CustomerLocationPage({
               rules={[{ required: true, message: "Enter the primary address" }]}>
               <Input />
             </Form.Item>
-            <Form.Item label='Address 2' name='address2'>
+            <Form.Item
+              label='Address 2'
+              name='address2'
+              rules={[{ required: true, message: "Enter the address 2" }]}>
               <Input />
             </Form.Item>
             <Form.Item
@@ -839,7 +912,14 @@ function CustomerLocationPage({
               label='Postal code'
               name='postal'
               rules={[{ required: true, message: "Enter a postal code" }]}>
-              <Input onBlur={handlePostalBlur} disabled={loadingPostal} />
+              <AutoComplete
+                options={postalOptions}
+                onSearch={handleSearchPostal}
+                onSelect={handleSelectPostal}
+                onBlur={handlePostalBlur}
+                disabled={loadingPostal}
+                notFoundContent={loadingPostal ? <Spin size="small" /> : null}
+              />
             </Form.Item>
             <Form.Item label='Contact name' name='contactName'>
               <Input />

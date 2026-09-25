@@ -105,7 +105,9 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
               <Form.Item
                 className='add-location-field--medium'
                 label='Product Class'
-                name='productClass'>
+                name='productClass'
+                required
+                rules={[{ required: true, message: "Product class is required" }]}>
                 <Select
                   allowClear
                   placeholder='-- Select --'
@@ -189,9 +191,21 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
                 </div>
               </Form.Item>
 
-              <Form.Item label='Product Weight'>
+              <Form.Item label='Product Weight' required>
                 <div className='add-product-unit-row'>
-                  <Form.Item name='weight' noStyle>
+                  <Form.Item 
+                    name='weight' 
+                    noStyle
+                    rules={[
+                      { required: true, message: "Weight is required" },
+                      {
+                        validator: (_, value) =>
+                          value > 0
+                            ? Promise.resolve()
+                            : Promise.reject(new Error("Weight must be greater than 0")),
+                      },
+                    ]}
+                  >
                     <InputNumber
                       min={0}
                       precision={2}

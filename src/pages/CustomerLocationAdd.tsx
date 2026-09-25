@@ -84,8 +84,17 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
       zipTimeoutRef.current = setTimeout(async () => {
         const country = form.getFieldValue("countryCode") || "USA";
         const results = await searchPostals(value, country);
-        if (results && results.length > 0) {
-          // Filter to avoid duplicates based on postal code + city
+        
+        if (results && results.length === 1) {
+          // Exactly 1 result -> auto-fill immediately
+          form.setFieldsValue({
+            postal: results[0].postalCode || value,
+            city: results[0].city,
+            state: results[0].state,
+          });
+          setPostalOptions([]);
+        } else if (results && results.length > 1) {
+          // Multiple results -> show dropdown
           const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || value}|${r.city}|${r.state}`)))
             .map(str => {
               const [p, c, s] = str.split('|');
@@ -242,7 +251,11 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 <Input placeholder='Street address' />
               </Form.Item>
 
-              <Form.Item label='Address 2' name='address2'>
+              <Form.Item
+                label='Address 2'
+                name='address2'
+                required
+                rules={[{ required: true, message: "Enter the address 2" }]}>
                 <Input placeholder='Suite, dock, unit...' />
               </Form.Item>
 

@@ -6,11 +6,14 @@ import type { AppState, LoginResponse } from "../types/auth.types";
 const savedToken = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
 const savedUsername = typeof window !== "undefined" ? localStorage.getItem("username") : null;
 
+const savedProfileCode = typeof window !== "undefined" ? localStorage.getItem("profileCode") : null;
+
 const initialState: AppState = {
   isAuthenticated: Boolean(savedToken),
   token: savedToken,
   username: savedUsername,
   countries: [],
+  profileCode: savedProfileCode,
   loading: false,
   error: null,
 };
@@ -31,7 +34,7 @@ export const fetchCountries = createAsyncThunk(
 );
 
 export const loginUser = createAsyncThunk<
-  { token: string; username: string },
+  { token: string; username: string; profileCode: string | null },
   { username: string; password: string },
   { rejectValue: string }
 >("app/loginUser", async ({ username, password }, { rejectWithValue }) => {
@@ -57,7 +60,29 @@ export const loginUser = createAsyncThunk<
       const token = response.data.data;
       localStorage.setItem("authToken", token);
       localStorage.setItem("username", username.trim());
-      return { token, username: username.trim() };
+      let profileCode = null;
+      
+      // Call GetClientAndSubclientWithProfiles API
+      try {
+        const clientRes = await axios.get(
+          `${API_BASE_URL}/GetClientAndSubclientWithProfiles?srvToken=${SRV_TOKEN}`,
+          {
+            headers: {
+              accept: "*/*",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        console.log("Client and Subclient Profiles:", clientRes.data);
+        if (clientRes.data?.data?.profiles?.length > 0) {
+          profileCode = clientRes.data.data.profiles[0].profileCode;
+          localStorage.setItem("profileCode", profileCode as string);
+        }
+      } catch (clientErr) {
+        console.error("Failed to fetch client and subclient profiles:", clientErr);
+      }
+
+      return { token, username: username.trim(), profileCode };
     }
 
     return rejectWithValue(
@@ -98,9 +123,11 @@ const appSlice = createSlice({
       state.isAuthenticated = false;
       state.token = null;
       state.username = null;
+      state.profileCode = null;
       state.error = null;
       localStorage.removeItem("authToken");
       localStorage.removeItem("username");
+      localStorage.removeItem("profileCode");
     },
     clearLoginError(state) {
       state.error = null;
@@ -116,6 +143,7 @@ const appSlice = createSlice({
         state.loading = false;
         state.token = action.payload.token;
         state.username = action.payload.username;
+        state.profileCode = action.payload.profileCode;
         state.error = null;
       })
       .addCase(loginUser.rejected, (state, action) => {

@@ -779,7 +779,12 @@ function CustomerProductPage({
             <Form.Item label='NMFC' name='nmfc'>
               <Input />
             </Form.Item>
-            <Form.Item label='Product class' name='productClass'>
+            <Form.Item 
+              label='Product class' 
+              name='productClass'
+              required
+              rules={[{ required: true, message: "Product class is required" }]}
+            >
               <Input />
             </Form.Item>
             <Form.Item label='Pallets' name='pallets'>
@@ -814,7 +819,20 @@ function CustomerProductPage({
             <Form.Item label='Height' name='height'>
               <InputNumber min={0} precision={0} />
             </Form.Item>
-            <Form.Item label='Weight' name='weight'>
+            <Form.Item 
+              label='Weight' 
+              name='weight'
+              required
+              rules={[
+                { required: true, message: "Weight is required" },
+                {
+                  validator: (_, value) =>
+                    value > 0
+                      ? Promise.resolve()
+                      : Promise.reject(new Error("Weight must be greater than 0")),
+                },
+              ]}
+            >
               <InputNumber min={0} precision={0} />
             </Form.Item>
             <Form.Item label='Width' name='width'>

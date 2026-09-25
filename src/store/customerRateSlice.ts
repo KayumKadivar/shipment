@@ -1,20 +1,44 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axios from "axios";
+import { API_BASE_URL } from "../config/apiConfig";
 
 // Interface for rate item
 export interface RateItem {
   id: string;
+  name: string;
   code: string;
-  description: string;
-  buyAmount: number;
-  customerAmount: number;
+  service: string;
+  price: number;
+  transitDays: number;
+  estimatedDelivery: string;
+  warning?: string;
+  quoteExpiry?: string;
+  liabilityNew?: string;
+  liabilityUsed?: string;
+  logo?: string;
+  logoKind?: "image" | "fedex";
+}
+
+// Interface for API response rate
+export interface ApiRate {
+  scac?: string;
+  carrierName?: string;
+  serviceLevelDescription?: string;
+  serviceLevelCode?: string;
+  rateType?: string;
+  totalShipmentCost?: number;
+  netCharge?: number;
+  grossCharge?: number;
+  transitDays?: number;
+  deliveryDate?: string;
+  errorMessage?: string;
+  quoteExpirationDate?: string;
+  [key: string]: unknown;
 }
 
 // Interface for customer rate state
 interface CustomerRateState {
   rates: RateItem[];
-  netFreight: number;
-  fuelPercentage: number;
-  total: number;
   loading: boolean;
   error: string | null;
 }
@@ -22,44 +46,38 @@ interface CustomerRateState {
 // Initial state for customer rate
 const initialState: CustomerRateState = {
   rates: [],
-  netFreight: 0,
-  fuelPercentage: 0,
-  total: 0,
   loading: false,
   error: null,
-};
-
-// Simulated API call function
-const fetchRatesAPI = async (): Promise<RateItem[]> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // data from response // Currently Static Data Show
-      resolve([
-        {
-          id: "1",
-          code: "FRT",
-          description: "Base Freight Charge",
-          buyAmount: 450.0,
-          customerAmount: 500.0,
-        },
-        {
-          id: "2",
-          code: "FSC",
-          description: "Fuel Surcharge",
-          buyAmount: 45.0,
-          customerAmount: 50.0,
-        },
-      ]);
-    }, 1000); 
-  });
 };
 
 // async thunk for fetching rates
 export const fetchCarrierRates = createAsyncThunk(
   "customerRate/fetchCarrierRates",
-  async () => {
-    const response = await fetchRatesAPI();
-    return response;
+  async (payload: Record<string, unknown>, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await axios.post(`${API_BASE_URL}/Rating/GetRates`, payload, {
+        headers: {
+          accept: "*/*",
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    
+      let apiRates: ApiRate[] = [];
+      if (response.data && response.data.data) {
+        if (response.data.data.leastCostCarriers) {
+           apiRates = response.data.data.leastCostCarriers;
+        } else if (Array.isArray(response.data.data)) {
+           apiRates = response.data.data;
+        }
+      }
+      console.log("Extracted apiRates:", apiRates);
+      return apiRates;
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      return rejectWithValue(err.response?.data?.message || "Failed to fetch rates");
+    }
   }
 );
 
@@ -70,9 +88,6 @@ const customerRateSlice = createSlice({
   reducers: {
     clearRates: (state) => {
       state.rates = [];
-      state.netFreight = 0;
-      state.fuelPercentage = 0;
-      state.total = 0;
     }
   },
   // extraReducers is used to handle extra reducers
@@ -82,15 +97,26 @@ const customerRateSlice = createSlice({
       .addCase(fetchCarrierRates.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.rates = [];
       })
       // fetchCarrierRates.fulfilled: when request is successful
       .addCase(fetchCarrierRates.fulfilled, (state, action) => {
         state.loading = false;
-        state.rates = action.payload;
-        // Mock totals logic
-        state.netFreight = action.payload.reduce((sum, rate) => sum + rate.customerAmount, 0);
-        state.fuelPercentage = 10;
-        state.total = state.netFreight + (state.netFreight * state.fuelPercentage) / 100;
+        
+        state.rates = action.payload.map((rate: ApiRate, index: number) => ({
+          id: rate.scac || `rate-${index}`,
+          name: rate.carrierName || rate.scac || "Unknown Carrier",
+          code: rate.scac || "",
+          service: rate.serviceLevelDescription || rate.serviceLevelCode || rate.rateType || "STANDARD RATE",
+          price: (rate.totalShipmentCost as number) || (rate.netCharge as number) || (rate.grossCharge as number) || 0,
+          transitDays: rate.transitDays || 0,
+          estimatedDelivery: rate.deliveryDate || "",
+          warning: rate.errorMessage?.trim() || "",
+          quoteExpiry: rate.quoteExpirationDate || "",
+          liabilityNew: "",
+          liabilityUsed: "",
+          logoKind: rate.scac?.toLowerCase() === "fxfe" ? "fedex" : undefined,
+        }));
       })
       // fetchCarrierRates.rejected: when request is failed
       .addCase(fetchCarrierRates.rejected, (state, action) => {

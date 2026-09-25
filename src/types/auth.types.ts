@@ -15,6 +15,7 @@ export interface AppState {
   token: string | null;
   username: string | null;
   countries: any[];
+  profileCode: string | null;
   loading: boolean;
   error: string | null;
 }

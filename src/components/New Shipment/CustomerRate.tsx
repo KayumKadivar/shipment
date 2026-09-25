@@ -6,12 +6,14 @@ import { fetchCarrierRates } from '../../store/customerRateSlice';
 
 const CustomerRate: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
-  const { rates, netFreight, fuelPercentage, total, loading } = useSelector(
-    (state: RootState) => state.customerRate
-  );
+  const customerRate = useSelector((state: RootState) => state.customerRate);
+  const { rates = [], loading = false } = customerRate || {};
+  const netFreight = (customerRate as any).netFreight || 0;
+  const fuelPercentage = (customerRate as any).fuelPercentage || 0;
+  const total = (customerRate as any).total || 0;
 
   const handleRateClick = () => {
-    dispatch(fetchCarrierRates());
+    dispatch(fetchCarrierRates({}));
   };
 
   return (
@@ -106,9 +108,9 @@ const CustomerRate: React.FC = () => {
             rates.map((rate) => (
               <div className="rate-header-row rate-item-row text-muted-13" key={rate.id} style={{ backgroundColor: 'transparent', color: '#333' }}>
                 <div className="col-80">{rate.code}</div>
-                <div className="col-flex-1">{rate.description}</div>
-                <div className="col-100 text-right">${rate.buyAmount.toFixed(2)}</div>
-                <div className="col-100 text-right">${rate.customerAmount.toFixed(2)}</div>
+                <div className="col-flex-1">{rate.service || 'STANDARD'}</div>
+                <div className="col-100 text-right">${(0).toFixed(2)}</div>
+                <div className="col-100 text-right">${(rate.price || 0).toFixed(2)}</div>
               </div>
             ))
           ) : (

@@ -4,11 +4,17 @@ import {
   PlusOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Button, Checkbox, Input, Select } from "antd";
+import { Button, Checkbox, Input, Select, AutoComplete, Spin, DatePicker, message } from "antd";
 import CountrySelect from "../components/CountrySelect";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePostalLookup } from "../hooks/usePostalLookup";
+import { useDispatch } from "react-redux";
+import { useAppSelector } from "../app/hooks";
+import type { AppDispatch } from "../app/store";
+import { fetchAccessorials } from "../store/accessorialsSlice";
+import { fetchCarrierRates } from "../store/customerRateSlice";
+import { SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 
 type ItemField =
   | "units"
@@ -58,25 +64,6 @@ const createPackage = (): QuotePackage => ({
   items: [createItem()],
 });
 
-const accessorialOptions = [
-  "Blind Shipment",
-  "Call Before Delivery",
-  "Call Before Pickup",
-  "Delivery Appointment",
-  "Guaranteed By 5PM",
-  "Inside Delivery",
-  "Inside Pickup",
-  "Liftgate Delivery",
-  "Liftgate Pickup",
-  "Limited Access Delivery",
-  "Limited Access Pickup",
-  "Protect From Freeze",
-  "Residential Delivery",
-  "Residential Pickup",
-  "Sort & Segregate",
-  "Trade Show Delivery",
-  "Trade Show Pickup",
-];
 
 
 const handlingUnitOptions = ["Pallet", "Crate", "Carton", "Drum", "Piece"].map(
@@ -107,22 +94,100 @@ function QuoteLocationCard({
   title,
   zipLabel,
   includeDate = false,
+  postal,
+  setPostal,
+  city,
+  setCity,
+  state,
+  setState,
+  country,
+  setCountry,
 }: {
   title: string;
   zipLabel: string;
   includeDate?: boolean;
+  postal: string;
+  setPostal: (val: string) => void;
+  city: string;
+  setCity: (val: string) => void;
+  state: string;
+  setState: (val: string) => void;
+  country: string;
+  setCountry: (val: string) => void;
 }) {
-  const [postal, setPostal] = useState("");
-  const [country, setCountry] = useState("USA");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const { lookupPostal, loadingPostal } = usePostalLookup();
+  const { searchPostals, loadingPostal } = usePostalLookup();
+  const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const postalRef = useRef(postal);
+  const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
+
+  const handleSearchPostal = (value: string) => {
+    if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
+    if (value.length >= 3) {
+      zipTimeoutRef.current = setTimeout(async () => {
+        const results = await searchPostals(value, country);
+        
+        if (results && results.length === 1) {
+          // Exactly 1 result (full postal code usually) -> auto-fill immediately
+          setPostal(results[0].postalCode || value);
+          setCity(results[0].city);
+          setState(results[0].state);
+          setPostalOptions([]);
+        } else if (results && results.length > 1) {
+          // Multiple results -> show dropdown
+          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || value}|${r.city}|${r.state}`)))
+            .map(str => {
+              const [p, c, s] = str.split('|');
+              return { postalCode: p, city: c, state: s };
+            });
+          setPostalOptions(
+            uniqueResults.map((r, idx) => ({
+              value: r.postalCode,
+              label: `${r.postalCode} - ${r.city}, ${r.state}`,
+              city: r.city,
+              state: r.state,
+              key: `postal-${idx}`
+            }))
+          );
+        } else {
+          setPostalOptions([]);
+        }
+      }, 600);
+    } else {
+      setPostalOptions([]);
+    }
+  };
+
+  const handleSelectPostal = (value: string, option: { city: string; state: string }) => {
+    setPostal(value);
+    setCity(option.city);
+    setState(option.state);
+  };
 
   const handlePostalBlur = async () => {
-    const result = await lookupPostal(postal, country);
-    if (result) {
-      setCity(result.city);
-      setState(result.state);
+    const val = postalRef.current;
+    if (!val || val.length < 3) return;
+    if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
+    const results = await searchPostals(val, country);
+    if (results && results.length === 1) {
+      setPostal(results[0].postalCode || val);
+      setCity(results[0].city);
+      setState(results[0].state);
+      setPostalOptions([]);
+    } else if (results && results.length > 1) {
+      const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || val}|${r.city}|${r.state}`)))
+        .map(str => {
+          const [p, c, s] = str.split('|');
+          return { postalCode: p, city: c, state: s };
+        });
+      setPostalOptions(
+        uniqueResults.map((r, idx) => ({
+          value: r.postalCode,
+          label: `${r.postalCode} - ${r.city}, ${r.state}`,
+          city: r.city,
+          state: r.state,
+          key: `postal-${idx}`
+        }))
+      );
     }
   };
 
@@ -138,17 +203,23 @@ function QuoteLocationCard({
         {includeDate ? (
           <label className='new-quote-field quote-location-card__date'>
             <span>Pickup Date</span>
-            <Input type='date' aria-label='Pickup date' />
+            <DatePicker style={{ width: '100%' }} format="MM-DD-YYYY" aria-label='Pickup date' />
           </label>
         ) : null}
         <label className='new-quote-field'>
           <span>{zipLabel}</span>
-          <Input 
-            value={postal} 
-            onChange={e => setPostal(e.target.value)}
+          <AutoComplete
+            value={postal}
+            options={postalOptions}
+            onSearch={handleSearchPostal}
+            onSelect={handleSelectPostal}
+            onChange={(val) => {
+              setPostal(val);
+              postalRef.current = val;
+            }}
             onBlur={handlePostalBlur}
             disabled={loadingPostal}
-            aria-label={zipLabel} 
+            notFoundContent={loadingPostal ? <Spin size="small" /> : null}
           />
         </label>
         <label className='new-quote-field'>
@@ -174,22 +245,39 @@ function QuoteLocationCard({
 
 function NewQuote() {
   const navigate = useNavigate();
+  const dispatch = useDispatch<AppDispatch>();
   const [packages, setPackages] = useState<QuotePackage[]>(() => [
     createPackage(),
   ]);
   const [accessorialSearch, setAccessorialSearch] = useState("");
-  const [selectedAccessorials, setSelectedAccessorials] = useState<string[]>([
-    "Call Before Pickup",
-  ]);
+  const [selectedAccessorials, setSelectedAccessorials] = useState<string[]>([]);
+  
+  const { data: accessorialOptions } = useAppSelector((state) => state.accessorials);
+  const profileCode = useAppSelector((state) => state.app.profileCode);
+
+  useEffect(() => {
+    dispatch(fetchAccessorials());
+  }, [dispatch]);
 
   const visibleAccessorials = useMemo(() => {
     const query = accessorialSearch.trim().toLowerCase();
+    const options = accessorialOptions.map((a) => a.accessorialName);
     return query
-      ? accessorialOptions.filter((option) =>
+      ? options.filter((option) =>
           option.toLowerCase().includes(query),
         )
-      : accessorialOptions;
-  }, [accessorialSearch]);
+      : options;
+  }, [accessorialSearch, accessorialOptions]);
+
+  const [origPostal, setOrigPostal] = useState("");
+  const [origCity, setOrigCity] = useState("");
+  const [origState, setOrigState] = useState("");
+  const [origCountry, setOrigCountry] = useState("USA");
+
+  const [destPostal, setDestPostal] = useState("");
+  const [destCity, setDestCity] = useState("");
+  const [destState, setDestState] = useState("");
+  const [destCountry, setDestCountry] = useState("USA");
 
   const updateItem = (
     packageId: string,
@@ -249,6 +337,86 @@ function NewQuote() {
 
   const isOnlyItem = packages.length === 1 && packages[0].items.length === 1;
 
+  const handleSeeRates = () => {
+    if (!origPostal || !origCity || !origState) {
+      message.error("Please provide complete origin location details (Zip, City, State).");
+      return;
+    }
+    if (!destPostal || !destCity || !destState) {
+      message.error("Please provide complete destination location details (Zip, City, State).");
+      return;
+    }
+
+    const hasItems = packages.some(p => p.items.length > 0);
+    if (!hasItems) {
+      message.error("Please add at least one item to the quote.");
+      return;
+    }
+
+    const payload = {
+      serviceToken: SRV_TOKEN,
+      origZip: origPostal,
+      origCity: origCity,
+      origState: origState,
+      origCountry: origCountry,
+      destZip: destPostal,
+      destCity: destCity,
+      destState: destState,
+      destCountry: destCountry,
+      shipments: packages.flatMap((p) =>
+        p.items.map((i) => ({
+          class: i.freightClass,
+          weight: Number(i.weight) || 0,
+          units: Number(i.units) || 0,
+          cubicFeet: 0,
+          hazMat: false,
+          nmfc: i.nmfc || undefined,
+          pallets: i.handlingUnit === "Pallet" ? Number(i.units) || 0 : 0,
+          pieces: Number(i.pieces) || 0,
+          length: Number(i.length) || 0,
+          width: Number(i.width) || 0,
+          height: Number(i.height) || 0,
+          packageType: i.handlingUnit,
+          linearFeet: 0,
+          stackable: true,
+        }))
+      ),
+      accessorialCodes: accessorialOptions
+        .filter((a) => selectedAccessorials.includes(a.accessorialName))
+        .map((a) => a.accesorialCode || a.accessorialName),
+      profileCode: profileCode,
+      clientCode: DEFAULT_CLIENT_CODE,
+      scac: undefined,
+      shipmentDate: new Date().toISOString(),
+      zoneCode: undefined,
+      miles: 0,
+      isBatch: false,
+      serviceLevelCode: undefined,
+      route: undefined,
+      clientResponseUrl: undefined,
+      requestId: undefined,
+      clientToken: undefined,
+      mode: "LTL",
+      isRateApiOnly: false,
+      getBenchMarkCost: false,
+      resultCount: 0,
+      totalLength: 0,
+      totalWidth: 0,
+      totalHeight: 0,
+      isAudit: false,
+      shipmentValue: 0,
+      originPortCode: undefined,
+      destPortCode: undefined,
+      equipment: undefined,
+      codAmount: 0,
+      totalLinearFeet: 0,
+    };
+
+    console.log("Saving API Request Payload:", payload);
+    dispatch(fetchCarrierRates(payload));
+    navigate("/quotes/rate");
+  };
+
   return (
     <div className='new-quote-scroll'>
       <section className='new-quote-page'>
@@ -258,7 +426,6 @@ function NewQuote() {
           </button>
           <div className='new-quote-page__top-actions'>
             <Button danger>Cancel Quote</Button>
-            <Button>Save Quote</Button>
           </div>
         </div>
 
@@ -289,45 +456,30 @@ function NewQuote() {
                 title='Pickup'
                 zipLabel='Pickup Zip Code'
                 includeDate
+                postal={origPostal}
+                setPostal={setOrigPostal}
+                city={origCity}
+                setCity={setOrigCity}
+                state={origState}
+                setState={setOrigState}
+                country={origCountry}
+                setCountry={setOrigCountry}
               />
               <QuoteLocationCard
                 title='Destination'
                 zipLabel='Dest. Zip Code'
+                postal={destPostal}
+                setPostal={setDestPostal}
+                city={destCity}
+                setCity={setDestCity}
+                state={destState}
+                setState={setDestState}
+                country={destCountry}
+                setCountry={setDestCountry}
               />
             </div>
 
-            <section className='new-quote-card quote-accessorial-card'>
-              <header className='new-quote-card__header'>
-                <h2>Accessorials</h2>
-              </header>
-              <Input
-                className='quote-accessorial-search'
-                value={accessorialSearch}
-                placeholder='Search accessorials...'
-                allowClear
-                onChange={(event) => setAccessorialSearch(event.target.value)}
-              />
-              <div className='quote-accessorial-list'>
-                {visibleAccessorials.map((option) => {
-                  const checked = selectedAccessorials.includes(option);
-                  return (
-                    <label className={checked ? "is-checked" : ""} key={option}>
-                      <Checkbox
-                        checked={checked}
-                        onChange={(event) =>
-                          setSelectedAccessorials((current) =>
-                            event.target.checked
-                              ? [...current, option]
-                              : current.filter((value) => value !== option),
-                          )
-                        }>
-                        {option}
-                      </Checkbox>
-                    </label>
-                  );
-                })}
-              </div>
-            </section>
+
 
             <div className='new-quote-packages'>
               {packages.map((quotePackage) => (
@@ -569,13 +721,46 @@ function NewQuote() {
                 }>
                 Add Package
               </Button>
-              <Button type='primary' onClick={() => navigate("/quotes/rate")}>
+              <Button type='primary' onClick={handleSeeRates}>
                 See Rates
               </Button>
             </div>
           </main>
 
           <aside className='new-quote-aside'>
+            <section className='new-quote-card quote-accessorial-card'>
+              <header className='new-quote-card__header'>
+                <h2>Accessorials</h2>
+              </header>
+              <Input
+                className='quote-accessorial-search'
+                value={accessorialSearch}
+                placeholder='Search accessorials...'
+                allowClear
+                onChange={(event) => setAccessorialSearch(event.target.value)}
+              />
+              <div className='quote-accessorial-list'>
+                {visibleAccessorials.map((option) => {
+                  const checked = selectedAccessorials.includes(option);
+                  return (
+                    <label className={checked ? "is-checked" : ""} key={option}>
+                      <Checkbox
+                        checked={checked}
+                        onChange={(event) =>
+                          setSelectedAccessorials((current) =>
+                            event.target.checked
+                              ? [...current, option]
+                              : current.filter((value) => value !== option),
+                          )
+                        }>
+                        {option}
+                      </Checkbox>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+
             <section className='new-quote-card quote-notes-card'>
               <header className='new-quote-card__header'>
                 <h2>Notes</h2>

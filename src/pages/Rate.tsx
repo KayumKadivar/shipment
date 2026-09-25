@@ -16,8 +16,9 @@ import {
 import { Button, Empty, Input, Select, Spin, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import abfLogo from "../assets/image 55.png";
-import rlLogo from "../assets/image 57.png";
+import { useAppSelector } from "../app/hooks";
+// import abfLogo from "../assets/image 55.png";
+// import rlLogo from "../assets/image 57.png";
 import SendRatesDialog, {
   type SendRateItem,
 } from "../components/rate/SendRatesDialog";
@@ -50,55 +51,6 @@ const usCenter = { lat: 39.5, lng: -98.35 };
 const originAddress = "Chandler, Arizona 85225, US";
 const destinationAddress = "Southington, Connecticut 06489, US";
 
-const carrierRates: CarrierRate[] = [
-  {
-    id: "abf",
-    name: "ABF FREIGHT",
-    code: "ABFS",
-    service: "STANDARD RATE",
-    price: 435.06,
-    warning:
-      "No Sysco Foods deliveries. NO ALCOHOL · No Graphite · No Ammunition · No Assembled Guns · No Vape or Hemp products.",
-    quoteExpiry: "4/22/2026",
-    transitDays: 6,
-    estimatedDelivery: "4/23/2026",
-    liabilityNew: "$3,425.00",
-    liabilityUsed: "$68.50",
-    logo: abfLogo,
-    logoKind: "image",
-  },
-  {
-    id: "rl",
-    name: "R&L CARRIERS",
-    code: "RLCA",
-    service: "STANDARD RATE",
-    price: 502.63,
-    warning:
-      "NO MEIJER DCs. NO VAPE PRODUCTS, THC, CBD, or HEMP · NO WAL-MART DCs in USA · Will handle WALMART DCs in Canada · NO AMAZON DCs · NO SYSCO · NO FIREARMS.",
-    quoteExpiry: "4/17/2026",
-    transitDays: 5,
-    estimatedDelivery: "4/22/2026",
-    liabilityNew: "$8,220.00",
-    liabilityUsed: "$68.50",
-    logo: rlLogo,
-    logoKind: "image",
-  },
-  {
-    id: "fedex",
-    name: "FedEx FREIGHT",
-    code: "FXNL",
-    service: "ECONOMY",
-    price: 589.4,
-    warning:
-      "No Firearms without carrier approval · No Tobacco · NO AMAZON.",
-    quoteExpiry: "4/21/2026",
-    transitDays: 7,
-    estimatedDelivery: "4/24/2026",
-    liabilityNew: "$17,125.00",
-    liabilityUsed: "$68.50",
-    logoKind: "fedex",
-  },
-];
 
 function formatDistance(distanceMeters?: number) {
   if (typeof distanceMeters !== "number") return "2,516 miles";
@@ -416,11 +368,14 @@ function Rate() {
   const [sendRateIds, setSendRateIds] = useState<string[]>([]);
   const [sendValidationError, setSendValidationError] = useState("");
 
+  const ratesFromStore = useAppSelector((state) => state.customerRate.rates) as CarrierRate[];
+  const loadingRates = useAppSelector((state) => state.customerRate.loading);
+
   const visibleRates = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const matches = carrierRates.filter((rate) =>
+    const matches = (ratesFromStore || []).filter((rate) =>
       [rate.name, rate.code, rate.service].some((value) =>
-        value.toLowerCase().includes(query),
+        value?.toLowerCase().includes(query),
       ),
     );
 
@@ -429,7 +384,7 @@ function Rate() {
       if (sortBy === "transit") return first.transitDays - second.transitDays;
       return first.price - second.price;
     });
-  }, [search, sortBy]);
+  }, [search, sortBy, ratesFromStore]);
 
   const setRateChecked = (rate: CarrierRate, checked: boolean) => {
     setSelectedRates((current) =>
@@ -496,11 +451,15 @@ function Rate() {
       <header className='rate-page__header'>
         <h1>Quote: 60113985278</h1>
         <div className='rate-page__header-actions'>
-          <Button onClick={() => messageApi.info("Quote editing is not connected yet.")}>
+          <Button onClick={() => navigate("/quotes/new")}>
             Edit Quote
+          </Button>
+          <Button style={{ marginLeft: 8 }}>
+            Save Quote
           </Button>
           <Button
             danger
+            style={{ marginLeft: 8 }}
             onClick={() => messageApi.info("Quote deletion is not connected yet.")}>
             Delete Quote
           </Button>
@@ -574,7 +533,7 @@ function Rate() {
               aria-selected={quoteMode === "ltl"}
               className={quoteMode === "ltl" ? "active" : ""}
               onClick={() => setQuoteMode("ltl")}>
-              LTL <span>11</span>
+              LTL <span>{(ratesFromStore || []).length}</span>
             </button>
             <button
               type='button'
@@ -628,15 +587,19 @@ function Rate() {
           </div>
 
           <p className='rate-results-count'>
-            Showing {quoteMode === "ltl" ? visibleRates.length : 0} of 11
-            carriers
+            {loadingRates ? "Loading rates..." : `Showing ${quoteMode === "ltl" ? visibleRates.length : 0} of ${(ratesFromStore || []).length} carriers`}
           </p>
+          {loadingRates && (
+            <div style={{ textAlign: "center", padding: "40px" }}>
+              <Spin size="large" />
+            </div>
+          )}
 
-          {quoteMode === "volume" ? (
+          {!loadingRates && quoteMode === "volume" ? (
             <div className='rate-empty-state'>
               <Empty description='No volume rates are available for this quote.' />
             </div>
-          ) : visibleRates.length ? (
+          ) : !loadingRates && visibleRates.length ? (
             <div className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
               {visibleRates.map((rate) => (
                 <CarrierCard
@@ -650,17 +613,17 @@ function Rate() {
                 />
               ))}
             </div>
-          ) : (
+          ) : !loadingRates ? (
             <div className='rate-empty-state'>
               <Empty description='No carriers match your search.' />
             </div>
-          )}
+          ) : null}
         </main>
       </div>
 
       <SendRatesDialog
         open={isSendDialogOpen}
-        rates={carrierRates}
+        rates={ratesFromStore || []}
         recipients={sendRecipients}
         selectedRateIds={sendRateIds}
         validationError={sendValidationError}
