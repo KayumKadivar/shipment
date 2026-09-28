@@ -104,18 +104,17 @@ const customerRateSlice = createSlice({
         state.loading = false;
         
         state.rates = action.payload.map((rate: ApiRate, index: number) => ({
-          id: rate.scac || `rate-${index}`,
-          name: rate.carrierName || rate.scac || "Unknown Carrier",
+          id: `${rate.scac}-${index}-${rate.saasQuoteNumber}`,
+          name: rate.carrierName || "",
           code: rate.scac || "",
-          service: rate.serviceLevelDescription || rate.serviceLevelCode || rate.rateType || "STANDARD RATE",
-          price: (rate.totalShipmentCost as number) || (rate.netCharge as number) || (rate.grossCharge as number) || 0,
+          service: rate.serviceLevelDescription || rate.rateType || "",
+          price: rate.totalShipmentCost || 0,
           transitDays: rate.transitDays || 0,
           estimatedDelivery: rate.deliveryDate || "",
           warning: rate.errorMessage?.trim() || "",
           quoteExpiry: rate.quoteExpirationDate || "",
           liabilityNew: "",
           liabilityUsed: "",
-          logoKind: rate.scac?.toLowerCase() === "fxfe" ? "fedex" : undefined,
         }));
       })
       // fetchCarrierRates.rejected: when request is failed

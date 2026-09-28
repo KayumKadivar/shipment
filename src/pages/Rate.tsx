@@ -253,16 +253,10 @@ function RateMap() {
 }
 
 function CarrierLogo({ rate }: { rate: CarrierRate }) {
-  if (rate.logoKind === "fedex") {
-    return (
-      <div className='rate-fedex-logo' aria-label='FedEx Freight'>
-        <span>Fed</span>
-        <strong>Ex</strong>
-      </div>
-    );
+  if (!rate.logo) {
+    return <div className="rate-placeholder-logo">{rate.name}</div>;
   }
-
-  return <img src={rate.logo} alt={`${rate.name} logo`} />;
+  return <img src={rate.logo} alt={`${rate.name} `} />;
 }
 
 function CarrierCard({
@@ -375,13 +369,18 @@ function Rate() {
     const query = search.trim().toLowerCase();
     const matches = (ratesFromStore || []).filter((rate) =>
       [rate.name, rate.code, rate.service].some((value) =>
-        value?.toLowerCase().includes(query),
+        (value || "").toLowerCase().includes(query),
       ),
     );
 
     return [...matches].sort((first, second) => {
       if (sortBy === "rate-desc") return second.price - first.price;
-      if (sortBy === "transit") return first.transitDays - second.transitDays;
+      if (sortBy === "transit") {
+        if (first.transitDays === second.transitDays) {
+          return first.price - second.price;
+        }
+        return first.transitDays - second.transitDays;
+      }
       return first.price - second.price;
     });
   }, [search, sortBy, ratesFromStore]);
