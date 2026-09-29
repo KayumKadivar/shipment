@@ -2,8 +2,8 @@ import {
   AppstoreOutlined,
   BarsOutlined,
   ExclamationCircleOutlined,
-  HomeOutlined,
-  InfoCircleOutlined,
+  // HomeOutlined,
+  // InfoCircleOutlined,
   SearchOutlined,
   SendOutlined,
 } from "@ant-design/icons";
@@ -16,7 +16,8 @@ import {
 import { Button, Empty, Input, Select, Spin, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAppSelector } from "../app/hooks";
+import { useAppSelector, useAppDispatch } from "../app/hooks";
+import { fetchCarrierLogo, saveCustomerQuote } from "../store/customerRateSlice";
 // import abfLogo from "../assets/image 55.png";
 // import rlLogo from "../assets/image 57.png";
 import SendRatesDialog, {
@@ -34,6 +35,10 @@ type CarrierRate = SendRateItem & {
   quoteExpiry: string;
   liabilityNew: string;
   liabilityUsed: string;
+  grossCharge?: number;
+  discount?: number;
+  fuelSurcharge?: number;
+  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number }[];
 };
 
 type SortOption = "rate-asc" | "rate-desc" | "transit";
@@ -48,16 +53,12 @@ const googleMapId =
 const mapContainerStyle = { width: "100%", height: "100%" };
 const usCenter = { lat: 39.5, lng: -98.35 };
 
-const originAddress = "Chandler, Arizona 85225, US";
-const destinationAddress = "Southington, Connecticut 06489, US";
-
-
 function formatDistance(distanceMeters?: number) {
   if (typeof distanceMeters !== "number") return "2,516 miles";
   return `${Math.round(distanceMeters / 1609.344).toLocaleString("en-US")} miles`;
 }
 
-function RateMap() {
+function RateMap({ originAddress, destinationAddress }: { originAddress: string; destinationAddress: string }) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [route, setRoute] = useState<ComputedRoute | null>(null);
   const [markers, setMarkers] = useState<RouteLocation[]>([]);
@@ -253,17 +254,43 @@ function RateMap() {
 }
 
 function CarrierLogo({ rate }: { rate: CarrierRate }) {
-  if (!rate.logo) {
+  const dispatch = useAppDispatch();
+  const [loading, setLoading] = useState(!rate.logo);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!rate.logo && rate.code) {
+      setLoading(true);
+      dispatch(fetchCarrierLogo(rate.code))
+        .unwrap()
+        .then(() => {
+           setLoading(false);
+        })
+        .catch(() => {
+           setError(true);
+           setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
+  }, [rate.code, rate.logo, dispatch]);
+
+  if (loading) {
+    return <div className="rate-placeholder-logo"><Spin size="small" /></div>;
+  }
+
+  if (error || !rate.logo) {
     return <div className="rate-placeholder-logo">{rate.name}</div>;
   }
-  return <img src={rate.logo} alt={`${rate.name} `} />;
+  
+  return <img src={rate.logo} alt={`${rate.name}`} />;
 }
 
 function CarrierCard({
   rate,
   checked,
   onCheckedChange,
-  onSend,
+  // onSend,
 }: {
   rate: CarrierRate;
   checked: boolean;
@@ -292,7 +319,7 @@ function CarrierCard({
             type={checked ? "primary" : "default"}
             className='rate-card__select'
             onClick={() => onCheckedChange(!checked)}>
-            {checked ? "Selected" : "Select Quote"}
+            {checked ? "Selected" : "Shipit"}
           </Button>
         </div>
 
@@ -308,7 +335,7 @@ function CarrierCard({
                 {rate.service}
               </span>
             </div>
-            <div className='rate-card__quick-actions'>
+            {/* <div className='rate-card__quick-actions'>
               <button type='button' onClick={onSend}>
                 <SendOutlined /> Send
               </button>
@@ -318,29 +345,30 @@ function CarrierCard({
               <button type='button'>
                 <InfoCircleOutlined /> Info
               </button>
-            </div>
+            </div> */}
           </div>
 
           <dl className='rate-card__details'>
             <div className='rate-detail-expiry'>
               <dt>Quote Exp. Date</dt>
               <dd>{rate.quoteExpiry}</dd>
-            </div>
-            <div className='rate-detail-transit'>
               <dt>Transit Days</dt>
               <dd>{rate.transitDays} business days</dd>
-            </div>
-            <div className='rate-detail-delivery'>
               <dt>Est. Delivery Date</dt>
               <dd>{rate.estimatedDelivery}</dd>
             </div>
-            <div className='rate-detail-liability-new'>
-              <dt>Carrier Liability New</dt>
-              <dd>{rate.liabilityNew}</dd>
+            <div className='rate-detail-charges'>
+              <dt>Gross Charge : {rate.grossCharge}</dt>
+              <dt>Discount : {rate.discount}</dt>
+              <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
+              {/* <dt>Gross Charge : {rate.grossCharge?.toLocaleString("en-US", { style: "currency", currency: "USD" })}</dt>
+              <dt>Discount : {rate.discount?.toLocaleString("en-US", { style: "currency", currency: "USD" })}</dt>
+              <dt>Fuel Surcharge : {rate.fuelSurcharge?.toLocaleString("en-US", { style: "currency", currency: "USD" })}</dt> */}
             </div>
-            <div className='rate-detail-liability-used'>
-              <dt>Carrier Liability Used</dt>
-              <dd>{rate.liabilityUsed}</dd>
+            <div className='rate-detail-accessorials'>
+              {rate.accessorialCharges?.map((charge, idx) => (
+                <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
+              ))}
             </div>
           </dl>
         </div>
@@ -351,6 +379,7 @@ function CarrierCard({
 
 function Rate() {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
   const [quoteMode, setQuoteMode] = useState<QuoteMode>("ltl");
   const [search, setSearch] = useState("");
@@ -364,6 +393,20 @@ function Rate() {
 
   const ratesFromStore = useAppSelector((state) => state.customerRate.rates) as CarrierRate[];
   const loadingRates = useAppSelector((state) => state.customerRate.loading);
+  const quoteRequest = useAppSelector((state) => state.customerRate.quoteRequest);
+  const accessorialsData = useAppSelector((state: any) => state.accessorials?.data) || [];
+
+  const dynamicOrigin = quoteRequest 
+    ? `${quoteRequest.origCity || ''}, ${quoteRequest.origState || ''} ${quoteRequest.origZip || ''}, ${quoteRequest.origCountry || ''}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ', ')
+    : "";
+
+  const dynamicDestination = quoteRequest
+    ? `${quoteRequest.destCity || ''}, ${quoteRequest.destState || ''} ${quoteRequest.destZip || ''}, ${quoteRequest.destCountry || ''}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ', ')
+    : "";
+
+  const shipmentDate = quoteRequest?.shipmentDate 
+    ? new Date(quoteRequest.shipmentDate).toLocaleDateString("en-US", { month: '2-digit', day: '2-digit', year: 'numeric' })
+    : "";
 
   const visibleRates = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -384,6 +427,17 @@ function Rate() {
       return first.price - second.price;
     });
   }, [search, sortBy, ratesFromStore]);
+
+  const handleSaveQuote = () => {
+    dispatch(saveCustomerQuote())
+      .unwrap()
+      .then(() => {
+        messageApi.success("Quote saved successfully!");
+      })
+      .catch((err: any) => {
+        messageApi.error(err || "Failed to save quote.");
+      });
+  };
 
   const setRateChecked = (rate: CarrierRate, checked: boolean) => {
     setSelectedRates((current) =>
@@ -448,17 +502,16 @@ function Rate() {
       </button>
 
       <header className='rate-page__header'>
-        <h1>Quote: 60113985278</h1>
+        <h1>Quote Results</h1>
         <div className='rate-page__header-actions'>
           <Button onClick={() => navigate("/quotes/new")}>
             Edit Quote
           </Button>
-          <Button style={{ marginLeft: 8 }}>
+          <Button onClick={handleSaveQuote}>
             Save Quote
           </Button>
           <Button
             danger
-            style={{ marginLeft: 8 }}
             onClick={() => messageApi.info("Quote deletion is not connected yet.")}>
             Delete Quote
           </Button>
@@ -477,51 +530,68 @@ function Rate() {
         <aside className='rate-context'>
           <article className='rate-route-card'>
             <div className='rate-route-card__map'>
-              <RateMap />
+              <RateMap originAddress={dynamicOrigin} destinationAddress={dynamicDestination} />
             </div>
             <div className='rate-route-card__summary'>
               <div>
                 <span>FROM</span>
-                <strong>{originAddress}</strong>
-                <small>04/15/2026</small>
+                <strong>{dynamicOrigin}</strong>
+                <small>{shipmentDate}</small>
               </div>
               <div>
                 <span>TO</span>
-                <strong>{destinationAddress}</strong>
+                <strong>{dynamicDestination}</strong>
               </div>
             </div>
           </article>
 
           <article className='rate-items-card'>
             <h2>ITEMS</h2>
-            <div className='rate-items-card__body'>
-              <strong className='rate-item-pill'>1 PALLET · CLASS 85</strong>
-              <dl>
-                <div>
-                  <dt>Piece(s)</dt>
-                  <dd>1</dd>
-                </div>
-                <div>
-                  <dt>Weight</dt>
-                  <dd>685 lbs</dd>
-                </div>
-                <div>
-                  <dt>Dimensions</dt>
-                  <dd>50&quot; × 40&quot; × 40&quot;</dd>
-                </div>
-              </dl>
-            </div>
+            {quoteRequest?.shipments?.map((item: any, index: number) => (
+              <div key={index} className='rate-items-card__body'>
+                <strong className='rate-item-pill'>{[item.pieces, item.packageType?.toUpperCase()].filter(Boolean).join(" ")} {item.class ? `· CLASS ${item.class}` : ''}</strong>
+                <dl>
+                  <div>
+                    <dt>Piece(s)</dt>
+                    <dd>{item.pieces}</dd>
+                  </div>
+                  <div>
+                    <dt>Weight</dt>
+                    <dd>{item.weight != null ? `${item.weight} lbs` : ''}</dd>
+                  </div>
+                  <div>
+                    <dt>Dimensions</dt>
+                    <dd>{item.length != null && item.width != null && item.height != null ? `${item.length}" × ${item.width}" × ${item.height}"` : ''}</dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
             <dl className='rate-items-card__totals'>
               <div>
                 <dt>Total weight</dt>
-                <dd>685 lbs</dd>
+                <dd>{quoteRequest?.shipments ? `${quoteRequest.shipments.reduce((acc: number, item: any) => acc + (item.weight || 0), 0)} lbs` : ''}</dd>
               </div>
               <div>
                 <dt>Total linear feet</dt>
-                <dd>3 ft</dd>
+                <dd>{quoteRequest?.totalLinearFeet != null ? `${quoteRequest.totalLinearFeet} ft` : ''}</dd>
               </div>
             </dl>
           </article>
+
+          {quoteRequest?.accessorialCodes && quoteRequest.accessorialCodes.length > 0 && (
+            <article className='rate-items-card'>
+              <h2>ACCESSORIALS</h2>
+              <div className='rate-items-card__body rate-accessorials-list'>
+                {quoteRequest.accessorialCodes.map((acc: string, idx: number) => {
+                  const match = accessorialsData.find((a: any) => a.accesorialCode === acc || a.accessorialName === acc);
+                  const displayName = match ? match.accessorialName : acc;
+                  return (
+                    <strong key={idx} className='rate-item-pill'>{displayName}</strong>
+                  );
+                })}
+              </div>
+            </article>
+          )}
         </aside>
 
         <main className='rate-results'>
@@ -534,14 +604,14 @@ function Rate() {
               onClick={() => setQuoteMode("ltl")}>
               LTL <span>{(ratesFromStore || []).length}</span>
             </button>
-            <button
+            {/* <button
               type='button'
               role='tab'
               aria-selected={quoteMode === "volume"}
               className={quoteMode === "volume" ? "active" : ""}
               onClick={() => setQuoteMode("volume")}>
               Volume <span>0</span>
-            </button>
+            </button> */}
           </div>
 
           <div className='rate-toolbar'>

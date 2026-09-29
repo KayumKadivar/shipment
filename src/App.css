@@ -554,6 +554,7 @@ body {
 
 .new-quote-page__top-actions {
   gap: 10px;
+  margin-bottom: 1rem;
 }
 
 .new-quote-page__top-actions .ant-btn {
@@ -850,7 +851,7 @@ body {
   gap: 2px 8px;
   padding: 2px 8px 10px;
   border-top: 1px solid #ececec;
-  max-height: 250px;
+  max-height: 360px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -5062,14 +5063,14 @@ body {
   grid-row: 2;
 }
 
-.rate-detail-liability-new {
-  grid-column: 3;
+.rate-detail-charges {
+  grid-column: 2;
   grid-row: 1;
 }
 
-.rate-detail-liability-used {
+.rate-detail-accessorials {
   grid-column: 3;
-  grid-row: 2;
+  grid-row: 1;
 }
 
 .rate-card__details dt,
@@ -6091,4 +6092,19 @@ body {
   align-items: center;
   color: #111;
   font-weight: 600;
+}
+
+.rate-accessorials-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rate-accessorials-list .rate-item-pill {
+  width: fit-content;
+}
+
+.rate-page__header-actions {
+  display: flex;
+  gap: 8px;
 }

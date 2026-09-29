@@ -119,6 +119,8 @@ function QuoteLocationCard({
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const postalRef = useRef(postal);
   const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const isFocusedRef = useRef(false);
 
   const handleSearchPostal = (value: string) => {
     if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
@@ -132,6 +134,7 @@ function QuoteLocationCard({
           setCity(results[0].city);
           setState(results[0].state);
           setPostalOptions([]);
+          setDropdownOpen(false);
         } else if (results && results.length > 1) {
           // Multiple results -> show dropdown
           const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || value}|${r.city}|${r.state}`)))
@@ -148,12 +151,17 @@ function QuoteLocationCard({
               key: `postal-${idx}`
             }))
           );
+          if (isFocusedRef.current) {
+            setDropdownOpen(true);
+          }
         } else {
           setPostalOptions([]);
+          setDropdownOpen(false);
         }
       }, 600);
     } else {
       setPostalOptions([]);
+      setDropdownOpen(false);
     }
   };
 
@@ -161,9 +169,11 @@ function QuoteLocationCard({
     setPostal(value);
     setCity(option.city);
     setState(option.state);
+    setDropdownOpen(false);
   };
 
   const handlePostalBlur = async () => {
+    isFocusedRef.current = false;
     const val = postalRef.current;
     if (!val || val.length < 3) return;
     if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
@@ -173,6 +183,7 @@ function QuoteLocationCard({
       setCity(results[0].city);
       setState(results[0].state);
       setPostalOptions([]);
+      setDropdownOpen(false);
     } else if (results && results.length > 1) {
       const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || val}|${r.city}|${r.state}`)))
         .map(str => {
@@ -188,6 +199,7 @@ function QuoteLocationCard({
           key: `postal-${idx}`
         }))
       );
+      
     }
   };
 
@@ -217,9 +229,17 @@ function QuoteLocationCard({
               setPostal(val);
               postalRef.current = val;
             }}
+            onFocus={() => {
+              isFocusedRef.current = true;
+              if (postalOptions.length > 0) {
+                setDropdownOpen(true);
+              }
+            }}
             onBlur={handlePostalBlur}
             disabled={loadingPostal}
             notFoundContent={loadingPostal ? <Spin size="small" /> : null}
+            open={dropdownOpen}
+            onDropdownVisibleChange={(visible) => setDropdownOpen(visible)}
           />
         </label>
         <label className='new-quote-field'>
@@ -428,26 +448,6 @@ function NewQuote() {
             <Button danger>Cancel Quote</Button>
           </div>
         </div>
-
-        <header className='new-quote-page__title'>
-          <h1>New Quote: 60113985278</h1>
-          <div>
-            <span>
-              Sales Group: <strong>Brian Young</strong>
-            </span>
-            <i />
-            <span>
-              Sales Rep: <strong>Brian Young</strong>
-            </span>
-            <i />
-            {/* <Select
-            size='small'
-            defaultValue='Notes: 2'
-            options={[{ value: "Notes: 2", label: "Notes: 2" }]}
-            aria-label='Quote notes count'
-          /> */}
-          </div>
-        </header>
 
         <div className='new-quote-layout'>
           <main className='new-quote-main'>
@@ -714,13 +714,13 @@ function NewQuote() {
             </div>
 
             <div className='new-quote-rate-actions'>
-              <Button
+              {/* <Button
                 icon={<PlusOutlined />}
                 onClick={() =>
                   setPackages((current) => [...current, createPackage()])
                 }>
                 Add Package
-              </Button>
+              </Button> */}
               <Button type='primary' onClick={handleSeeRates}>
                 See Rates
               </Button>
@@ -761,7 +761,7 @@ function NewQuote() {
               </div>
             </section>
 
-            <section className='new-quote-card quote-notes-card'>
+            {/* <section className='new-quote-card quote-notes-card'>
               <header className='new-quote-card__header'>
                 <h2>Notes</h2>
                 <Button size='small' icon={<PlusOutlined />}>
@@ -777,7 +777,7 @@ function NewQuote() {
                 <Input.TextArea placeholder='Add a note...' rows={3} />
                 <Button className='quote-note-confirm'>Confirm</Button>
               </div>
-            </section>
+            </section> */}
           </aside>
         </div>
       </section>

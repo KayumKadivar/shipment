@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/apiConfig';
 import { useAppSelector } from '../app/hooks';
+import { message } from 'antd';
 
 export interface PostalResult {
   city: string;
@@ -28,12 +29,19 @@ export function usePostalLookup() {
         }
       });
 
-      if (response.data && response.data.isSuccess && response.data.data && Array.isArray(response.data.data)) {
-        return response.data.data.map((data: any) => ({
-          city: data.cityName,
-          state: data.stateCode?.trim() || "",
-          postalCode: data.postalCode || postalCode,
-        }));
+      if (response.data && response.data.isSuccess) {
+        if (!response.data.data || response.data.data.length === 0) {
+          message.error(response.data.message || 'No Record found');
+          return [];
+        }
+        
+        if (Array.isArray(response.data.data)) {
+          return response.data.data.map((data: any) => ({
+            city: data.cityName,
+            state: data.stateCode?.trim() || "",
+            postalCode: data.postalCode || postalCode,
+          }));
+        }
       }
       return [];
     } catch (error) {

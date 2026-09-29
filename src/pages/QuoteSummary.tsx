@@ -7,10 +7,11 @@ import {
 import { Button, DatePicker, Empty, Input, Select, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "../app/hooks";
+import { fetchQuotes } from "../store/quoteSlice";
 import {
-  quoteSummaryData,
   type QuoteLoad,
   type QuoteSummaryRecord,
 } from "./quoteSummaryData";
@@ -20,7 +21,6 @@ type DateRangeValue = [Dayjs | null, Dayjs | null] | null;
 const selectOptions = {
   salesGroups: ["Florida Hub", "Midwest Hub", "National Accounts"],
   salesReps: ["Brian Young", "Nicole Keener", "Pete Jones"],
-  customers: quoteSummaryData.map((quote) => quote.customer),
 };
 
 function DetailCell({ primary, secondary }: { primary: string; secondary: string }) {
@@ -45,11 +45,54 @@ function QuoteSummary() {
   const [salesRep, setSalesRep] = useState<string>();
   const [customer, setCustomer] = useState<string>();
 
+  const dispatch = useAppDispatch();
+  const { quotes: apiQuotes, loading } = useAppSelector((state) => state.quote);
+
+  useEffect(() => {
+    dispatch(fetchQuotes({ clientCode: "DEVTS" }));
+  }, [dispatch]);
+
+  const dynamicQuoteSummaryData: QuoteSummaryRecord[] = useMemo(() => {
+    return apiQuotes.map((q) => {
+      const result = q.quoteResults?.[0] || {};
+      const date = q.requestedDate ? new Date(q.requestedDate) : new Date();
+      return {
+        key: `quote-${q.quoteRequestId}`,
+        customer: q.clientName || "Unknown Customer",
+        customerCode: q.clientCode || "Unknown",
+        createdAgo: "Created recently on",
+        createdDate: date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }),
+        reference: String(q.quoteRequestId),
+        pickupDate: q.pickupDate ? new Date(q.pickupDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }) : "",
+        pickupTimestamp: q.pickupDate ? new Date(q.pickupDate).getTime() : 0,
+        origin: `${q.originCity || ""}, ${q.originStateCode || ""}`,
+        originPostal: q.originZip || "",
+        destination: `${q.destinationCity || ""}, ${q.destinationStateCode || ""}`,
+        destinationPostal: q.destinationZip || "",
+        loads: (q.quoteProducts || []).map((p) => ({
+          freightClass: p.productClass || "",
+          weight: `${p.weight || 0} lbs`,
+        })),
+        carrierCode: result.scac || "UNK",
+        carrierName: result.carrierName || "Unknown Carrier",
+        createdBy: q.profileCode || "System",
+        profile: q.profileCode || "",
+        totalWeight: `${(q.quoteProducts || []).reduce((acc, p) => acc + (p.weight || 0), 0)} lbs`,
+        pallets: (q.quoteProducts || []).reduce((acc, p) => acc + (p.pallets || 0), 0),
+        pieces: 0,
+      };
+    });
+  }, [apiQuotes]);
+
+  const uniqueCustomers = useMemo(() => {
+    return Array.from(new Set(dynamicQuoteSummaryData.map((quote) => quote.customer)));
+  }, [dynamicQuoteSummaryData]);
+
   const visibleQuotes = useMemo(() => {
     const query = appliedSearch.trim().toLowerCase();
-    if (!query) return quoteSummaryData;
+    if (!query) return dynamicQuoteSummaryData;
 
-    return quoteSummaryData.filter((quote) =>
+    return dynamicQuoteSummaryData.filter((quote) =>
       [
         quote.customer,
         quote.customerCode,
@@ -65,7 +108,7 @@ function QuoteSummary() {
         ...quote.loads.flatMap((load) => [load.freightClass, load.weight]),
       ].some((value) => value.toLowerCase().includes(query)),
     );
-  }, [appliedSearch]);
+  }, [appliedSearch, dynamicQuoteSummaryData]);
 
   const clearFilters = () => {
     setDraftSearch("");
@@ -243,7 +286,7 @@ function QuoteSummary() {
               aria-label='Customer'
               showSearch
               optionFilterProp='value'
-              options={selectOptions.customers.map((value) => ({ value }))}
+              options={uniqueCustomers.map((value) => ({ value }))}
               onChange={setCustomer}
             />
             <div className='quote-summary-filter-actions'>
@@ -267,6 +310,7 @@ function QuoteSummary() {
         <Table<QuoteSummaryRecord>
           columns={columns}
           dataSource={visibleQuotes}
+          loading={loading}
           pagination={false}
           showSorterTooltip={false}
           scroll={{ x: 1145 }}
