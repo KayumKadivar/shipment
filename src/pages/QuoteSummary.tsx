@@ -58,8 +58,8 @@ function QuoteSummary() {
       const date = q.requestedDate ? new Date(q.requestedDate) : new Date();
       return {
         key: `quote-${q.quoteRequestId}`,
-        customer: q.clientName || "Unknown Customer",
-        customerCode: q.clientCode || "Unknown",
+        customer: q.clientName || "",
+        customerCode: q.clientCode || "",
         createdAgo: "Created recently on",
         createdDate: date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }),
         reference: String(q.quoteRequestId),
@@ -73,9 +73,9 @@ function QuoteSummary() {
           freightClass: p.productClass || "",
           weight: `${p.weight || 0} lbs`,
         })),
-        carrierCode: result.scac || "UNK",
-        carrierName: result.carrierName || "Unknown Carrier",
-        createdBy: q.profileCode || "System",
+        carrierCode: result.scac || "",
+        carrierName: result.carrierName || "",
+        createdBy: q.profileCode || "",
         profile: q.profileCode || "",
         totalWeight: `${(q.quoteProducts || []).reduce((acc, p) => acc + (p.weight || 0), 0)} lbs`,
         pallets: (q.quoteProducts || []).reduce((acc, p) => acc + (p.pallets || 0), 0),

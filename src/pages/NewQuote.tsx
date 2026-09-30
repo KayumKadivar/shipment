@@ -14,6 +14,7 @@ import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import { fetchAccessorials } from "../store/accessorialsSlice";
 import { fetchCarrierRates } from "../store/customerRateSlice";
+import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import { SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 
 type ItemField =
@@ -274,9 +275,11 @@ function NewQuote() {
   
   const { data: accessorialOptions } = useAppSelector((state) => state.accessorials);
   const profileCode = useAppSelector((state) => state.app.profileCode);
+  const { clients } = useAppSelector((state) => state.customerLocation);
 
   useEffect(() => {
     dispatch(fetchAccessorials());
+    dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
 
   const visibleAccessorials = useMemo(() => {
@@ -387,6 +390,7 @@ function NewQuote() {
         p.items.map((i) => ({
           class: i.freightClass,
           weight: Number(i.weight) || 0,
+          weightUnit: i.weightUnit,
           units: Number(i.units) || 0,
           cubicFeet: 0,
           hazMat: false,
@@ -406,6 +410,7 @@ function NewQuote() {
         .map((a) => a.accesorialCode || a.accessorialName),
       profileCode: profileCode,
       clientCode: DEFAULT_CLIENT_CODE,
+      clientName: clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE)?.clientName || "",
       scac: undefined,
       shipmentDate: new Date().toISOString(),
       zoneCode: undefined,
