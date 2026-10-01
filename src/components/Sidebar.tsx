@@ -10,37 +10,20 @@ import { Avatar, Layout, Menu, Typography, type MenuProps } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
 import avatarImage from "../assets/avtar.png";
 import nicoSidebarLogo from "../assets/side-head.png";
-
-const { Sider } = Layout;
-
-const menuItems: NonNullable<MenuProps["items"]> = [
-  { key: "/shipments", icon: <TruckOutlined />, label: "Shipments" },
-  { key: "/quotes", icon: <FileTextOutlined />, label: "Quotes" },
-  {
-    key: "/quote-summary",
-    icon: <ProfileOutlined />,
-    label: "Quote Summary",
-  },
-  {
-    key: "/customer-location",
-    icon: <TeamOutlined />,
-    label: "Customer Location",
-  },
-  {
-    key: "/customer-products",
-    icon: <AppstoreOutlined />,
-    label: "Customer Products",
-  },
-];
+import { useAppSelector } from "../app/hooks";
 
 type SidebarProps = {
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
 };
 
+const { Sider } = Layout;
+
 function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const quotesCount = useAppSelector((state: any) => state.quote?.quotes?.length || 0);
+
   const selectedKey =
     location.pathname.startsWith("/shipments")
       ? "/shipments"
@@ -57,6 +40,35 @@ function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
   const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
     navigate(String(key));
   };
+
+  const menuItems: NonNullable<MenuProps["items"]> = [
+    { key: "/shipments", icon: <TruckOutlined />, label: "Shipments" },
+    { key: "/quotes", icon: <FileTextOutlined />, label: "Quotes" },
+    {
+      key: "/quote-summary",
+      icon: <ProfileOutlined />,
+      label: (
+        <div className="sidebar-quote-summary-label">
+          <span>Quote Summary</span>
+          {quotesCount > 0 && (
+            <span className="sidebar-quote-summary-badge">
+              {quotesCount}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "/customer-location",
+      icon: <TeamOutlined />,
+      label: "Customer Location",
+    },
+    {
+      key: "/customer-products",
+      icon: <AppstoreOutlined />,
+      label: "Customer Products",
+    },
+  ];
 
   return (
     <Sider

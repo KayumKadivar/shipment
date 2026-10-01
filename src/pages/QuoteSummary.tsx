@@ -3,6 +3,8 @@ import {
   PlusOutlined,
   SaveOutlined,
   SearchOutlined,
+  LeftOutlined,
+  RightOutlined,
 } from "@ant-design/icons";
 import { Button, DatePicker, Empty, Input, Select, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -44,6 +46,8 @@ function QuoteSummary() {
   const [salesGroup, setSalesGroup] = useState<string>();
   const [salesRep, setSalesRep] = useState<string>();
   const [customer, setCustomer] = useState<string>();
+  const [activePage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const dispatch = useAppDispatch();
   const { quotes: apiQuotes, loading } = useAppSelector((state) => state.quote);
@@ -109,6 +113,20 @@ function QuoteSummary() {
       ].some((value) => value.toLowerCase().includes(query)),
     );
   }, [appliedSearch, dynamicQuoteSummaryData]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [appliedSearch, dateRange, salesGroup, salesRep, customer]);
+
+  const totalCount = visibleQuotes.length;
+  const totalPages = Math.ceil(totalCount / pageSize);
+  const paginatedQuotes = useMemo(() => {
+    const startIndex = (activePage - 1) * pageSize;
+    return visibleQuotes.slice(startIndex, startIndex + pageSize);
+  }, [visibleQuotes, activePage, pageSize]);
+
+  const shownStart = totalCount === 0 ? 0 : (activePage - 1) * pageSize + 1;
+  const shownEnd = Math.min(activePage * pageSize, totalCount);
 
   const clearFilters = () => {
     setDraftSearch("");
@@ -307,9 +325,36 @@ function QuoteSummary() {
       </div>
 
       <div className='quote-summary-table-card'>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 15px', borderBottom: '1px solid #e3e4e6' }}>
+          <div className='location-page-controls'>
+            <span>Page size</span>
+            <Select
+              value={pageSize}
+              aria-label='Quotes page size'
+              options={[10, 20, 50].map((value) => ({ value, label: value }))}
+              onChange={(value) => {
+                setPageSize(value);
+                setCurrentPage(1);
+              }}
+            />
+            <Button
+              aria-label='Previous page'
+              icon={<LeftOutlined />}
+              disabled={activePage === 1}
+              onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
+            />
+            <span>{totalPages > 0 ? `${activePage} of ${totalPages}` : "0 of 0"}</span>
+            <Button
+              aria-label='Next page'
+              icon={<RightOutlined />}
+              disabled={activePage === totalPages || totalPages === 0}
+              onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))}
+            />
+          </div>
+        </div>
         <Table<QuoteSummaryRecord>
           columns={columns}
-          dataSource={visibleQuotes}
+          dataSource={paginatedQuotes}
           loading={loading}
           pagination={false}
           showSorterTooltip={false}
@@ -318,6 +363,36 @@ function QuoteSummary() {
             emptyText: <Empty description='No quotes match your search.' />,
           }}
         />
+        <div className='customer-location-footer'>
+          <span>
+            Showing {shownStart}-{shownEnd} of <strong>{totalCount}</strong>{" "}
+            Quotes
+          </span>
+          <div className='customer-location-pagination'>
+            <button
+              type='button'
+              disabled={activePage === 1}
+              onClick={() => setCurrentPage(Math.max(1, activePage - 1))}>
+              Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+              <button
+                type='button'
+                key={page}
+                aria-current={page === activePage ? "page" : undefined}
+                className={page === activePage ? "current" : ""}
+                onClick={() => setCurrentPage(page)}>
+                {page}
+              </button>
+            ))}
+            <button
+              type='button'
+              disabled={activePage === totalPages || totalPages === 0}
+              onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))}>
+              Next
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -1,14 +1,10 @@
-import {
-  HomeOutlined,
-  InfoCircleOutlined,
-  SendOutlined,
-} from "@ant-design/icons";
-import { Button, Result } from "antd";
-import { useState } from "react";
+
+import { Button, Result, Spin } from "antd";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import abfLogo from "../assets/image 55.png";
-import rlLogo from "../assets/image 57.png";
-import { quoteSummaryData, type QuoteSummaryRecord } from "./quoteSummaryData";
+import { useAppSelector, useAppDispatch } from "../app/hooks";
+import { fetchCarrierLogo } from "../store/customerRateSlice";
+import { type QuoteSummaryRecord } from "./quoteSummaryData";
 
 type CarrierLogoKind = "abf" | "rl" | "fedex";
 
@@ -20,14 +16,11 @@ type CarrierOffer = {
   logoKind: CarrierLogoKind;
   price: number;
   quoteId: string;
-  quoteExpiry: string;
   transitDays: number;
-  estimatedDelivery: string;
-  liabilityNew: string;
-  liabilityUsed: string;
   accessorials: string[];
 };
 
+/*
 const carrierOffers: CarrierOffer[] = [
   {
     id: "fedex-economy",
@@ -180,23 +173,43 @@ const carrierOffers: CarrierOffer[] = [
     accessorials: ["Inside Delivery", "Call Before Delivery"],
   },
 ];
+*/
 
 function CarrierLogo({ offer }: { offer: CarrierOffer }) {
-  if (offer.logoKind === "fedex") {
+  const dispatch = useAppDispatch();
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (offer.code) {
+      setLoading(true);
+      dispatch(fetchCarrierLogo(offer.code))
+        .unwrap()
+        .then((res: any) => {
+          setLogoUrl(res.logo);
+          setLoading(false);
+        })
+        .catch(() => {
+          setLogoUrl(null);
+          setLoading(false);
+        });
+    }
+  }, [offer.code, dispatch]);
+
+  if (loading) {
+    return <Spin size="small" />;
+  }
+
+  if (logoUrl) {
     return (
-      <div className='quote-detail-fedex-logo' aria-label='FedEx Freight'>
-        <span>Fed</span>
-        <strong>Ex</strong>
-      </div>
+      <img
+        src={logoUrl}
+        alt={`${offer.name} logo`}
+      />
     );
   }
 
-  return (
-    <img
-      src={offer.logoKind === "abf" ? abfLogo : rlLogo}
-      alt={`${offer.name} logo`}
-    />
-  );
+  return <strong>{offer.name}</strong>;
 }
 
 function QuoteInformation({ quote }: { quote: QuoteSummaryRecord }) {
@@ -239,6 +252,7 @@ function QuoteInformation({ quote }: { quote: QuoteSummaryRecord }) {
   );
 }
 
+
 function CarrierOfferCard({
   offer,
   selected,
@@ -268,48 +282,21 @@ function CarrierOfferCard({
 
       <div className='quote-detail-offer-card__information'>
         <header className='quote-detail-offer-card__heading'>
-          <div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <strong>{offer.name}</strong>
-            <span>{offer.code}</span>
-            <span>{offer.service}</span>
+            <span className="rate-chip">{offer.code}</span>
+            <span className="rate-chip">{offer.service}</span>
           </div>
-          <nav aria-label={`${offer.name} actions`}>
-            <button type='button'>
-              <SendOutlined /> Send
-            </button>
-            <button type='button'>
-              <HomeOutlined /> Terminals
-            </button>
-            <button type='button'>
-              <InfoCircleOutlined /> Info
-            </button>
-          </nav>
         </header>
 
         <dl className='quote-detail-offer-card__details'>
           <div>
             <dt>Quote ID</dt>
-            <dd>{offer.quoteId}</dd>
-          </div>
-          <div>
-            <dt>Quote Exp. Date</dt>
-            <dd>{offer.quoteExpiry}</dd>
+            <dd>{offer.quoteId || "N/A"}</dd>
           </div>
           <div>
             <dt>Transit Days</dt>
-            <dd>{offer.transitDays} business days</dd>
-          </div>
-          <div>
-            <dt>Est. Delivery Date</dt>
-            <dd>{offer.estimatedDelivery}</dd>
-          </div>
-          <div>
-            <dt>Carrier Liability New</dt>
-            <dd>{offer.liabilityNew}</dd>
-          </div>
-          <div>
-            <dt>Carrier Liability Used</dt>
-            <dd>{offer.liabilityUsed}</dd>
+            <dd>{offer.transitDays ? `${offer.transitDays} business days` : "N/A"}</dd>
           </div>
         </dl>
 
@@ -332,9 +319,83 @@ function QuoteRateDetail() {
   const navigate = useNavigate();
   const { reference } = useParams<{ reference: string }>();
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
-  const quote = quoteSummaryData.find(
-    (item) => item.reference === decodeURIComponent(reference ?? ""),
-  );
+  
+  const { quotes: apiQuotes } = useAppSelector((state) => state.quote);
+
+  const apiQuote = useMemo(() => {
+    return apiQuotes.find((q) => String(q.quoteRequestId) === decodeURIComponent(reference ?? ""));
+  }, [apiQuotes, reference]);
+
+  const quote = useMemo(() => {
+    /*
+    const hardcoded = quoteSummaryData.find(
+      (item) => item.reference === decodeURIComponent(reference ?? "")
+    );
+    if (hardcoded) return hardcoded;
+    */
+
+    if (!apiQuote) return undefined;
+
+    const result = apiQuote.quoteResults?.[0] || {};
+    const date = apiQuote.requestedDate ? new Date(apiQuote.requestedDate) : new Date();
+
+    return {
+      key: `quote-${apiQuote.quoteRequestId}`,
+      customer: apiQuote.clientName || "",
+      customerCode: apiQuote.clientCode || "",
+      createdAgo: "Created recently on",
+      createdDate: date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }),
+      reference: String(apiQuote.quoteRequestId),
+      pickupDate: apiQuote.pickupDate ? new Date(apiQuote.pickupDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }) : "",
+      pickupTimestamp: apiQuote.pickupDate ? new Date(apiQuote.pickupDate).getTime() : 0,
+      origin: `${apiQuote.originCity || ""}, ${apiQuote.originStateCode || ""}`,
+      originPostal: apiQuote.originZip || "",
+      destination: `${apiQuote.destinationCity || ""}, ${apiQuote.destinationStateCode || ""}`,
+      destinationPostal: apiQuote.destinationZip || "",
+      loads: (apiQuote.quoteProducts || []).map((p: any) => ({
+        freightClass: p.productClass || "",
+        weight: `${p.weight || 0} lbs`,
+      })),
+      carrierCode: result.scac || "",
+      carrierName: result.carrierName || "",
+      createdBy: apiQuote.profileCode || "",
+      profile: apiQuote.profileCode || "",
+      totalWeight: `${(apiQuote.quoteProducts || []).reduce((acc: number, p: any) => acc + (p.weight || 0), 0)} lbs`,
+      pallets: (apiQuote.quoteProducts || []).reduce((acc: number, p: any) => acc + (p.pallets || 0), 0),
+      pieces: 0,
+    } as QuoteSummaryRecord;
+  }, [apiQuote, reference]);
+
+  const dynamicCarrierOffers = useMemo(() => {
+    if (apiQuote && apiQuote.quoteResults && apiQuote.quoteResults.length > 0) {
+      return apiQuote.quoteResults.map((result: any) => {
+        let logoKind: "fedex" | "abf" | "rl" = "abf";
+        const scacLower = (result.scac || "").toLowerCase();
+        if (scacLower.includes("fxf") || scacLower.includes("fedex")) {
+          logoKind = "fedex";
+        } else if (scacLower.includes("rl")) {
+          logoKind = "rl";
+        }
+
+        return {
+          id: String(result.quoteResultId || Math.random()),
+          name: result.carrierName || "Unknown Carrier",
+          code: result.scac || "",
+          service: result.serviceLevel || "",
+          logoKind,
+          price: 0, 
+          quoteId: result.saasQuoteId || result.carrierQuoteNo || "",
+          transitDays: parseInt(result.transitDays) || 0,
+          accessorials: [],
+        } as CarrierOffer;
+      });
+    }
+    
+    /*
+    return carrierOffers;
+    */
+    return [];
+  }, [apiQuote]);
 
   if (!quote) {
     return (
@@ -357,7 +418,7 @@ function QuoteRateDetail() {
     <section className='quote-detail-page'>
       <QuoteInformation quote={quote} />
       <div className='quote-detail-offer-list' aria-label='Available carrier quotes'>
-        {carrierOffers.map((offer) => (
+        {dynamicCarrierOffers.map((offer) => (
           <CarrierOfferCard
             key={offer.id}
             offer={offer}
