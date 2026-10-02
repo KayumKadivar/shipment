@@ -10,7 +10,7 @@ import { Avatar, Layout, Menu, Typography, type MenuProps } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
 import avatarImage from "../assets/avtar.png";
 import nicoSidebarLogo from "../assets/side-head.png";
-import { useAppSelector } from "../app/hooks";
+
 
 type SidebarProps = {
   collapsed: boolean;
@@ -22,7 +22,6 @@ const { Sider } = Layout;
 function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const quotesCount = useAppSelector((state: any) => state.quote?.quotes?.length || 0);
 
   const selectedKey =
     location.pathname.startsWith("/shipments")
@@ -47,16 +46,7 @@ function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
     {
       key: "/quote-summary",
       icon: <ProfileOutlined />,
-      label: (
-        <div className="sidebar-quote-summary-label">
-          <span>Quote Summary</span>
-          {quotesCount > 0 && (
-            <span className="sidebar-quote-summary-badge">
-              {quotesCount}
-            </span>
-          )}
-        </div>
-      ),
+      label: "Quote Summary",
     },
     {
       key: "/customer-location",

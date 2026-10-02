@@ -616,6 +616,10 @@ body {
   gap: 14px;
 }
 
+.new-quote-packages {
+  margin-top: 16px;
+}
+
 .new-quote-location-grid {
   min-width: 0;
   display: grid;
@@ -743,10 +747,23 @@ body {
   display: grid;
   grid-template-columns:
     minmax(42px, 0.55fr) minmax(75px, 0.8fr) minmax(50px, 0.55fr)
-    minmax(125px, 1.25fr) minmax(60px, 0.7fr) minmax(215px, 2.2fr)
-    minmax(60px, 0.75fr) minmax(60px, 0.9fr) 18px 18px;
+    minmax(80px, 1fr) minmax(60px, 0.7fr) minmax(150px, 1.8fr)
+    minmax(60px, 0.75fr) minmax(100px, 1.2fr) 80px 80px 18px;
   gap: 4px;
   align-items: center;
+}
+
+.quote-items-table__head.has-hazmat,
+.quote-item-row.has-hazmat {
+  grid-template-columns:
+    minmax(42px, 0.55fr) minmax(75px, 0.8fr) minmax(50px, 0.55fr)
+    minmax(80px, 1fr) minmax(60px, 0.7fr) minmax(150px, 1.8fr)
+    minmax(60px, 0.75fr) minmax(100px, 1.2fr) 80px 80px minmax(60px, 0.8fr) minmax(60px, 0.8fr) 18px;
+}
+
+.quote-items-table__head > *:nth-child(10),
+.quote-item-row > *:nth-child(10) {
+  margin-left: 15px;
 }
 
 .quote-items-table__head {
@@ -816,7 +833,7 @@ body {
 .new-quote-rate-actions {
   justify-content: flex-end;
   gap: 14px;
-  padding-top: 0;
+  padding-top: 16px;
 }
 
 .new-quote-rate-actions .ant-btn {
@@ -851,7 +868,7 @@ body {
   gap: 2px 8px;
   padding: 2px 8px 10px;
   border-top: 1px solid #ececec;
-  max-height: 360px;
+  max-height: 100px;
   overflow-y: auto;
   overflow-x: hidden;
 }

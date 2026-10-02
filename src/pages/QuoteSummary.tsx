@@ -20,10 +20,10 @@ import {
 
 type DateRangeValue = [Dayjs | null, Dayjs | null] | null;
 
-const selectOptions = {
-  salesGroups: ["Florida Hub", "Midwest Hub", "National Accounts"],
-  salesReps: ["Brian Young", "Nicole Keener", "Pete Jones"],
-};
+// const selectOptions = {
+//   salesGroups: ["Florida Hub", "Midwest Hub", "National Accounts"],
+//   salesReps: ["Brian Young", "Nicole Keener", "Pete Jones"],
+// };
 
 function DetailCell({ primary, secondary }: { primary: string; secondary: string }) {
   return (
@@ -38,12 +38,11 @@ function QuoteSummary() {
   const navigate = useNavigate();
   const [draftSearch, setDraftSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const [showMoreFilters, setShowMoreFilters] = useState(true);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => [
     dayjs("2026-08-06"),
     dayjs("2026-08-25"),
   ]);
-  const [salesGroup, setSalesGroup] = useState<string>();
   const [salesRep, setSalesRep] = useState<string>();
   const [customer, setCustomer] = useState<string>();
   const [activePage, setCurrentPage] = useState(1);
@@ -115,8 +114,9 @@ function QuoteSummary() {
   }, [appliedSearch, dynamicQuoteSummaryData]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
-  }, [appliedSearch, dateRange, salesGroup, salesRep, customer]);
+  }, [appliedSearch, dateRange, salesRep, customer]);
 
   const totalCount = visibleQuotes.length;
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -132,7 +132,6 @@ function QuoteSummary() {
     setDraftSearch("");
     setAppliedSearch("");
     setDateRange(null);
-    setSalesGroup(undefined);
     setSalesRep(undefined);
     setCustomer(undefined);
   };
@@ -205,8 +204,8 @@ function QuoteSummary() {
               className='quote-summary-load-item'
               key={`${load.freightClass}-${index}`}>
               <span className='quote-summary-class-badge'>
-                <small>Class</small>
-                <strong>{load.freightClass}</strong>
+                <small>Class : <strong>{load.freightClass}</strong></small>
+               
               </span>
               <small>{load.weight}</small>
             </span>
@@ -214,16 +213,7 @@ function QuoteSummary() {
         </span>
       ),
     },
-    {
-      title: "Carrier",
-      dataIndex: "carrierCode",
-      width: 150,
-      sorter: (first, second) =>
-        first.carrierName.localeCompare(second.carrierName),
-      render: (_, record) => (
-        <DetailCell primary={record.carrierCode} secondary={record.carrierName} />
-      ),
-    },
+
     {
       title: "Created By",
       dataIndex: "createdBy",
@@ -238,14 +228,16 @@ function QuoteSummary() {
     <section className='quote-summary-page' aria-label='Quote Summary'>
       <div className='quote-summary-filter-card'>
         <div className='quote-summary-filter-topline'>
-          <Input
-            value={draftSearch}
-            placeholder='Filter quotes...'
-            allowClear
-            aria-label='Filter quotes'
-            onChange={(event) => setDraftSearch(event.target.value)}
-            onPressEnter={() => setAppliedSearch(draftSearch)}
-          />
+          {showMoreFilters ? (
+            <Input
+              value={draftSearch}
+              placeholder='Filter quotes...'
+              allowClear
+              aria-label='Filter quotes'
+              onChange={(event) => setDraftSearch(event.target.value)}
+              onPressEnter={() => setAppliedSearch(draftSearch)}
+            />
+          ) : <div style={{ flex: 1 }} />}
           <Button
             icon={<FilterOutlined />}
             aria-expanded={showMoreFilters}
@@ -275,25 +267,14 @@ function QuoteSummary() {
                 onChange={(dates) => setDateRange(dates)}
               />
             </label>
-            <Select
-              className='quote-summary-filter-control'
-              size='large'
-              value={salesGroup}
-              allowClear
-              placeholder='Sales Group'
-              aria-label='Sales group'
-              options={selectOptions.salesGroups.map((value) => ({ value }))}
-              onChange={setSalesGroup}
-            />
-            <Select
+            <Input
               className='quote-summary-filter-control'
               size='large'
               value={salesRep}
               allowClear
               placeholder='Sales Rep'
               aria-label='Sales representative'
-              options={selectOptions.salesReps.map((value) => ({ value }))}
-              onChange={setSalesRep}
+              onChange={(e) => setSalesRep(e.target.value)}
             />
             <Select
               className='quote-summary-filter-control'

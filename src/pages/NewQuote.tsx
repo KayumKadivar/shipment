@@ -1,6 +1,5 @@
 import {
   DeleteOutlined,
-  EditOutlined,
   PlusOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
@@ -29,10 +28,14 @@ type ItemField =
   | "height"
   | "dimensionUnit"
   | "nmfc"
-  | "description";
+  | "description"
+  | "hazMatClass"
+  | "hazMatUN";
 
 type QuoteItem = Record<ItemField, string> & {
   id: string;
+  stackable: boolean;
+  hazMat: boolean;
 };
 
 type QuotePackage = {
@@ -58,6 +61,10 @@ const createItem = (): QuoteItem => ({
   dimensionUnit: "in.",
   nmfc: "",
   description: "",
+  stackable: false,
+  hazMat: false,
+  hazMatClass: "",
+  hazMatUN: "",
 });
 
 const createPackage = (): QuotePackage => ({
@@ -97,9 +104,7 @@ function QuoteLocationCard({
   includeDate = false,
   postal,
   setPostal,
-  city,
   setCity,
-  state,
   setState,
   country,
   setCountry,
@@ -109,9 +114,7 @@ function QuoteLocationCard({
   includeDate?: boolean;
   postal: string;
   setPostal: (val: string) => void;
-  city: string;
   setCity: (val: string) => void;
-  state: string;
   setState: (val: string) => void;
   country: string;
   setCountry: (val: string) => void;
@@ -125,27 +128,28 @@ function QuoteLocationCard({
 
   const handleSearchPostal = (value: string) => {
     if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
-    if (value.length >= 3) {
+    const searchVal = value.split(' - ')[0];
+    if (searchVal.length >= 3) {
       zipTimeoutRef.current = setTimeout(async () => {
-        const results = await searchPostals(value, country);
+        const results = await searchPostals(searchVal, country);
         
         if (results && results.length === 1) {
           // Exactly 1 result (full postal code usually) -> auto-fill immediately
-          setPostal(results[0].postalCode || value);
+          setPostal(`${results[0].postalCode || searchVal} - ${results[0].city}, ${results[0].state}`);
           setCity(results[0].city);
           setState(results[0].state);
           setPostalOptions([]);
           setDropdownOpen(false);
         } else if (results && results.length > 1) {
           // Multiple results -> show dropdown
-          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || value}|${r.city}|${r.state}`)))
+          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || searchVal}|${r.city}|${r.state}`)))
             .map(str => {
               const [p, c, s] = str.split('|');
               return { postalCode: p, city: c, state: s };
             });
           setPostalOptions(
             uniqueResults.map((r, idx) => ({
-              value: r.postalCode,
+              value: `${r.postalCode} - ${r.city}, ${r.state}`,
               label: `${r.postalCode} - ${r.city}, ${r.state}`,
               city: r.city,
               state: r.state,
@@ -176,24 +180,26 @@ function QuoteLocationCard({
   const handlePostalBlur = async () => {
     isFocusedRef.current = false;
     const val = postalRef.current;
-    if (!val || val.length < 3) return;
+    if (!val) return;
+    const searchVal = val.split(' - ')[0];
+    if (searchVal.length < 3) return;
     if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
-    const results = await searchPostals(val, country);
+    const results = await searchPostals(searchVal, country);
     if (results && results.length === 1) {
-      setPostal(results[0].postalCode || val);
+      setPostal(`${results[0].postalCode || searchVal} - ${results[0].city}, ${results[0].state}`);
       setCity(results[0].city);
       setState(results[0].state);
       setPostalOptions([]);
       setDropdownOpen(false);
     } else if (results && results.length > 1) {
-      const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || val}|${r.city}|${r.state}`)))
+      const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || searchVal}|${r.city}|${r.state}`)))
         .map(str => {
           const [p, c, s] = str.split('|');
           return { postalCode: p, city: c, state: s };
         });
       setPostalOptions(
         uniqueResults.map((r, idx) => ({
-          value: r.postalCode,
+          value: `${r.postalCode} - ${r.city}, ${r.state}`,
           label: `${r.postalCode} - ${r.city}, ${r.state}`,
           city: r.city,
           state: r.state,
@@ -243,14 +249,7 @@ function QuoteLocationCard({
             onDropdownVisibleChange={(visible) => setDropdownOpen(visible)}
           />
         </label>
-        <label className='new-quote-field'>
-          <span>City</span>
-          <Input value={city} onChange={e => setCity(e.target.value)} aria-label={`${title} city`} />
-        </label>
-        <label className='new-quote-field'>
-          <span>State</span>
-          <Input value={state} onChange={e => setState(e.target.value)} aria-label={`${title} state`} />
-        </label>
+
         <label className='new-quote-field'>
           <span>Country</span>
           <CountrySelect
@@ -305,8 +304,8 @@ function NewQuote() {
   const updateItem = (
     packageId: string,
     itemId: string,
-    field: ItemField,
-    value: string,
+    field: keyof QuoteItem,
+    value: string | boolean,
   ) => {
     setPackages((current) =>
       current.map((quotePackage) =>
@@ -378,11 +377,11 @@ function NewQuote() {
 
     const payload = {
       serviceToken: SRV_TOKEN,
-      origZip: origPostal,
+      origZip: origPostal.split(' - ')[0],
       origCity: origCity,
       origState: origState,
       origCountry: origCountry,
-      destZip: destPostal,
+      destZip: destPostal.split(' - ')[0],
       destCity: destCity,
       destState: destState,
       destCountry: destCountry,
@@ -393,8 +392,11 @@ function NewQuote() {
           weightUnit: i.weightUnit,
           units: Number(i.units) || 0,
           cubicFeet: 0,
-          hazMat: false,
+          hazMat: i.hazMat,
+          hazMatClass: i.hazMatClass || undefined,
+          hazMatUN: i.hazMatUN || undefined,
           nmfc: i.nmfc || undefined,
+          description: i.description || "Freight",
           pallets: i.handlingUnit === "Pallet" ? Number(i.units) || 0 : 0,
           pieces: Number(i.pieces) || 0,
           length: Number(i.length) || 0,
@@ -402,7 +404,7 @@ function NewQuote() {
           height: Number(i.height) || 0,
           packageType: i.handlingUnit,
           linearFeet: 0,
-          stackable: true,
+          stackable: i.stackable,
         }))
       ),
       accessorialCodes: accessorialOptions
@@ -463,9 +465,7 @@ function NewQuote() {
                 includeDate
                 postal={origPostal}
                 setPostal={setOrigPostal}
-                city={origCity}
                 setCity={setOrigCity}
-                state={origState}
                 setState={setOrigState}
                 country={origCountry}
                 setCountry={setOrigCountry}
@@ -475,18 +475,51 @@ function NewQuote() {
                 zipLabel='Dest. Zip Code'
                 postal={destPostal}
                 setPostal={setDestPostal}
-                city={destCity}
                 setCity={setDestCity}
-                state={destState}
                 setState={setDestState}
                 country={destCountry}
                 setCountry={setDestCountry}
               />
             </div>
+          </main>
 
+          <aside className='new-quote-aside'>
+            <section className='new-quote-card quote-accessorial-card'>
+              <header className='new-quote-card__header'>
+                <h2>Accessorials</h2>
+              </header>
+              <Input
+                className='quote-accessorial-search'
+                value={accessorialSearch}
+                placeholder='Search accessorials...'
+                allowClear
+                onChange={(event) => setAccessorialSearch(event.target.value)}
+              />
+              <div className='quote-accessorial-list'>
+                {visibleAccessorials.map((option) => {
+                  const checked = selectedAccessorials.includes(option);
+                  return (
+                    <label className={checked ? "is-checked" : ""} key={option}>
+                      <Checkbox
+                        checked={checked}
+                        onChange={(event) =>
+                          setSelectedAccessorials((current) =>
+                            event.target.checked
+                              ? [...current, option]
+                              : current.filter((value) => value !== option),
+                          )
+                        }>
+                        {option}
+                      </Checkbox>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+          </aside>
+        </div>
 
-
-            <div className='new-quote-packages'>
+        <div className='new-quote-packages'>
               {packages.map((quotePackage) => (
                 <section
                   className='new-quote-card quote-items-card'
@@ -497,29 +530,32 @@ function NewQuote() {
                       <Button size='small' icon={<TeamOutlined />}>
                         Inventory
                       </Button>
-                      <Checkbox>Stackable</Checkbox>
-                      <Checkbox>Hazmat</Checkbox>
-                      <Checkbox>Used</Checkbox>
-                      <Checkbox>Machinery</Checkbox>
                     </div>
                   </header>
 
                   <div className='quote-items-table'>
-                    <div className='quote-items-table__head' aria-hidden='true'>
+                    <div className={`quote-items-table__head ${quotePackage.items.some(i => i.hazMat) ? 'has-hazmat' : ''}`} aria-hidden='true'>
                       <span>Units</span>
                       <span>Handling Unit</span>
                       <span>Pieces</span>
-                      <span>Weight</span>
+                      <span>Weight [lbs]</span>
                       <span>Class</span>
-                      <span>Dimensions</span>
+                      <span>Dimensions [inches]</span>
                       <span>NMFC</span>
                       <span>Description</span>
-                      <span />
+                      <span>Stackable</span>
+                      <span>Hazmat</span>
+                      {quotePackage.items.some(i => i.hazMat) && (
+                        <>
+                          <span>Hazmat Class</span>
+                          <span>Hazmat UN</span>
+                        </>
+                      )}
                       <span />
                     </div>
 
                     {quotePackage.items.map((item) => (
-                      <div className='quote-item-row' key={item.id}>
+                      <div className={`quote-item-row ${quotePackage.items.some(i => i.hazMat) ? 'has-hazmat' : ''}`} key={item.id}>
                         <Input
                           value={item.units}
                           aria-label='Units'
@@ -557,36 +593,18 @@ function NewQuote() {
                             )
                           }
                         />
-                        <div className='quote-item-combined quote-item-combined--weight'>
-                          <Input
-                            value={item.weight}
-                            aria-label='Weight'
-                            onChange={(event) =>
-                              updateItem(
-                                quotePackage.id,
-                                item.id,
-                                "weight",
-                                event.target.value,
-                              )
-                            }
-                          />
-                          <Select
-                            value={item.weightUnit}
-                            options={[
-                              { value: "lbs", label: "lbs" },
-                              { value: "kg", label: "kg" },
-                            ]}
-                            aria-label='Weight unit'
-                            onChange={(value) =>
-                              updateItem(
-                                quotePackage.id,
-                                item.id,
-                                "weightUnit",
-                                value,
-                              )
-                            }
-                          />
-                        </div>
+                        <Input
+                          value={item.weight}
+                          aria-label='Weight [lbs]'
+                          onChange={(event) =>
+                            updateItem(
+                              quotePackage.id,
+                              item.id,
+                              "weight",
+                              event.target.value,
+                            )
+                          }
+                        />
                         <Select
                           value={item.freightClass}
                           options={classOptions}
@@ -640,22 +658,6 @@ function NewQuote() {
                               )
                             }
                           />
-                          <Select
-                            value={item.dimensionUnit}
-                            options={[
-                              { value: "in.", label: "in." },
-                              { value: "cm", label: "cm" },
-                            ]}
-                            aria-label='Dimension unit'
-                            onChange={(value) =>
-                              updateItem(
-                                quotePackage.id,
-                                item.id,
-                                "dimensionUnit",
-                                value,
-                              )
-                            }
-                          />
                         </div>
                         <Input
                           value={item.nmfc}
@@ -683,13 +685,65 @@ function NewQuote() {
                             )
                           }
                         />
-                        <Button
-                          type='text'
-                          className='quote-item-edit'
-                          icon={<EditOutlined />}
-                          aria-label='Edit item'
-                          title='Edit item'
+                        <Checkbox
+                          checked={item.stackable}
+                          onChange={(event) =>
+                            updateItem(
+                              quotePackage.id,
+                              item.id,
+                              "stackable",
+                              event.target.checked,
+                            )
+                          }
                         />
+                        <Checkbox
+                          checked={item.hazMat}
+                          onChange={(event) =>
+                            updateItem(
+                              quotePackage.id,
+                              item.id,
+                              "hazMat",
+                              event.target.checked,
+                            )
+                          }
+                        />
+                        {quotePackage.items.some(i => i.hazMat) && (
+                          item.hazMat ? (
+                            <>
+                              <Input
+                                value={item.hazMatClass}
+                                placeholder='Class'
+                                aria-label='Hazmat Class'
+                                onChange={(event) =>
+                                  updateItem(
+                                    quotePackage.id,
+                                    item.id,
+                                    "hazMatClass",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <Input
+                                value={item.hazMatUN}
+                                placeholder='UN'
+                                aria-label='Hazmat UN'
+                                onChange={(event) =>
+                                  updateItem(
+                                    quotePackage.id,
+                                    item.id,
+                                    "hazMatUN",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <span />
+                              <span />
+                            </>
+                          )
+                        )}
                         <Button
                           type='text'
                           danger
@@ -730,61 +784,6 @@ function NewQuote() {
                 See Rates
               </Button>
             </div>
-          </main>
-
-          <aside className='new-quote-aside'>
-            <section className='new-quote-card quote-accessorial-card'>
-              <header className='new-quote-card__header'>
-                <h2>Accessorials</h2>
-              </header>
-              <Input
-                className='quote-accessorial-search'
-                value={accessorialSearch}
-                placeholder='Search accessorials...'
-                allowClear
-                onChange={(event) => setAccessorialSearch(event.target.value)}
-              />
-              <div className='quote-accessorial-list'>
-                {visibleAccessorials.map((option) => {
-                  const checked = selectedAccessorials.includes(option);
-                  return (
-                    <label className={checked ? "is-checked" : ""} key={option}>
-                      <Checkbox
-                        checked={checked}
-                        onChange={(event) =>
-                          setSelectedAccessorials((current) =>
-                            event.target.checked
-                              ? [...current, option]
-                              : current.filter((value) => value !== option),
-                          )
-                        }>
-                        {option}
-                      </Checkbox>
-                    </label>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* <section className='new-quote-card quote-notes-card'>
-              <header className='new-quote-card__header'>
-                <h2>Notes</h2>
-                <Button size='small' icon={<PlusOutlined />}>
-                  Add Note
-                </Button>
-              </header>
-              <ol className='quote-notes-list'>
-                <li>
-                  Make sure customer rep is at gate to supervise unloading.
-                </li>
-              </ol>
-              <div className='quote-note-entry'>
-                <Input.TextArea placeholder='Add a note...' rows={3} />
-                <Button className='quote-note-confirm'>Confirm</Button>
-              </div>
-            </section> */}
-          </aside>
-        </div>
       </section>
     </div>
   );

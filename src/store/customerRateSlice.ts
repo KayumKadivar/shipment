@@ -145,6 +145,7 @@ export const saveCustomerQuote = createAsyncThunk(
           quoteRequestId: 0,
           productClass: s.class || "",
           productNMFC: s.nmfc || "",
+          description: s.description || "",
           weight: s.weight || 0,
           pallets: s.pieces || 0,
           isHazmat: s.isHazmat || false,

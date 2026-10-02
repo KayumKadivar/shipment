@@ -1,9 +1,10 @@
-
+import { ExclamationCircleOutlined } from "@ant-design/icons";
 import { Button, Result, Spin } from "antd";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
 import { fetchCarrierLogo } from "../store/customerRateSlice";
+import { fetchQuoteById } from "../store/quoteSlice";
 import { type QuoteSummaryRecord } from "./quoteSummaryData";
 
 type CarrierLogoKind = "abf" | "rl" | "fedex";
@@ -18,6 +19,13 @@ type CarrierOffer = {
   quoteId: string;
   transitDays: number;
   accessorials: string[];
+  warning?: string;
+  quoteExpiry?: string;
+  estimatedDelivery?: string;
+  grossCharge?: number;
+  discount?: number;
+  fuelSurcharge?: number;
+  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number }[];
 };
 
 /*
@@ -263,68 +271,91 @@ function CarrierOfferCard({
   onSelect: () => void;
 }) {
   return (
-    <article
-      className={`quote-detail-offer-card${selected ? " is-selected" : ""}`}>
-      <div className='quote-detail-offer-card__offer'>
-        <div className='quote-detail-offer-card__logo'>
-          <CarrierLogo offer={offer} />
+    <article className={`rate-card ${selected ? "rate-card--selected" : ""}`}>
+      {offer.warning && (
+        <div className='rate-card__warning'>
+          <ExclamationCircleOutlined />
+          <span>{offer.warning}</span>
         </div>
-        <strong className='quote-detail-offer-card__price'>
-          {offer.price.toLocaleString("en-US", {
-            style: "currency",
-            currency: "USD",
-          })}
-        </strong>
-        <Button type={selected ? "primary" : "default"} onClick={onSelect}>
-          {selected ? "Selected" : "Select Quote"}
-        </Button>
-      </div>
+      )}
 
-      <div className='quote-detail-offer-card__information'>
-        <header className='quote-detail-offer-card__heading'>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <strong>{offer.name}</strong>
-            <span className="rate-chip">{offer.code}</span>
-            <span className="rate-chip">{offer.service}</span>
+      <div className='rate-card__body'>
+        <div className='rate-card__offer'>
+          <div className='rate-card__logo'>
+            <CarrierLogo offer={offer} />
           </div>
-        </header>
+          <strong className='rate-card__price'>
+            {offer.price.toLocaleString("en-US", {
+              style: "currency",
+              currency: "USD",
+            })}
+          </strong>
+          <Button
+            type={selected ? "primary" : "default"}
+            className='rate-card__select'
+            onClick={onSelect}>
+            {selected ? "Selected" : "Ship It"}
+          </Button>
+        </div>
 
-        <dl className='quote-detail-offer-card__details'>
-          <div>
-            <dt>Quote ID</dt>
-            <dd>{offer.quoteId || "N/A"}</dd>
-          </div>
-          <div>
-            <dt>Transit Days</dt>
-            <dd>{offer.transitDays ? `${offer.transitDays} business days` : "N/A"}</dd>
-          </div>
-        </dl>
-
-        {offer.accessorials.length ? (
-          <div className='quote-detail-offer-card__accessorials'>
-            <strong>Accessorials</strong>
-            <div>
-              {offer.accessorials.map((accessorial) => (
-                <span key={accessorial}>{accessorial}</span>
-              ))}
+        <div className='rate-card__information'>
+          <div className='rate-card__heading'>
+            <div className='rate-card__identity'>
+              <strong>{offer.name}</strong>
+              <span className='rate-chip'>{offer.code}</span>
+              <span
+                className={`rate-chip ${
+                  offer.service === "ECONOMY" ? "rate-chip--blue" : ""
+                }`}>
+                {offer.service}
+              </span>
             </div>
           </div>
-        ) : null}
+
+          <dl className='rate-card__details'>
+            <div className='rate-detail-expiry'>
+              <dt>Quote Exp. Date</dt>
+              <dd>{offer.quoteExpiry || "N/A"}</dd>
+              <dt>Transit Days</dt>
+              <dd>{offer.transitDays ? `${offer.transitDays} business days` : "N/A"}</dd>
+              <dt>Est. Delivery Date</dt>
+              <dd>{offer.estimatedDelivery || "N/A"}</dd>
+            </div>
+            <div className='rate-detail-charges'>
+              <dt>Gross Charge : {offer.grossCharge || 0}</dt>
+              <dt>Discount : {offer.discount || 0}</dt>
+              <dt>Fuel Surcharge : {offer.fuelSurcharge || 0}</dt>
+            </div>
+            <div className='rate-detail-accessorials'>
+              {offer.accessorialCharges?.map((charge, idx) => (
+                <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
+              ))}
+            </div>
+          </dl>
+        </div>
       </div>
     </article>
   );
 }
+
 
 function QuoteRateDetail() {
   const navigate = useNavigate();
   const { reference } = useParams<{ reference: string }>();
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   
-  const { quotes: apiQuotes } = useAppSelector((state) => state.quote);
+  const dispatch = useAppDispatch();
+  const { currentQuote, loading } = useAppSelector((state) => state.quote);
+
+  useEffect(() => {
+    if (reference) {
+      dispatch(fetchQuoteById(reference));
+    }
+  }, [dispatch, reference]);
 
   const apiQuote = useMemo(() => {
-    return apiQuotes.find((q) => String(q.quoteRequestId) === decodeURIComponent(reference ?? ""));
-  }, [apiQuotes, reference]);
+    return currentQuote;
+  }, [currentQuote]);
 
   const quote = useMemo(() => {
     /*
@@ -364,11 +395,11 @@ function QuoteRateDetail() {
       pallets: (apiQuote.quoteProducts || []).reduce((acc: number, p: any) => acc + (p.pallets || 0), 0),
       pieces: 0,
     } as QuoteSummaryRecord;
-  }, [apiQuote, reference]);
+  }, [apiQuote]);
 
   const dynamicCarrierOffers = useMemo(() => {
     if (apiQuote && apiQuote.quoteResults && apiQuote.quoteResults.length > 0) {
-      return apiQuote.quoteResults.map((result: any) => {
+      return apiQuote.quoteResults.map((result: any, index: number) => {
         let logoKind: "fedex" | "abf" | "rl" = "abf";
         const scacLower = (result.scac || "").toLowerCase();
         if (scacLower.includes("fxf") || scacLower.includes("fedex")) {
@@ -378,7 +409,7 @@ function QuoteRateDetail() {
         }
 
         return {
-          id: String(result.quoteResultId || Math.random()),
+          id: String(result.quoteResultId || `quote-${index}`),
           name: result.carrierName || "Unknown Carrier",
           code: result.scac || "",
           service: result.serviceLevel || "",
@@ -387,15 +418,30 @@ function QuoteRateDetail() {
           quoteId: result.saasQuoteId || result.carrierQuoteNo || "",
           transitDays: parseInt(result.transitDays) || 0,
           accessorials: [],
+          warning: " ",
+          quoteExpiry: apiQuote.requestedDate || "N/A",
+          estimatedDelivery: result.estimatedDeliveryDate || "0001-01-01T00:00:00",
+          grossCharge: 0,
+          discount: 0,
+          fuelSurcharge: 0,
+          accessorialCharges: result.quoteCostDetails ? result.quoteCostDetails.map((cd: any) => ({
+            accessorialDescription: cd.accName,
+            accessorialCharge: cd.amount
+          })) : []
         } as CarrierOffer;
       });
     }
     
-    /*
-    return carrierOffers;
-    */
     return [];
   }, [apiQuote]);
+
+  if (loading) {
+    return (
+      <section className='quote-detail-not-found' style={{ padding: '40px', textAlign: 'center' }}>
+        <Spin size="large"/>
+      </section>
+    );
+  }
 
   if (!quote) {
     return (
@@ -417,7 +463,7 @@ function QuoteRateDetail() {
   return (
     <section className='quote-detail-page'>
       <QuoteInformation quote={quote} />
-      <div className='quote-detail-offer-list' aria-label='Available carrier quotes'>
+      <div className='rate-carrier-list rate-carrier-list--list' aria-label='Available carrier quotes'>
         {dynamicCarrierOffers.map((offer) => (
           <CarrierOfferCard
             key={offer.id}

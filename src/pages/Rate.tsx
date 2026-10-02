@@ -319,7 +319,7 @@ function CarrierCard({
             type={checked ? "primary" : "default"}
             className='rate-card__select'
             onClick={() => onCheckedChange(!checked)}>
-            {checked ? "Selected" : "Shipit"}
+            {checked ? "Selected" : "Ship It"}
           </Button>
         </div>
 
@@ -433,6 +433,7 @@ function Rate() {
       .unwrap()
       .then(() => {
         messageApi.success("Quote saved successfully!");
+        navigate("/quote-summary");
       })
       .catch((err: any) => {
         messageApi.error(err || "Failed to save quote.");
