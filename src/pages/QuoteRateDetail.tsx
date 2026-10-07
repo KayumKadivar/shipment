@@ -1,9 +1,17 @@
 import { ExclamationCircleOutlined } from "@ant-design/icons";
-import { Button, Result, Spin } from "antd";
+import { Button, Empty, Result, Spin } from "antd";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
-import { fetchCarrierLogo } from "../store/customerRateSlice";
+import {
+  fetchCarrierLogo,
+  COST_CODE_GROSS,
+  COST_CODE_DISC,
+  COST_CODE_FUEL,
+  COST_NAME_GROSS,
+  COST_NAME_DISC,
+  COST_NAME_FUEL,
+} from "../store/customerRateSlice";
 import { fetchQuoteById } from "../store/quoteSlice";
 import { type QuoteSummaryRecord } from "./quoteSummaryData";
 
@@ -264,11 +272,11 @@ function QuoteInformation({ quote }: { quote: QuoteSummaryRecord }) {
 function CarrierOfferCard({
   offer,
   selected,
-  onSelect,
+  onShipIt,
 }: {
   offer: CarrierOffer;
   selected: boolean;
-  onSelect: () => void;
+  onShipIt: () => void;
 }) {
   return (
     <article className={`rate-card ${selected ? "rate-card--selected" : ""}`}>
@@ -293,7 +301,7 @@ function CarrierOfferCard({
           <Button
             type={selected ? "primary" : "default"}
             className='rate-card__select'
-            onClick={onSelect}>
+            onClick={onShipIt}>
             {selected ? "Selected" : "Ship It"}
           </Button>
         </div>
@@ -346,6 +354,7 @@ function QuoteRateDetail() {
   
   const dispatch = useAppDispatch();
   const { currentQuote, loading } = useAppSelector((state) => state.quote);
+  const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
 
   useEffect(() => {
     if (reference) {
@@ -408,32 +417,69 @@ function QuoteRateDetail() {
           logoKind = "rl";
         }
 
+        let grossCharge = Number(result.grossCharge) || 0;
+        let discount = Number(result.discount) || 0;
+        let fuelSurcharge = Number(result.fuelSurcharge) || 0;
+        const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number }[] = [];
+
+        if (result.quoteCostDetails && Array.isArray(result.quoteCostDetails)) {
+          result.quoteCostDetails.forEach((cd: any) => {
+            const code = (cd.accCode || "").trim().toUpperCase();
+            const name = (cd.accName || "").trim().toLowerCase();
+            const amount = Number(cd.amount) || 0;
+
+            if (code === COST_CODE_GROSS || name === COST_NAME_GROSS.toLowerCase() || name === "grosscharge") {
+              grossCharge = amount;
+            } else if (code === COST_CODE_DISC || name === COST_NAME_DISC.toLowerCase()) {
+              discount = amount;
+            } else if (code === COST_CODE_FUEL || name === COST_NAME_FUEL.toLowerCase() || name === "fuelsurcharge") {
+              fuelSurcharge = amount;
+            } else {
+              otherAccessorials.push({
+                accessorialDescription: cd.accName || cd.accCode || "Accessorial",
+                accessorialCharge: amount,
+              });
+            }
+          });
+        }
+
+        const calculatedPrice =
+          Number(result.totalShipmentCost) ||
+          Number(result.netCharge) ||
+          Number(result.price) ||
+          (grossCharge - discount + fuelSurcharge + otherAccessorials.reduce((acc, c) => acc + (c.accessorialCharge || 0), 0));
+
         return {
           id: String(result.quoteResultId || `quote-${index}`),
           name: result.carrierName || "Unknown Carrier",
           code: result.scac || "",
           service: result.serviceLevel || "",
           logoKind,
-          price: 0, 
+          price: calculatedPrice > 0 ? calculatedPrice : 0, 
           quoteId: result.saasQuoteId || result.carrierQuoteNo || "",
           transitDays: parseInt(result.transitDays) || 0,
           accessorials: [],
-          warning: " ",
+          warning: result.errorMessage?.trim() || result.warning?.trim() || (calculatedPrice <= 0 ? "Rate unavailable or carrier error." : ""),
           quoteExpiry: apiQuote.requestedDate || "N/A",
           estimatedDelivery: result.estimatedDeliveryDate || "0001-01-01T00:00:00",
-          grossCharge: 0,
-          discount: 0,
-          fuelSurcharge: 0,
-          accessorialCharges: result.quoteCostDetails ? result.quoteCostDetails.map((cd: any) => ({
-            accessorialDescription: cd.accName,
-            accessorialCharge: cd.amount
-          })) : []
+          grossCharge,
+          discount,
+          fuelSurcharge,
+          accessorialCharges: otherAccessorials,
         } as CarrierOffer;
       });
     }
     
     return [];
   }, [apiQuote]);
+
+  const validOffers = useMemo(() => {
+    return dynamicCarrierOffers.filter((offer) => (offer.price ?? 0) > 0);
+  }, [dynamicCarrierOffers]);
+
+  const errorOffers = useMemo(() => {
+    return dynamicCarrierOffers.filter((offer) => (offer.price ?? 0) <= 0);
+  }, [dynamicCarrierOffers]);
 
   if (loading) {
     return (
@@ -460,23 +506,77 @@ function QuoteRateDetail() {
     );
   }
 
+  const handleShipIt = (offer: CarrierOffer) => {
+    setSelectedOfferId(offer.id);
+    let quoteToSend = apiQuote ? { ...apiQuote } : undefined;
+    if (quoteToSend?.quoteProducts) {
+      const formItems = quoteFormData?.packages?.flatMap((p: any) => p.items || []) || [];
+      quoteToSend.quoteProducts = quoteToSend.quoteProducts.map((p: any, idx: number) => {
+        const matchingForm = formItems[idx];
+        return {
+          ...p,
+          length: (p.length != null && p.length !== 0 && p.length !== "") ? p.length : (matchingForm?.length || p.length),
+          width: (p.width != null && p.width !== 0 && p.width !== "") ? p.width : (matchingForm?.width || p.width),
+          height: (p.height != null && p.height !== 0 && p.height !== "") ? p.height : (matchingForm?.height || p.height),
+          packagingGroup: p.packagingGroup || matchingForm?.handlingUnit || p.packagingGroup,
+          pieces: (p.pieces != null && p.pieces !== 0 && p.pieces !== "") ? p.pieces : (matchingForm?.pieces || p.pieces),
+          pallets: (p.pallets != null && p.pallets !== 0 && p.pallets !== "") ? p.pallets : (matchingForm?.units || p.pallets),
+          productNMFC: p.productNMFC || matchingForm?.nmfc || p.productNMFC,
+          description: p.description || matchingForm?.description || p.description,
+        };
+      });
+    }
+
+    navigate("/shipments/new", {
+      state: {
+        quote: quoteToSend,
+        selectedCarrier: offer,
+        reference,
+      },
+    });
+  };
+
   return (
     <section className='quote-detail-page'>
       <QuoteInformation quote={quote} />
-      <div className='rate-carrier-list rate-carrier-list--list' aria-label='Available carrier quotes'>
-        {dynamicCarrierOffers.map((offer) => (
-          <CarrierOfferCard
-            key={offer.id}
-            offer={offer}
-            selected={selectedOfferId === offer.id}
-            onSelect={() =>
-              setSelectedOfferId((current) =>
-                current === offer.id ? null : offer.id,
-              )
-            }
-          />
-        ))}
-      </div>
+
+      {validOffers.length > 0 ? (
+        <div className='rate-carrier-list rate-carrier-list--list' aria-label='Available carrier quotes'>
+          {validOffers.map((offer) => (
+            <CarrierOfferCard
+              key={offer.id}
+              offer={offer}
+              selected={selectedOfferId === offer.id}
+              onShipIt={() => handleShipIt(offer)}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {errorOffers.length > 0 ? (
+        <section className='rate-error-section' aria-label='Carrier quotes with errors'>
+          <h2 className='rate-error-heading'>
+            <span>With Errors</span>
+            <span className='rate-error-badge'>{errorOffers.length}</span>
+          </h2>
+          <div className='rate-carrier-list rate-carrier-list--list' aria-label='Carrier quotes with errors list'>
+            {errorOffers.map((offer) => (
+              <CarrierOfferCard
+                key={offer.id}
+                offer={offer}
+                selected={selectedOfferId === offer.id}
+                onShipIt={() => handleShipIt(offer)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {validOffers.length === 0 && errorOffers.length === 0 ? (
+        <div className='rate-empty-state'>
+          <Empty description='No carrier quotes available for this reference.' />
+        </div>
+      ) : null}
     </section>
   );
 }

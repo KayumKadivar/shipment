@@ -7,12 +7,13 @@ import { Button, Checkbox, Input, Select, AutoComplete, Spin, DatePicker, messag
 import CountrySelect from "../components/CountrySelect";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import dayjs from "dayjs";
 import { usePostalLookup } from "../hooks/usePostalLookup";
 import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import { fetchAccessorials } from "../store/accessorialsSlice";
-import { fetchCarrierRates } from "../store/customerRateSlice";
+import { fetchCarrierRates, setQuoteFormData, clearQuoteFormData } from "../store/customerRateSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import { SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 
@@ -108,6 +109,8 @@ function QuoteLocationCard({
   setState,
   country,
   setCountry,
+  date,
+  setDate,
 }: {
   title: string;
   zipLabel: string;
@@ -118,6 +121,8 @@ function QuoteLocationCard({
   setState: (val: string) => void;
   country: string;
   setCountry: (val: string) => void;
+  date?: string | null;
+  setDate?: (val: string | null) => void;
 }) {
   const { searchPostals, loadingPostal } = usePostalLookup();
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -222,7 +227,13 @@ function QuoteLocationCard({
         {includeDate ? (
           <label className='new-quote-field quote-location-card__date'>
             <span>Pickup Date</span>
-            <DatePicker style={{ width: '100%' }} format="MM-DD-YYYY" aria-label='Pickup date' />
+            <DatePicker
+              style={{ width: '100%' }}
+              format="MM-DD-YYYY"
+              aria-label='Pickup date'
+              value={date ? dayjs(date) : null}
+              onChange={(d) => setDate?.(d ? d.format("YYYY-MM-DD") : null)}
+            />
           </label>
         ) : null}
         <label className='new-quote-field'>
@@ -266,20 +277,57 @@ function QuoteLocationCard({
 function NewQuote() {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const [packages, setPackages] = useState<QuotePackage[]>(() => [
-    createPackage(),
-  ]);
+  const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
+
+  const [packages, setPackages] = useState<QuotePackage[]>(() =>
+    quoteFormData?.packages && quoteFormData.packages.length > 0
+      ? quoteFormData.packages
+      : [createPackage()]
+  );
   const [accessorialSearch, setAccessorialSearch] = useState("");
-  const [selectedAccessorials, setSelectedAccessorials] = useState<string[]>([]);
+  const [selectedAccessorials, setSelectedAccessorials] = useState<string[]>(
+    () => quoteFormData?.selectedAccessorials || []
+  );
   
   const { data: accessorialOptions } = useAppSelector((state) => state.accessorials);
   const profileCode = useAppSelector((state) => state.app.profileCode);
   const { clients } = useAppSelector((state) => state.customerLocation);
 
+  const [origPostal, setOrigPostal] = useState(() => quoteFormData?.origPostal || "");
+  const [origCity, setOrigCity] = useState(() => quoteFormData?.origCity || "");
+  const [origState, setOrigState] = useState(() => quoteFormData?.origState || "");
+  const [origCountry, setOrigCountry] = useState(() => quoteFormData?.origCountry || "USA");
+  const [pickupDate, setPickupDate] = useState<string | null>(() => quoteFormData?.pickupDate || null);
+
+  const [destPostal, setDestPostal] = useState(() => quoteFormData?.destPostal || "");
+  const [destCity, setDestCity] = useState(() => quoteFormData?.destCity || "");
+  const [destState, setDestState] = useState(() => quoteFormData?.destState || "");
+  const [destCountry, setDestCountry] = useState(() => quoteFormData?.destCountry || "USA");
+
   useEffect(() => {
     dispatch(fetchAccessorials());
     dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (quoteFormData) {
+      if (quoteFormData.packages && quoteFormData.packages.length > 0) {
+        setPackages(quoteFormData.packages);
+      }
+      if (quoteFormData.origPostal !== undefined) setOrigPostal(quoteFormData.origPostal);
+      if (quoteFormData.origCity !== undefined) setOrigCity(quoteFormData.origCity);
+      if (quoteFormData.origState !== undefined) setOrigState(quoteFormData.origState);
+      if (quoteFormData.origCountry !== undefined) setOrigCountry(quoteFormData.origCountry);
+      if (quoteFormData.destPostal !== undefined) setDestPostal(quoteFormData.destPostal);
+      if (quoteFormData.destCity !== undefined) setDestCity(quoteFormData.destCity);
+      if (quoteFormData.destState !== undefined) setDestState(quoteFormData.destState);
+      if (quoteFormData.destCountry !== undefined) setDestCountry(quoteFormData.destCountry);
+      if (quoteFormData.pickupDate !== undefined) setPickupDate(quoteFormData.pickupDate);
+      if (quoteFormData.selectedAccessorials !== undefined) {
+        setSelectedAccessorials(quoteFormData.selectedAccessorials);
+      }
+    }
+  }, [quoteFormData]);
 
   const visibleAccessorials = useMemo(() => {
     const query = accessorialSearch.trim().toLowerCase();
@@ -290,16 +338,6 @@ function NewQuote() {
         )
       : options;
   }, [accessorialSearch, accessorialOptions]);
-
-  const [origPostal, setOrigPostal] = useState("");
-  const [origCity, setOrigCity] = useState("");
-  const [origState, setOrigState] = useState("");
-  const [origCountry, setOrigCountry] = useState("USA");
-
-  const [destPostal, setDestPostal] = useState("");
-  const [destCity, setDestCity] = useState("");
-  const [destState, setDestState] = useState("");
-  const [destCountry, setDestCountry] = useState("USA");
 
   const updateItem = (
     packageId: string,
@@ -414,7 +452,7 @@ function NewQuote() {
       clientCode: DEFAULT_CLIENT_CODE,
       clientName: clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE)?.clientName || "",
       scac: undefined,
-      shipmentDate: new Date().toISOString(),
+      shipmentDate: pickupDate || new Date().toISOString(),
       zoneCode: undefined,
       miles: 0,
       isBatch: false,
@@ -439,20 +477,51 @@ function NewQuote() {
       totalLinearFeet: 0,
     };
 
+    dispatch(
+      setQuoteFormData({
+        origPostal,
+        origCity,
+        origState,
+        origCountry,
+        pickupDate,
+        destPostal,
+        destCity,
+        destState,
+        destCountry,
+        packages,
+        selectedAccessorials,
+      })
+    );
+
     console.log("Saving API Request Payload:", payload);
     dispatch(fetchCarrierRates(payload));
     navigate("/quotes/rate");
+  };
+
+  const handleCancelQuote = () => {
+    dispatch(clearQuoteFormData());
+    setPackages([createPackage()]);
+    setSelectedAccessorials([]);
+    setOrigPostal("");
+    setOrigCity("");
+    setOrigState("");
+    setOrigCountry("USA");
+    setDestPostal("");
+    setDestCity("");
+    setDestState("");
+    setDestCountry("USA");
+    setPickupDate(null);
   };
 
   return (
     <div className='new-quote-scroll'>
       <section className='new-quote-page'>
         <div className='new-quote-page__topline'>
-          <button className='new-quote-back' type='button'>
+          <button className='new-quote-back' type='button' onClick={() => navigate("/quote-summary")}>
             &larr; All Quotes
           </button>
           <div className='new-quote-page__top-actions'>
-            <Button danger>Cancel Quote</Button>
+            <Button danger onClick={handleCancelQuote}>Cancel Quote</Button>
           </div>
         </div>
 
@@ -469,6 +538,8 @@ function NewQuote() {
                 setState={setOrigState}
                 country={origCountry}
                 setCountry={setOrigCountry}
+                date={pickupDate}
+                setDate={setPickupDate}
               />
               <QuoteLocationCard
                 title='Destination'

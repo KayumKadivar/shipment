@@ -1,11 +1,32 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, Form, Input, Row, Col, Button, Select } from 'antd';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 
-const DestinationLocation: React.FC = () => {
+export interface DestinationLocationProps {
+  initialData?: {
+    companyName?: string;
+    postal?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+  };
+}
+
+const DestinationLocation: React.FC<DestinationLocationProps> = ({ initialData }) => {
   const [form] = Form.useForm();
   const { lookupPostal, loadingPostal } = usePostalLookup();
+
+  useEffect(() => {
+    if (initialData) {
+      form.setFieldsValue({
+        postal: initialData.postal || "",
+        city: initialData.city || "",
+        state: initialData.state || "",
+        country: initialData.country || "USA",
+      });
+    }
+  }, [initialData, form]);
 
   const handlePostalBlur = async () => {
     const postal = form.getFieldValue("postal");
@@ -25,7 +46,7 @@ const DestinationLocation: React.FC = () => {
       extra={<Button type="link" className="add-master-btn add-line-btn">+ Add to Master</Button>}
     >
       <Form layout="vertical" form={form} initialValues={{ country: "USA" }}>
-        <Form.Item label="Company Name">
+        <Form.Item label="Company Name" name="companyName">
           <Input placeholder="Company name" />
         </Form.Item>
         <Form.Item label="Address Line 1">

@@ -899,14 +899,15 @@ function CustomerLocationPage({
             <Form.Item
               label='State'
               name='state'
-              rules={[{ required: true, message: "Enter a state" }]}>
-              <Input />
+              rules={[{ required: true, message: "Enter a state" }]}
+              >
+              <Input readOnly />
             </Form.Item>
             <Form.Item
               label='City'
               name='city'
               rules={[{ required: true, message: "Enter a city" }]}>
-              <Input />
+              <Input readOnly />
             </Form.Item>
             <Form.Item
               label='Postal code'

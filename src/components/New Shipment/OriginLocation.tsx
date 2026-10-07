@@ -1,11 +1,35 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, Form, Input, Row, Col, Button, Select } from 'antd';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 
-const OriginLocation: React.FC = () => {
+export interface OriginLocationProps {
+  initialData?: {
+    companyName?: string;
+    postal?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    pickupDate?: string;
+  };
+}
+
+const OriginLocation: React.FC<OriginLocationProps> = ({ initialData }) => {
   const [form] = Form.useForm();
   const { lookupPostal, loadingPostal } = usePostalLookup();
+
+  useEffect(() => {
+    if (initialData) {
+      form.setFieldsValue({
+        postal: initialData.postal || "",
+        city: initialData.city || "",
+        state: initialData.state || "",
+        country: initialData.country || "USA",
+        pickupDate: initialData.pickupDate || "",
+        expPickupDate: initialData.pickupDate || "",
+      });
+    }
+  }, [initialData, form]);
 
   const handlePostalBlur = async () => {
     const postal = form.getFieldValue("postal");
@@ -25,7 +49,7 @@ const OriginLocation: React.FC = () => {
       extra={<Button type="link" className="add-master-btn">+ Add to Master</Button>}
     >
       <Form layout="vertical" form={form} initialValues={{ country: "USA" }}>
-        <Form.Item label="Company Name">
+        <Form.Item label="Company Name" name="companyName">
           <Input placeholder="Company name" />
         </Form.Item>
         <Form.Item label="Address Line 1">
@@ -92,7 +116,7 @@ const OriginLocation: React.FC = () => {
         </Row>
         <Row gutter={[12, 12]}>
           <Col xs={24} md={12}>
-            <Form.Item label="Exp. Pickup Date">
+            <Form.Item label="Exp. Pickup Date" name="expPickupDate">
               <Input placeholder="mm/dd/yyyy" />
             </Form.Item>
           </Col>
@@ -113,7 +137,7 @@ const OriginLocation: React.FC = () => {
         </Row>
         <Row gutter={[12, 12]}>
           <Col xs={24} md={12}>
-            <Form.Item label="Pickup Date">
+            <Form.Item label="Pickup Date" name="pickupDate">
               <Input placeholder="mm/dd/yyyy"/>
             </Form.Item>
           </Col>

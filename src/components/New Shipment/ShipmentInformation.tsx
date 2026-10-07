@@ -1,16 +1,36 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, Form, Input, Select, Row, Col } from 'antd';
 
-const ShipmentInformation: React.FC = () => {
+export interface ShipmentInformationProps {
+  initialData?: {
+    serviceLevel?: string;
+    customerRef?: string;
+    mode?: string;
+  };
+}
+
+const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }) => {
+  const [form] = Form.useForm();
+
+  useEffect(() => {
+    if (initialData) {
+      form.setFieldsValue({
+        serviceLevel: initialData.serviceLevel || "Standard",
+        customerRef: initialData.customerRef || "",
+        mode: initialData.mode || "LTL",
+      });
+    }
+  }, [initialData, form]);
+
   return (
     <Card 
       title="Shipment Information" 
       className="shipment-panel"
     >
-      <Form layout="vertical">
+      <Form layout="vertical" form={form} initialValues={{ mode: "LTL", equipment: "LTL", serviceLevel: "Standard", priority: "Standard", paymentTerm: "3rd Party Prep" }}>
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={12}>
-            <Form.Item label="Mode">
+            <Form.Item label="Mode" name="mode">
               <Select defaultValue="LTL">
                 <Select.Option value="LTL">LTL</Select.Option>
               </Select>
@@ -27,7 +47,7 @@ const ShipmentInformation: React.FC = () => {
         
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={12}>
-            <Form.Item label="Service Level">
+            <Form.Item label="Service Level" name="serviceLevel">
               <Select defaultValue="Standard">
                 <Select.Option value="Standard">Standard</Select.Option>
               </Select>
@@ -48,7 +68,7 @@ const ShipmentInformation: React.FC = () => {
           </Select>
         </Form.Item>
 
-        <Form.Item label="Customer Reference #">
+        <Form.Item label="Customer Reference #" name="customerRef">
           <Input placeholder="Customer ref #" />
         </Form.Item>
 

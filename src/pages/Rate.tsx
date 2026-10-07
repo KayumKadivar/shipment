@@ -17,7 +17,7 @@ import { Button, Empty, Input, Select, Spin, message } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
-import { fetchCarrierLogo, saveCustomerQuote } from "../store/customerRateSlice";
+import { fetchCarrierLogo, saveCustomerQuote, clearQuoteFormData } from "../store/customerRateSlice";
 // import abfLogo from "../assets/image 55.png";
 // import rlLogo from "../assets/image 57.png";
 import SendRatesDialog, {
@@ -290,19 +290,28 @@ function CarrierCard({
   rate,
   checked,
   onCheckedChange,
+  onShipIt,
   // onSend,
 }: {
   rate: CarrierRate;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
+  onShipIt: () => void;
   onSend: () => void;
 }) {
   return (
-    <article className={`rate-card ${checked ? "rate-card--selected" : ""}`}>
-      <div className='rate-card__warning'>
-        <ExclamationCircleOutlined />
-        <span>{rate.warning}</span>
-      </div>
+    <article
+      className={`rate-card ${checked ? "rate-card--selected" : ""}`}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        onCheckedChange(!checked);
+      }}>
+      {rate.warning ? (
+        <div className='rate-card__warning'>
+          <ExclamationCircleOutlined />
+          <span>{rate.warning}</span>
+        </div>
+      ) : null}
 
       <div className='rate-card__body'>
         <div className='rate-card__offer'>
@@ -318,7 +327,7 @@ function CarrierCard({
           <Button
             type={checked ? "primary" : "default"}
             className='rate-card__select'
-            onClick={() => onCheckedChange(!checked)}>
+            onClick={onShipIt}>
             {checked ? "Selected" : "Ship It"}
           </Button>
         </div>
@@ -428,16 +437,66 @@ function Rate() {
     });
   }, [search, sortBy, ratesFromStore]);
 
+  const validRates = useMemo(() => {
+    return visibleRates.filter((rate) => (rate.price ?? 0) > 0);
+  }, [visibleRates]);
+
+  const errorRates = useMemo(() => {
+    return visibleRates.filter((rate) => (rate.price ?? 0) <= 0);
+  }, [visibleRates]);
+
   const handleSaveQuote = () => {
     dispatch(saveCustomerQuote())
       .unwrap()
       .then(() => {
+        dispatch(clearQuoteFormData());
         messageApi.success("Quote saved successfully!");
         navigate("/quote-summary");
       })
       .catch((err: any) => {
         messageApi.error(err || "Failed to save quote.");
       });
+  };
+
+  const handleShipIt = (rate: CarrierRate) => {
+    navigate("/shipments/new", {
+      state: {
+        quote: {
+          quoteRequestId: 0,
+          originZip: quoteRequest?.origZip,
+          originCity: quoteRequest?.origCity,
+          originStateCode: quoteRequest?.origState,
+          originCountry: quoteRequest?.origCountry,
+          destinationZip: quoteRequest?.destZip,
+          destinationCity: quoteRequest?.destCity,
+          destinationStateCode: quoteRequest?.destState,
+          destinationCountry: quoteRequest?.destCountry,
+          pickupDate: quoteRequest?.shipmentDate,
+          clientName: quoteRequest?.clientName,
+          clientCode: quoteRequest?.clientCode,
+          profileCode: quoteRequest?.profileCode,
+          quoteProducts: (quoteRequest?.shipments || []).map((s: any, idx: number) => ({
+            quoteProductId: idx + 1,
+            pallets: s.pallets || s.units || "",
+            pieces: s.pieces || "",
+            packagingGroup: s.packageType || s.packagingGroup || "",
+            description: s.description || "",
+            productClass: s.class || "",
+            weight: s.weight || "",
+            productNMFC: s.nmfc || "",
+            length: s.length || "",
+            width: s.width || "",
+            height: s.height || "",
+            isHazmat: s.hazMat || s.isHazmat || false,
+            hazmatClass: s.hazMatClass || s.hazmatClass || "",
+            hazmatUN: s.hazMatUN || s.hazmatUN || "",
+            isStackable: s.stackable ?? true,
+          })),
+          quoteAccessorials: (quoteRequest?.accessorialCodes || []).map((code: string) => ({ accCode: code })),
+        },
+        selectedCarrier: rate,
+      },
+    });
   };
 
   const setRateChecked = (rate: CarrierRate, checked: boolean) => {
@@ -498,14 +557,17 @@ function Rate() {
       <button
         type='button'
         className='rate-back-button'
-        onClick={() => navigate("/quotes")}>
+        onClick={() => {
+          dispatch(clearQuoteFormData());
+          navigate("/quote-summary");
+        }}>
         &larr; All Quotes
       </button>
 
       <header className='rate-page__header'>
         <h1>Quote Results</h1>
         <div className='rate-page__header-actions'>
-          <Button onClick={() => navigate("/quotes/new")}>
+          <Button onClick={() => navigate("/quotes")}>
             Edit Quote
           </Button>
           <Button onClick={handleSaveQuote}>
@@ -669,20 +731,48 @@ function Rate() {
             <div className='rate-empty-state'>
               <Empty description='No volume rates are available for this quote.' />
             </div>
-          ) : !loadingRates && visibleRates.length ? (
-            <div className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
-              {visibleRates.map((rate) => (
-                <CarrierCard
-                  key={rate.id}
-                  rate={rate}
-                  checked={selectedRates.includes(rate.id)}
-                  onCheckedChange={(checked) =>
-                    setRateChecked(rate, checked)
-                  }
-                  onSend={() => openSendDialog([rate.id])}
-                />
-              ))}
-            </div>
+          ) : !loadingRates && (validRates.length > 0 || errorRates.length > 0) ? (
+            <>
+              {validRates.length > 0 ? (
+                <div className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
+                  {validRates.map((rate) => (
+                    <CarrierCard
+                      key={rate.id}
+                      rate={rate}
+                      checked={selectedRates.includes(rate.id)}
+                      onCheckedChange={(checked) =>
+                        setRateChecked(rate, checked)
+                      }
+                      onShipIt={() => handleShipIt(rate)}
+                      onSend={() => openSendDialog([rate.id])}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {errorRates.length > 0 && (
+                <section className='rate-error-section' aria-label='Carriers with errors'>
+                  <h2 className='rate-error-heading'>
+                    <span>With Errors</span>
+                    <span className='rate-error-badge'>{errorRates.length}</span>
+                  </h2>
+                  <div className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
+                    {errorRates.map((rate) => (
+                      <CarrierCard
+                        key={rate.id}
+                        rate={rate}
+                        checked={selectedRates.includes(rate.id)}
+                        onCheckedChange={(checked) =>
+                          setRateChecked(rate, checked)
+                        }
+                        onShipIt={() => handleShipIt(rate)}
+                        onSend={() => openSendDialog([rate.id])}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
           ) : !loadingRates ? (
             <div className='rate-empty-state'>
               <Empty description='No carriers match your search.' />

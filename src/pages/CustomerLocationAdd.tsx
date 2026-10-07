@@ -283,7 +283,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
               </Form.Item>
 
               <Form.Item className='add-location-field--compact' label='State' name='state'>
-                <Input placeholder='State / Province' />
+                <Input placeholder='State / Province' readOnly />
               </Form.Item>
 
               <Form.Item
@@ -291,7 +291,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 name='city'
                 required
                 rules={[{ required: true, message: "Enter the city" }]}>
-                <Input placeholder='City' />
+                <Input placeholder='City' readOnly />
               </Form.Item>
 
               {/* <Form.Item className='add-location-field--compact' label='Port' name='port'>

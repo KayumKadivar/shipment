@@ -3,19 +3,21 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 // Interface for product item
 export interface ProductItem {
   id: string;
-  pallets: number;
-  pieces: number;
+  pallets: number | string;
+  pieces: number | string;
   packageType: string;
   description: string;
   stackable: boolean;
   hazmat: boolean;
   nmfc: string;
-  length: number;
-  width: number;
-  height: number;
-  pcfDensity: number;
+  length: number | string;
+  width: number | string;
+  height: number | string;
+  pcfDensity: number | string;
   class: string;
-  weight: number;
+  weight: number | string;
+  hazmatClass?: string;
+  hazmatUN?: string;
 }
 
 // interface for product state
@@ -26,39 +28,22 @@ interface ProductState {
 
 // Initial state for product
 const initialState: ProductState = {
-  // data from response // Currently Static Data Show
   items: [
     {
-      id: "prod_1",
-      pallets: 2,
-      pieces: 40,
-      packageType: "Pallet",
-      description: "Electronic Components",
-      stackable: true,
-      hazmat: false,
-      nmfc: "116030",
-      length: 48,
-      width: 40,
-      height: 48,
-      pcfDensity: 12.50,
-      class: "70",
-      weight: 1200,
-    },
-    {
-      id: "prod_2",
-      pallets: 1,
-      pieces: 10,
-      packageType: "Carton",
-      description: "Lithium Batteries",
+      id: "1",
+      pallets: "",
+      pieces: "",
+      packageType: "",
+      description: "",
       stackable: false,
-      hazmat: true,
-      nmfc: "060680",
-      length: 24,
-      width: 24,
-      height: 24,
-      pcfDensity: 15.00,
-      class: "85",
-      weight: 300,
+      hazmat: false,
+      nmfc: "",
+      length: "",
+      width: "",
+      height: "",
+      pcfDensity: "",
+      class: "",
+      weight: "",
     },
   ],
   weightUnit: "Lbs",
@@ -73,19 +58,21 @@ const productSlice = createSlice({
     addProductRow: (state) => {
       state.items.push({
         id: Date.now().toString(),
-        pallets: 1,
-        pieces: 25,
-        packageType: "Box",
-        description: "Lithium Batteries",
-        stackable: true,
+        pallets: "",
+        pieces: "",
+        packageType: "",
+        description: "",
+        stackable: false,
         hazmat: false,
-        nmfc: "060680",
-        length: 20,
-        width: 20,
-        height: 20,
-        pcfDensity: 10.00,
-        class: "60",
-        weight: 500,
+        nmfc: "",
+        length: "",
+        width: "",
+        height: "",
+        pcfDensity: "",
+        class: "",
+        weight: "",
+        hazmatClass: "",
+        hazmatUN: "",
       });
     },
     // remove product row
@@ -106,9 +93,12 @@ const productSlice = createSlice({
     setWeightUnit: (state, action: PayloadAction<"Lbs" | "Kgs">) => {
       state.weightUnit = action.payload;
     },
+    // set all product items (e.g. prefill from quote)
+    setProductItems: (state, action: PayloadAction<ProductItem[]>) => {
+      state.items = action.payload;
+    },
   },
 });
 
-export const { addProductRow, removeProductRow, updateProductRow, setWeightUnit } = productSlice.actions;
-// Export slice reducer
+export const { addProductRow, removeProductRow, updateProductRow, setWeightUnit, setProductItems } = productSlice.actions;
 export default productSlice.reducer;

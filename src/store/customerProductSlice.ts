@@ -6,7 +6,7 @@ import type { PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 
 import { API_BASE_URL } from "../config/apiConfig";
-import type { CustomerProduct } from "../types/customerProduct.types";
+import type { CustomerProduct, ProductPackageType } from "../types/customerProduct.types";
 
 interface CustomerProductState {
   products: CustomerProduct[];
@@ -14,6 +14,8 @@ interface CustomerProductState {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  packageTypes: ProductPackageType[];
+  loadingPackageTypes: boolean;
 }
 
 const initialState: CustomerProductState = {
@@ -22,6 +24,8 @@ const initialState: CustomerProductState = {
   loading: false,
   saving: false,
   error: null,
+  packageTypes: [],
+  loadingPackageTypes: false,
 };
 
 // ============================================================
@@ -524,6 +528,60 @@ export const searchCustomerProducts = createAsyncThunk<
 );
 
 // ============================================================
+// Get Product Package Types (GET /api/ProductPackageType)
+// ============================================================
+export const getProductPackageTypes = createAsyncThunk(
+  "customerProduct/getProductPackageTypes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await axios.get(
+        `${API_BASE_URL}/ProductPackageType`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            accept: "application/json, text/plain, */*",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
+      console.log("GetProductPackageTypes Response:", response.data);
+
+      const rawData = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response.data?.data)
+        ? response.data.data
+        : [];
+
+      const mappedList: ProductPackageType[] = rawData
+        .map((item: any, index: number) => {
+          if (typeof item === "string") {
+            return {
+              packageTypeId: index + 1,
+              packageType: item.trim(),
+            };
+          }
+          return {
+            packageTypeId: item.packageTypeId ?? item.PackageTypeId ?? index + 1,
+            packageType: (item.packageType ?? item.PackageType ?? "").trim(),
+          };
+        })
+        .filter((item: ProductPackageType) => Boolean(item.packageType));
+
+      return mappedList;
+    } catch (error: any) {
+      console.error("GetProductPackageTypes API Error:", error);
+      return rejectWithValue(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to retrieve product package types."
+      );
+    }
+  }
+);
+
+// ============================================================
 // Customer Product Slice
 // ============================================================
 const customerProductSlice = createSlice({
@@ -700,6 +758,24 @@ const customerProductSlice = createSlice({
         action.payload ||
         action.error.message ||
         "Failed to search products.";
+    });
+
+    // ========================================================
+    // GET PRODUCT PACKAGE TYPES
+    // ========================================================
+    builder.addCase(getProductPackageTypes.pending, (state) => {
+      state.loadingPackageTypes = true;
+    });
+    builder.addCase(getProductPackageTypes.fulfilled, (state, action) => {
+      state.loadingPackageTypes = false;
+      state.packageTypes = action.payload;
+    });
+    builder.addCase(getProductPackageTypes.rejected, (state, action) => {
+      state.loadingPackageTypes = false;
+      state.error =
+        (action.payload as string) ||
+        action.error.message ||
+        "Failed to retrieve product package types.";
     });
   },
 });

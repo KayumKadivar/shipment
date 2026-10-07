@@ -820,7 +820,7 @@ body {
 }
 
 .quote-item-combined--dimensions {
-  grid-template-columns: repeat(3, minmax(0, 1fr)) 62px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .quote-add-item.ant-btn {
@@ -2887,6 +2887,8 @@ body {
 }
 .quote-summary-load-cell {
   gap: 5px;
+  max-height: 70px;
+  overflow-y: auto;
 }
 .quote-summary-load-item {
   align-items: flex-start;
@@ -2896,7 +2898,9 @@ body {
   min-width: 52px;
   padding: 3px 8px;
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
+  gap: 4px;
+  white-space: nowrap;
   align-items: center;
   border-radius: 5px;
   color: #111;
@@ -2930,12 +2934,10 @@ body {
 
 /* Quote reference carrier rates */
 .quote-detail-page {
-  height: calc(100vh - 58px);
-  min-height: 520px;
+  min-height: calc(100vh - 58px);
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow: hidden;
   padding: 14px 20px 16px;
   color: #171b28;
   background: #f4f4f5;
@@ -4890,6 +4892,34 @@ body {
   gap: 14px;
 }
 
+.rate-error-section {
+  margin-top: 36px;
+  padding-top: 24px;
+  border-top: 2px dashed #fecaca;
+}
+
+.rate-error-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.rate-error-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .rate-card {
   min-width: 0;
   overflow: hidden;
@@ -5443,6 +5473,11 @@ body {
   color: #b6b7ba;
 }
 .add-location-card__body .ant-input[readonly] {
+  color: #151515;
+  background: #f8f9fa;
+  font-weight: 500;
+}
+.customer-location-form-grid .ant-input[readonly] {
   color: #151515;
   background: #f8f9fa;
   font-weight: 500;

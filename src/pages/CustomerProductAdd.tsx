@@ -1,6 +1,9 @@
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, Form, Input, InputNumber, Select, Switch } from "antd";
+import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "../app/hooks";
+import { getProductPackageTypes } from "../store/customerProductSlice";
 import type { ProductFormValues } from "../types/customerProduct.types";
 
 interface CustomerProductAddProps {
@@ -33,6 +36,15 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
   const location = useLocation();
   const clientName = location.state?.clientName || "";
   
+  const dispatch = useAppDispatch();
+  const { packageTypes, loadingPackageTypes } = useAppSelector(
+    (state) => state.customerProduct
+  );
+
+  useEffect(() => {
+    dispatch(getProductPackageTypes());
+  }, [dispatch]);
+
   const [form] = Form.useForm<ProductFormValues>();
   const isHazmat = Form.useWatch("isHazmat", form) ?? false;
 
@@ -125,12 +137,15 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
               <Form.Item label='Package Group' name='packageGroup'>
                 <Select
                   allowClear
+                  showSearch
+                  optionFilterProp='label'
+                  loading={loadingPackageTypes}
                   placeholder='-- Select --'
-                  options={[
-                    { value: "Bag", label: "Bag" },
-                    { value: "Drum", label: "Drum" },
-                    { value: "Pallet", label: "Pallet" },
-                  ]}
+                  options={packageTypes.map((item) => ({
+                    value: item.packageType,
+                    label: item.packageType,
+                    key: item.packageTypeId,
+                  }))}
                 />
               </Form.Item>
 

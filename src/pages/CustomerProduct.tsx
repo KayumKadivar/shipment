@@ -43,6 +43,7 @@ import {
   getCustomerProducts,
   updateCustomerProduct,
   deleteCustomerProducts,
+  getProductPackageTypes,
 } from "../store/customerProductSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import type {
@@ -142,7 +143,7 @@ function CustomerProductPage({
 }: CustomerProductPageProps) {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
-  const { loading, totalCount } = useAppSelector(
+  const { loading, totalCount, packageTypes, loadingPackageTypes } = useAppSelector(
     (state) => state.customerProduct
   );
   const { clients } = useAppSelector(
@@ -169,6 +170,7 @@ function CustomerProductPage({
 
   useEffect(() => {
     dispatch(fetchClientsAndSubclients());
+    dispatch(getProductPackageTypes());
   }, [dispatch]);
 
   useEffect(() => {
@@ -792,11 +794,16 @@ function CustomerProductPage({
             </Form.Item>
             <Form.Item label='Package Group' name='packageGroup'>
               <Select
-                options={[
-                  { value: "Bag", label: "Bag" },
-                  { value: "Drum", label: "Drum" },
-                  { value: "Pallet", label: "Pallet" },
-                ]}
+                allowClear
+                showSearch
+                optionFilterProp='label'
+                loading={loadingPackageTypes}
+                placeholder='-- Select --'
+                options={packageTypes.map((item) => ({
+                  value: item.packageType,
+                  label: item.packageType,
+                  key: item.packageTypeId,
+                }))}
               />
             </Form.Item>
             <Form.Item label='Commodity' name='commodity'>

@@ -13,6 +13,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { fetchQuotes } from "../store/quoteSlice";
+import { clearQuoteFormData } from "../store/customerRateSlice";
 import {
   type QuoteLoad,
   type QuoteSummaryRecord,
@@ -53,6 +54,7 @@ function QuoteSummary() {
 
   useEffect(() => {
     dispatch(fetchQuotes({ clientCode: "DEVTS" }));
+    dispatch(clearQuoteFormData());
   }, [dispatch]);
 
   const dynamicQuoteSummaryData: QuoteSummaryRecord[] = useMemo(() => {
@@ -196,7 +198,7 @@ function QuoteSummary() {
     {
       title: "Load",
       dataIndex: "loads",
-      width: 110,
+      width: 150,
       render: (loads: QuoteLoad[]) => (
         <span className='quote-summary-load-cell'>
           {loads.map((load, index) => (
@@ -204,10 +206,8 @@ function QuoteSummary() {
               className='quote-summary-load-item'
               key={`${load.freightClass}-${index}`}>
               <span className='quote-summary-class-badge'>
-                <small>Class : <strong>{load.freightClass}</strong></small>
-               
+                <small>Class : <strong>{load.freightClass}</strong> - {load.weight}</small>
               </span>
-              <small>{load.weight}</small>
             </span>
           ))}
         </span>
@@ -247,7 +247,10 @@ function QuoteSummary() {
           <Button
             type='primary'
             icon={<PlusOutlined />}
-            onClick={() => navigate("/quotes")}>
+            onClick={() => {
+              dispatch(clearQuoteFormData());
+              navigate("/quotes");
+            }}>
             New Quote
           </Button>
         </div>

@@ -19,6 +19,11 @@ export interface CustomerProduct {
   packageGroup?: string;
 }
 
+export interface ProductPackageType {
+  packageTypeId?: number;
+  packageType: string;
+}
+
 export type ProductFormValues = Omit<CustomerProduct, "key">;
 
 export type ProductView = "detail" | "group";
