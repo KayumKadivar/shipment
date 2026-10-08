@@ -90,6 +90,7 @@ const quoteSlice = createSlice({
       .addCase(fetchQuoteById.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.currentQuote = null;
       })
       .addCase(fetchQuoteById.fulfilled, (state, action) => {
         state.loading = false;

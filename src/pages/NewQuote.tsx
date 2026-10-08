@@ -2,6 +2,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
   TeamOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import { Button, Checkbox, Input, Select, AutoComplete, Spin, DatePicker, message } from "antd";
 import CountrySelect from "../components/CountrySelect";
@@ -50,10 +51,10 @@ const createId = (prefix: string) => `${prefix}-${++quoteEntityId}`;
 
 const createItem = (): QuoteItem => ({
   id: createId("item"),
-  units: "1",
+  units: "",
   handlingUnit: "Pallet",
-  pieces: "1",
-  weight: "864",
+  pieces: "",
+  weight: "",
   weightUnit: "lbs",
   freightClass: "50",
   length: "",
@@ -293,11 +294,17 @@ function NewQuote() {
   const profileCode = useAppSelector((state) => state.app.profileCode);
   const { clients } = useAppSelector((state) => state.customerLocation);
 
+  const [selectedClientCode, setSelectedClientCode] = useState<string>(
+    () => quoteFormData?.selectedClientCode || sessionStorage.getItem("quotes_selectedClientCode") || sessionStorage.getItem("customerLocation_selectedClientCode") || ""
+  );
+
   const [origPostal, setOrigPostal] = useState(() => quoteFormData?.origPostal || "");
   const [origCity, setOrigCity] = useState(() => quoteFormData?.origCity || "");
   const [origState, setOrigState] = useState(() => quoteFormData?.origState || "");
   const [origCountry, setOrigCountry] = useState(() => quoteFormData?.origCountry || "USA");
-  const [pickupDate, setPickupDate] = useState<string | null>(() => quoteFormData?.pickupDate || null);
+  const [pickupDate, setPickupDate] = useState<string | null>(
+    () => quoteFormData?.pickupDate || dayjs().format("YYYY-MM-DD")
+  );
 
   const [destPostal, setDestPostal] = useState(() => quoteFormData?.destPostal || "");
   const [destCity, setDestCity] = useState(() => quoteFormData?.destCity || "");
@@ -308,6 +315,23 @@ function NewQuote() {
     dispatch(fetchAccessorials());
     dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (clients.length > 0) {
+      const isClientValid = clients.some(c => c.clientCode === selectedClientCode);
+      if (!isClientValid) {
+        const defaultClient = clients.find(c => c.clientCode === DEFAULT_CLIENT_CODE)?.clientCode || clients[0].clientCode;
+        setSelectedClientCode(defaultClient);
+        sessionStorage.setItem("quotes_selectedClientCode", defaultClient);
+      }
+    }
+  }, [clients, selectedClientCode]);
+
+  const handleClientChange = (value: string) => {
+    setSelectedClientCode(value);
+    sessionStorage.setItem("quotes_selectedClientCode", value);
+    sessionStorage.setItem("customerLocation_selectedClientCode", value);
+  };
 
   useEffect(() => {
     if (quoteFormData) {
@@ -325,6 +349,9 @@ function NewQuote() {
       if (quoteFormData.pickupDate !== undefined) setPickupDate(quoteFormData.pickupDate);
       if (quoteFormData.selectedAccessorials !== undefined) {
         setSelectedAccessorials(quoteFormData.selectedAccessorials);
+      }
+      if (quoteFormData.selectedClientCode !== undefined) {
+        setSelectedClientCode(quoteFormData.selectedClientCode);
       }
     }
   }, [quoteFormData]);
@@ -490,6 +517,7 @@ function NewQuote() {
         destCountry,
         packages,
         selectedAccessorials,
+        selectedClientCode,
       })
     );
 
@@ -510,16 +538,45 @@ function NewQuote() {
     setDestCity("");
     setDestState("");
     setDestCountry("USA");
-    setPickupDate(null);
+    setPickupDate(dayjs().format("YYYY-MM-DD"));
   };
 
   return (
     <div className='new-quote-scroll'>
       <section className='new-quote-page'>
         <div className='new-quote-page__topline'>
-          <button className='new-quote-back' type='button' onClick={() => navigate("/quote-summary")}>
-            &larr; All Quotes
-          </button>
+          <div className='new-quote-page__top-left'>
+            <button className='new-quote-back' type='button' onClick={() => navigate("/quote-summary")}>
+              &larr; All Quotes
+            </button>
+            <div className='location-client-row quote-client-dropdown'>
+              <span>Client:</span>
+              <Select
+                showSearch
+                allowClear
+                placeholder='Search or select client...'
+                value={selectedClientCode || undefined}
+                onChange={handleClientChange}
+                style={{ minWidth: 260 }}
+                filterOption={(input, option) =>
+                  String((option as any)?.searchValue || "")
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
+                options={clients.map((client) => ({
+                  label: (
+                    <span>
+                      <UserOutlined style={{ marginRight: 8 }} />
+                      {client.clientName}
+                    </span>
+                  ),
+                  value: client.clientCode,
+                  searchValue: `${client.clientName} ${client.clientCode}`,
+                }))}
+                loading={clients.length === 0}
+              />
+            </div>
+          </div>
           <div className='new-quote-page__top-actions'>
             <Button danger onClick={handleCancelQuote}>Cancel Quote</Button>
           </div>

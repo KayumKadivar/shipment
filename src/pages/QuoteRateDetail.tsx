@@ -1,422 +1,80 @@
-import { ExclamationCircleOutlined } from "@ant-design/icons";
-import { Button, Empty, Result, Spin } from "antd";
+import {
+  AppstoreOutlined,
+  BarsOutlined,
+  ExclamationCircleOutlined,
+  SearchOutlined,
+  SendOutlined,
+} from "@ant-design/icons";
+import { Button, Empty, Input, Select, Spin, Result, message } from "antd";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
 import {
-  fetchCarrierLogo,
   COST_CODE_GROSS,
   COST_CODE_DISC,
   COST_CODE_FUEL,
   COST_NAME_GROSS,
   COST_NAME_DISC,
   COST_NAME_FUEL,
+  setQuoteFormData,
 } from "../store/customerRateSlice";
 import { fetchQuoteById } from "../store/quoteSlice";
-import { type QuoteSummaryRecord } from "./quoteSummaryData";
-
-type CarrierLogoKind = "abf" | "rl" | "fedex";
-
-type CarrierOffer = {
-  id: string;
-  name: string;
-  code: string;
-  service: string;
-  logoKind: CarrierLogoKind;
-  price: number;
-  quoteId: string;
-  transitDays: number;
-  accessorials: string[];
-  warning?: string;
-  quoteExpiry?: string;
-  estimatedDelivery?: string;
-  grossCharge?: number;
-  discount?: number;
-  fuelSurcharge?: number;
-  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number }[];
-};
-
-/*
-const carrierOffers: CarrierOffer[] = [
-  {
-    id: "fedex-economy",
-    name: "FedEx Freight",
-    code: "FXNL",
-    service: "Economy",
-    logoKind: "fedex",
-    price: 2098.6,
-    quoteId: "1552153518",
-    quoteExpiry: "8/26/2026",
-    transitDays: 3,
-    estimatedDelivery: "8/28/2026",
-    liabilityNew: "$42,100.00",
-    liabilityUsed: "$842.00",
-    accessorials: ["Excessive Length, 8ft: Accepted"],
-  },
-  {
-    id: "abf-standard",
-    name: "ABF Freight",
-    code: "ABFS",
-    service: "Standard Rate",
-    logoKind: "abf",
-    price: 2174.28,
-    quoteId: "ABF820614",
-    quoteExpiry: "8/27/2026",
-    transitDays: 5,
-    estimatedDelivery: "8/31/2026",
-    liabilityNew: "$21,050.00",
-    liabilityUsed: "$421.00",
-    accessorials: ["Liftgate Delivery"],
-  },
-  {
-    id: "rl-standard",
-    name: "R+L Carriers",
-    code: "RLCA",
-    service: "Standard Rate",
-    logoKind: "rl",
-    price: 2248.95,
-    quoteId: "RL4586201",
-    quoteExpiry: "8/27/2026",
-    transitDays: 4,
-    estimatedDelivery: "8/29/2026",
-    liabilityNew: "$25,000.00",
-    liabilityUsed: "$500.00",
-    accessorials: ["Call Before Delivery"],
-  },
-  {
-    id: "fedex-priority",
-    name: "FedEx Freight",
-    code: "FXFE",
-    service: "Priority",
-    logoKind: "fedex",
-    price: 2303.02,
-    quoteId: "1552153774",
-    quoteExpiry: "8/27/2026",
-    transitDays: 2,
-    estimatedDelivery: "8/27/2026",
-    liabilityNew: "$42,100.00",
-    liabilityUsed: "$842.00",
-    accessorials: [],
-  },
-  {
-    id: "abf-volume",
-    name: "ABF Freight",
-    code: "ABFS",
-    service: "Volume LTL",
-    logoKind: "abf",
-    price: 2389.41,
-    quoteId: "ABF820658",
-    quoteExpiry: "8/28/2026",
-    transitDays: 4,
-    estimatedDelivery: "8/30/2026",
-    liabilityNew: "$18,500.00",
-    liabilityUsed: "$370.00",
-    accessorials: ["Limited Access Delivery"],
-  },
-  {
-    id: "rl-priority",
-    name: "R+L Carriers",
-    code: "RLCA",
-    service: "Priority Service",
-    logoKind: "rl",
-    price: 2455.77,
-    quoteId: "RL4586255",
-    quoteExpiry: "8/28/2026",
-    transitDays: 3,
-    estimatedDelivery: "8/28/2026",
-    liabilityNew: "$25,000.00",
-    liabilityUsed: "$500.00",
-    accessorials: ["Delivery Appointment", "Liftgate Delivery"],
-  },
-  {
-    id: "fedex-direct",
-    name: "FedEx Freight",
-    code: "FXNL",
-    service: "Direct",
-    logoKind: "fedex",
-    price: 2512.36,
-    quoteId: "1552153920",
-    quoteExpiry: "8/29/2026",
-    transitDays: 3,
-    estimatedDelivery: "8/28/2026",
-    liabilityNew: "$40,000.00",
-    liabilityUsed: "$800.00",
-    accessorials: ["Residential Delivery"],
-  },
-  {
-    id: "abf-guaranteed",
-    name: "ABF Freight",
-    code: "ABFS",
-    service: "Guaranteed",
-    logoKind: "abf",
-    price: 2638.14,
-    quoteId: "ABF820699",
-    quoteExpiry: "8/29/2026",
-    transitDays: 3,
-    estimatedDelivery: "8/28/2026",
-    liabilityNew: "$21,050.00",
-    liabilityUsed: "$421.00",
-    accessorials: ["Guaranteed By 5PM"],
-  },
-  {
-    id: "rl-guaranteed",
-    name: "R+L Carriers",
-    code: "RLCA",
-    service: "Guaranteed AM",
-    logoKind: "rl",
-    price: 2719.88,
-    quoteId: "RL4586314",
-    quoteExpiry: "8/30/2026",
-    transitDays: 2,
-    estimatedDelivery: "8/27/2026",
-    liabilityNew: "$25,000.00",
-    liabilityUsed: "$500.00",
-    accessorials: ["Guaranteed Delivery"],
-  },
-  {
-    id: "fedex-premium",
-    name: "FedEx Freight",
-    code: "FXFE",
-    service: "Premium",
-    logoKind: "fedex",
-    price: 2846.5,
-    quoteId: "1552154108",
-    quoteExpiry: "8/30/2026",
-    transitDays: 2,
-    estimatedDelivery: "8/27/2026",
-    liabilityNew: "$42,100.00",
-    liabilityUsed: "$842.00",
-    accessorials: ["Inside Delivery", "Call Before Delivery"],
-  },
-];
-*/
-
-function CarrierLogo({ offer }: { offer: CarrierOffer }) {
-  const dispatch = useAppDispatch();
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (offer.code) {
-      setLoading(true);
-      dispatch(fetchCarrierLogo(offer.code))
-        .unwrap()
-        .then((res: any) => {
-          setLogoUrl(res.logo);
-          setLoading(false);
-        })
-        .catch(() => {
-          setLogoUrl(null);
-          setLoading(false);
-        });
-    }
-  }, [offer.code, dispatch]);
-
-  if (loading) {
-    return <Spin size="small" />;
-  }
-
-  if (logoUrl) {
-    return (
-      <img
-        src={logoUrl}
-        alt={`${offer.name} logo`}
-      />
-    );
-  }
-
-  return <strong>{offer.name}</strong>;
-}
-
-function QuoteInformation({ quote }: { quote: QuoteSummaryRecord }) {
-  const freightClasses = Array.from(
-    new Set(quote.loads.map((load) => load.freightClass)),
-  ).join(", ");
-
-  const groups = [
-    [
-      ["Profile", quote.profile],
-      ["Class", freightClasses],
-    ],
-    [
-      ["Origin", `${quote.originPostal}, ${quote.origin}`],
-      ["Weight", quote.totalWeight],
-    ],
-    [
-      ["Destination", `${quote.destinationPostal}, ${quote.destination}`],
-      ["Pallets", String(quote.pallets)],
-    ],
-    [
-      ["Pickup Date", quote.pickupDate],
-      ["Pieces", String(quote.pieces)],
-    ],
-  ];
-
-  return (
-    <section className='quote-detail-summary' aria-label='Quote information'>
-      {groups.map((group, groupIndex) => (
-        <dl className='quote-detail-summary__group' key={groupIndex}>
-          {group.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}:</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      ))}
-    </section>
-  );
-}
-
-
-function CarrierOfferCard({
-  offer,
-  selected,
-  onShipIt,
-}: {
-  offer: CarrierOffer;
-  selected: boolean;
-  onShipIt: () => void;
-}) {
-  return (
-    <article className={`rate-card ${selected ? "rate-card--selected" : ""}`}>
-      {offer.warning && (
-        <div className='rate-card__warning'>
-          <ExclamationCircleOutlined />
-          <span>{offer.warning}</span>
-        </div>
-      )}
-
-      <div className='rate-card__body'>
-        <div className='rate-card__offer'>
-          <div className='rate-card__logo'>
-            <CarrierLogo offer={offer} />
-          </div>
-          <strong className='rate-card__price'>
-            {offer.price.toLocaleString("en-US", {
-              style: "currency",
-              currency: "USD",
-            })}
-          </strong>
-          <Button
-            type={selected ? "primary" : "default"}
-            className='rate-card__select'
-            onClick={onShipIt}>
-            {selected ? "Selected" : "Ship It"}
-          </Button>
-        </div>
-
-        <div className='rate-card__information'>
-          <div className='rate-card__heading'>
-            <div className='rate-card__identity'>
-              <strong>{offer.name}</strong>
-              <span className='rate-chip'>{offer.code}</span>
-              <span
-                className={`rate-chip ${
-                  offer.service === "ECONOMY" ? "rate-chip--blue" : ""
-                }`}>
-                {offer.service}
-              </span>
-            </div>
-          </div>
-
-          <dl className='rate-card__details'>
-            <div className='rate-detail-expiry'>
-              <dt>Quote Exp. Date</dt>
-              <dd>{offer.quoteExpiry || "N/A"}</dd>
-              <dt>Transit Days</dt>
-              <dd>{offer.transitDays ? `${offer.transitDays} business days` : "N/A"}</dd>
-              <dt>Est. Delivery Date</dt>
-              <dd>{offer.estimatedDelivery || "N/A"}</dd>
-            </div>
-            <div className='rate-detail-charges'>
-              <dt>Gross Charge : {offer.grossCharge || 0}</dt>
-              <dt>Discount : {offer.discount || 0}</dt>
-              <dt>Fuel Surcharge : {offer.fuelSurcharge || 0}</dt>
-            </div>
-            <div className='rate-detail-accessorials'>
-              {offer.accessorialCharges?.map((charge, idx) => (
-                <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
-              ))}
-            </div>
-          </dl>
-        </div>
-      </div>
-    </article>
-  );
-}
-
+import { fetchAccessorials } from "../store/accessorialsSlice";
+import SendRatesDialog from "../components/rate/SendRatesDialog";
+import {
+  RateMap,
+  CarrierCard,
+  type CarrierRate,
+  type SortOption,
+  type QuoteMode,
+  type ViewMode,
+} from "./Rate";
 
 function QuoteRateDetail() {
   const navigate = useNavigate();
   const { reference } = useParams<{ reference: string }>();
-  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
-  
   const dispatch = useAppDispatch();
-  const { currentQuote, loading } = useAppSelector((state) => state.quote);
+  const [messageApi, messageContext] = message.useMessage();
+
+  const [quoteMode, setQuoteMode] = useState<QuoteMode>("ltl");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("rate-asc");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [selectedRates, setSelectedRates] = useState<string[]>([]);
+  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
+  const [sendRecipients, setSendRecipients] = useState<string[]>([""]);
+  const [sendRateIds, setSendRateIds] = useState<string[]>([]);
+  const [sendValidationError, setSendValidationError] = useState("");
+
+  const { currentQuote: apiQuote, loading } = useAppSelector((state) => state.quote);
   const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
+  const accessorialsData = useAppSelector((state: any) => state.accessorials?.data) || [];
 
   useEffect(() => {
     if (reference) {
       dispatch(fetchQuoteById(reference));
     }
+    dispatch(fetchAccessorials());
   }, [dispatch, reference]);
 
-  const apiQuote = useMemo(() => {
-    return currentQuote;
-  }, [currentQuote]);
+  const originCountry = (apiQuote as any)?.originCountry || "USA";
+  const destCountry = (apiQuote as any)?.destinationCountry || "USA";
 
-  const quote = useMemo(() => {
-    /*
-    const hardcoded = quoteSummaryData.find(
-      (item) => item.reference === decodeURIComponent(reference ?? "")
-    );
-    if (hardcoded) return hardcoded;
-    */
+  const dynamicOrigin = apiQuote
+    ? `${apiQuote.originCity || ''}, ${apiQuote.originStateCode || ''} ${apiQuote.originZip || ''}, ${originCountry}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ', ')
+    : "";
 
-    if (!apiQuote) return undefined;
+  const dynamicDestination = apiQuote
+    ? `${apiQuote.destinationCity || ''}, ${apiQuote.destinationStateCode || ''} ${apiQuote.destinationZip || ''}, ${destCountry}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ', ')
+    : "";
 
-    const result = apiQuote.quoteResults?.[0] || {};
-    const date = apiQuote.requestedDate ? new Date(apiQuote.requestedDate) : new Date();
+  const shipmentDate = apiQuote?.pickupDate 
+    ? new Date(apiQuote.pickupDate).toLocaleDateString("en-US", { month: '2-digit', day: '2-digit', year: 'numeric' })
+    : (apiQuote?.requestedDate ? new Date(apiQuote.requestedDate).toLocaleDateString("en-US", { month: '2-digit', day: '2-digit', year: 'numeric' }) : "");
 
-    return {
-      key: `quote-${apiQuote.quoteRequestId}`,
-      customer: apiQuote.clientName || "",
-      customerCode: apiQuote.clientCode || "",
-      createdAgo: "Created recently on",
-      createdDate: date.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }),
-      reference: String(apiQuote.quoteRequestId),
-      pickupDate: apiQuote.pickupDate ? new Date(apiQuote.pickupDate).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" }) : "",
-      pickupTimestamp: apiQuote.pickupDate ? new Date(apiQuote.pickupDate).getTime() : 0,
-      origin: `${apiQuote.originCity || ""}, ${apiQuote.originStateCode || ""}`,
-      originPostal: apiQuote.originZip || "",
-      destination: `${apiQuote.destinationCity || ""}, ${apiQuote.destinationStateCode || ""}`,
-      destinationPostal: apiQuote.destinationZip || "",
-      loads: (apiQuote.quoteProducts || []).map((p: any) => ({
-        freightClass: p.productClass || "",
-        weight: `${p.weight || 0} lbs`,
-      })),
-      carrierCode: result.scac || "",
-      carrierName: result.carrierName || "",
-      createdBy: apiQuote.profileCode || "",
-      profile: apiQuote.profileCode || "",
-      totalWeight: `${(apiQuote.quoteProducts || []).reduce((acc: number, p: any) => acc + (p.weight || 0), 0)} lbs`,
-      pallets: (apiQuote.quoteProducts || []).reduce((acc: number, p: any) => acc + (p.pallets || 0), 0),
-      pieces: 0,
-    } as QuoteSummaryRecord;
-  }, [apiQuote]);
-
-  const dynamicCarrierOffers = useMemo(() => {
+  const rates = useMemo<CarrierRate[]>(() => {
     if (apiQuote && apiQuote.quoteResults && apiQuote.quoteResults.length > 0) {
       return apiQuote.quoteResults.map((result: any, index: number) => {
-        let logoKind: "fedex" | "abf" | "rl" = "abf";
-        const scacLower = (result.scac || "").toLowerCase();
-        if (scacLower.includes("fxf") || scacLower.includes("fedex")) {
-          logoKind = "fedex";
-        } else if (scacLower.includes("rl")) {
-          logoKind = "rl";
-        }
-
         let grossCharge = Number(result.grossCharge) || 0;
         let discount = Number(result.discount) || 0;
         let fuelSurcharge = Number(result.fuelSurcharge) || 0;
@@ -450,64 +108,100 @@ function QuoteRateDetail() {
           (grossCharge - discount + fuelSurcharge + otherAccessorials.reduce((acc, c) => acc + (c.accessorialCharge || 0), 0));
 
         return {
-          id: String(result.quoteResultId || `quote-${index}`),
+          id: String(result.quoteResultId || `${result.scac}-${index}`),
           name: result.carrierName || "Unknown Carrier",
           code: result.scac || "",
-          service: result.serviceLevel || "",
-          logoKind,
-          price: calculatedPrice > 0 ? calculatedPrice : 0, 
-          quoteId: result.saasQuoteId || result.carrierQuoteNo || "",
+          service: result.serviceLevel || result.serviceType || "Standard",
+          logoKind: "image" as const,
+          price: calculatedPrice > 0 ? calculatedPrice : 0,
           transitDays: parseInt(result.transitDays) || 0,
-          accessorials: [],
+          estimatedDelivery: result.estimatedDeliveryDate || "0001-01-01T00:00:00",
           warning: result.errorMessage?.trim() || result.warning?.trim() || (calculatedPrice <= 0 ? "Rate unavailable or carrier error." : ""),
           quoteExpiry: apiQuote.requestedDate || "N/A",
-          estimatedDelivery: result.estimatedDeliveryDate || "0001-01-01T00:00:00",
+          liabilityNew: "",
+          liabilityUsed: "",
           grossCharge,
           discount,
           fuelSurcharge,
           accessorialCharges: otherAccessorials,
-        } as CarrierOffer;
+        };
       });
     }
-    
     return [];
   }, [apiQuote]);
 
-  const validOffers = useMemo(() => {
-    return dynamicCarrierOffers.filter((offer) => (offer.price ?? 0) > 0);
-  }, [dynamicCarrierOffers]);
-
-  const errorOffers = useMemo(() => {
-    return dynamicCarrierOffers.filter((offer) => (offer.price ?? 0) <= 0);
-  }, [dynamicCarrierOffers]);
-
-  if (loading) {
-    return (
-      <section className='quote-detail-not-found' style={{ padding: '40px', textAlign: 'center' }}>
-        <Spin size="large"/>
-      </section>
+  const visibleRates = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const matches = rates.filter((rate) =>
+      [rate.name, rate.code, rate.service].some((value) =>
+        (value || "").toLowerCase().includes(query),
+      ),
     );
-  }
 
-  if (!quote) {
-    return (
-      <section className='quote-detail-not-found'>
-        <Result
-          status='404'
-          title='Quote not found'
-          subTitle='This quote reference does not exist in the current summary.'
-          extra={
-            <Button type='primary' onClick={() => navigate("/quote-summary")}>
-              Back to Quote Summary
-            </Button>
-          }
-        />
-      </section>
-    );
-  }
+    return [...matches].sort((first, second) => {
+      if (sortBy === "rate-desc") return second.price - first.price;
+      if (sortBy === "transit") {
+        if (first.transitDays === second.transitDays) {
+          return first.price - second.price;
+        }
+        return first.transitDays - second.transitDays;
+      }
+      return first.price - second.price;
+    });
+  }, [search, sortBy, rates]);
 
-  const handleShipIt = (offer: CarrierOffer) => {
-    setSelectedOfferId(offer.id);
+  const validRates = useMemo(() => {
+    return visibleRates.filter((rate) => (rate.price ?? 0) > 0);
+  }, [visibleRates]);
+
+  const errorRates = useMemo(() => {
+    return visibleRates.filter((rate) => (rate.price ?? 0) <= 0);
+  }, [visibleRates]);
+
+  const handleEditQuote = () => {
+    if (apiQuote) {
+      dispatch(
+        setQuoteFormData({
+          origPostal: apiQuote.originZip || "",
+          origCity: apiQuote.originCity || "",
+          origState: apiQuote.originStateCode || "",
+          origCountry: originCountry,
+          pickupDate: apiQuote.pickupDate || null,
+          destPostal: apiQuote.destinationZip || "",
+          destCity: apiQuote.destinationCity || "",
+          destState: apiQuote.destinationStateCode || "",
+          destCountry: destCountry,
+          packages: [{
+            id: "package-1",
+            items: (apiQuote.quoteProducts || []).map((p: any, idx: number) => ({
+              id: `item-${idx + 1}`,
+              units: String(p.pallets ?? p.units ?? ""),
+              handlingUnit: p.packagingGroup || p.packageType || "Pallet",
+              pieces: String(p.pieces ?? ""),
+              weight: String(p.weight ?? ""),
+              weightUnit: "lbs",
+              freightClass: String(p.productClass ?? p.class ?? "50"),
+              length: String(p.length ?? ""),
+              width: String(p.width ?? ""),
+              height: String(p.height ?? ""),
+              dimensionUnit: "in.",
+              nmfc: String(p.productNMFC ?? p.nmfc ?? ""),
+              description: p.description ?? "",
+              stackable: Boolean(p.isStackable ?? p.stackable),
+              hazMat: Boolean(p.isHazmat ?? p.hazMat),
+              hazMatClass: p.hazmatClass ?? "",
+              hazMatUN: p.hazmatUN ?? "",
+            })),
+          }],
+          selectedAccessorials: (apiQuote.quoteAccessorials || []).map((a: any) => a.accCode || a.description || a),
+          selectedClientCode: apiQuote.clientCode || undefined,
+        })
+      );
+    }
+    navigate("/quotes");
+  };
+
+  const handleShipIt = (rate: CarrierRate) => {
     let quoteToSend = apiQuote ? { ...apiQuote } : undefined;
     if (quoteToSend?.quoteProducts) {
       const formItems = quoteFormData?.packages?.flatMap((p: any) => p.items || []) || [];
@@ -530,53 +224,347 @@ function QuoteRateDetail() {
     navigate("/shipments/new", {
       state: {
         quote: quoteToSend,
-        selectedCarrier: offer,
+        selectedCarrier: rate,
         reference,
       },
     });
   };
 
+  const setRateChecked = (rate: CarrierRate, checked: boolean) => {
+    setSelectedRates((current) =>
+      checked
+        ? current.includes(rate.id)
+          ? current
+          : [...current, rate.id]
+        : current.filter((id) => id !== rate.id),
+    );
+  };
+
+  const closeSendDialog = () => {
+    setIsSendDialogOpen(false);
+    setSendRecipients([""]);
+    setSendRateIds([]);
+    setSendValidationError("");
+  };
+
+  const openSendDialog = (rateIds: string[] = []) => {
+    setSendRecipients([""]);
+    setSendRateIds(rateIds);
+    setSendValidationError("");
+    setIsSendDialogOpen(true);
+  };
+
+  const sendRates = () => {
+    const enteredRecipients = sendRecipients
+      .map((recipient) => recipient.trim())
+      .filter(Boolean);
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!enteredRecipients.length) {
+      setSendValidationError("Add at least one recipient email address.");
+      return;
+    }
+
+    if (enteredRecipients.some((recipient) => !emailPattern.test(recipient))) {
+      setSendValidationError("Enter a valid email address for every recipient.");
+      return;
+    }
+
+    if (!sendRateIds.length) {
+      setSendValidationError("Select at least one rate to send.");
+      return;
+    }
+
+    messageApi.success(
+      `${sendRateIds.length} ${sendRateIds.length === 1 ? "rate" : "rates"} sent to ${enteredRecipients.length} ${enteredRecipients.length === 1 ? "recipient" : "recipients"}`,
+    );
+    closeSendDialog();
+  };
+
+  const isQuoteForThisRef = apiQuote && String(apiQuote.quoteRequestId) === String(reference);
+
+  if (loading || !isQuoteForThisRef) {
+    return (
+      <section className='rate-page' style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Spin size="large" />
+      </section>
+    );
+  }
+
+  if (!loading && !apiQuote) {
+    return (
+      <section className='rate-page'>
+        <button
+          type='button'
+          className='rate-back-button'
+          onClick={() => navigate("/quote-summary")}>
+          &larr; All Quotes
+        </button>
+        <Result
+          status='404'
+          title='Quote not found'
+          subTitle='This quote reference does not exist in the current summary.'
+          extra={
+            <Button type='primary' onClick={() => navigate("/quote-summary")}>
+              Back to Quote Summary
+            </Button>
+          }
+        />
+      </section>
+    );
+  }
+
+  const totalWeight = (apiQuote?.quoteProducts || []).reduce((acc: number, item: any) => acc + (Number(item.weight) || 0), 0);
+
   return (
-    <section className='quote-detail-page'>
-      <QuoteInformation quote={quote} />
+    <section className='rate-page'>
+      {messageContext}
 
-      {validOffers.length > 0 ? (
-        <div className='rate-carrier-list rate-carrier-list--list' aria-label='Available carrier quotes'>
-          {validOffers.map((offer) => (
-            <CarrierOfferCard
-              key={offer.id}
-              offer={offer}
-              selected={selectedOfferId === offer.id}
-              onShipIt={() => handleShipIt(offer)}
-            />
-          ))}
+      <button
+        type='button'
+        className='rate-back-button'
+        onClick={() => {
+          navigate("/quote-summary");
+        }}>
+        &larr; All Quotes
+      </button>
+
+      <header className='rate-page__header'>
+        <h1>Quote Results</h1>
+        <div className='rate-page__header-actions'>
+          <Button onClick={handleEditQuote}>
+            Edit Quote
+          </Button>
+          <Button onClick={() => messageApi.success("Quote is already saved.")}>
+            Save Quote
+          </Button>
+          <Button
+            danger
+            onClick={() => messageApi.info("Quote deletion is not connected yet.")}>
+            Delete Quote
+          </Button>
         </div>
-      ) : null}
+      </header>
 
-      {errorOffers.length > 0 ? (
-        <section className='rate-error-section' aria-label='Carrier quotes with errors'>
-          <h2 className='rate-error-heading'>
-            <span>With Errors</span>
-            <span className='rate-error-badge'>{errorOffers.length}</span>
-          </h2>
-          <div className='rate-carrier-list rate-carrier-list--list' aria-label='Carrier quotes with errors list'>
-            {errorOffers.map((offer) => (
-              <CarrierOfferCard
-                key={offer.id}
-                offer={offer}
-                selected={selectedOfferId === offer.id}
-                onShipIt={() => handleShipIt(offer)}
-              />
-            ))}
+      <div className='rate-capacity-warning' role='alert'>
+        <ExclamationCircleOutlined />
+        <span>
+          Your quote exceeds some carrier capacity rules, so we didn't include
+          those carriers in this list.
+        </span>
+      </div>
+
+      <div className='rate-content-grid'>
+        <aside className='rate-context'>
+          <article className='rate-route-card'>
+            <div className='rate-route-card__map'>
+              <RateMap originAddress={dynamicOrigin} destinationAddress={dynamicDestination} />
+            </div>
+            <div className='rate-route-card__summary'>
+              <div>
+                <span>FROM</span>
+                <strong>{dynamicOrigin}</strong>
+                {shipmentDate && <small>{shipmentDate}</small>}
+              </div>
+              <div>
+                <span>TO</span>
+                <strong>{dynamicDestination}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article className='rate-items-card'>
+            <h2>ITEMS</h2>
+            {(apiQuote?.quoteProducts || []).map((item: any, index: number) => {
+              const pieces = item.pieces != null && item.pieces !== 0 && item.pieces !== "" ? item.pieces : (item.pallets ?? item.units ?? "");
+              const pkgType = (item.packagingGroup || item.packageType || "PALLET").toUpperCase();
+              const fClass = item.productClass || item.class;
+              return (
+                <div key={index} className='rate-items-card__body'>
+                  <strong className='rate-item-pill'>{[pieces, pkgType].filter(Boolean).join(" ")} {fClass ? `· CLASS ${fClass}` : ''}</strong>
+                  <dl>
+                    <div>
+                      <dt>Piece(s)</dt>
+                      <dd>{pieces}</dd>
+                    </div>
+                    <div>
+                      <dt>Weight</dt>
+                      <dd>{item.weight != null ? `${item.weight} lbs` : ''}</dd>
+                    </div>
+                    <div>
+                      <dt>Dimensions</dt>
+                      <dd>{item.length != null && item.width != null && item.height != null && item.length !== "" ? `${item.length}" × ${item.width}" × ${item.height}"` : ''}</dd>
+                    </div>
+                  </dl>
+                </div>
+              );
+            })}
+            <dl className='rate-items-card__totals'>
+              <div>
+                <dt>Total weight</dt>
+                <dd>{totalWeight ? `${totalWeight} lbs` : ''}</dd>
+              </div>
+              <div>
+                <dt>Total linear feet</dt>
+                <dd>0 ft</dd>
+              </div>
+            </dl>
+          </article>
+
+          {(apiQuote?.quoteAccessorials && apiQuote.quoteAccessorials.length > 0) && (
+            <article className='rate-items-card'>
+              <h2>ACCESSORIALS</h2>
+              <div className='rate-items-card__body rate-accessorials-list'>
+                {apiQuote.quoteAccessorials.map((acc: any, idx: number) => {
+                  const accCode = (acc.accCode || acc.accesorialCode || acc.accessorialName || acc.description || acc || "").toString();
+                  const match = accessorialsData.find((a: any) => a.accesorialCode === accCode || a.accessorialName === accCode);
+                  const displayName = match ? match.accessorialName : (acc.accName || acc.description || accCode);
+                  return (
+                    <strong key={idx} className='rate-item-pill'>{displayName}</strong>
+                  );
+                })}
+              </div>
+            </article>
+          )}
+        </aside>
+
+        <main className='rate-results'>
+          <div className='rate-mode-tabs' role='tablist' aria-label='Quote type'>
+            <button
+              type='button'
+              role='tab'
+              aria-selected={quoteMode === "ltl"}
+              className={quoteMode === "ltl" ? "active" : ""}
+              onClick={() => setQuoteMode("ltl")}>
+              LTL <span>{rates.length}</span>
+            </button>
           </div>
-        </section>
-      ) : null}
 
-      {validOffers.length === 0 && errorOffers.length === 0 ? (
-        <div className='rate-empty-state'>
-          <Empty description='No carrier quotes available for this reference.' />
-        </div>
-      ) : null}
+          <div className='rate-toolbar'>
+            <Input
+              value={search}
+              prefix={<SearchOutlined />}
+              placeholder='Carriers search'
+              allowClear
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <Select<SortOption>
+              value={sortBy}
+              onChange={setSortBy}
+              options={[
+                { value: "rate-asc", label: "Sort by rate, low to high" },
+                { value: "rate-desc", label: "Sort by rate, high to low" },
+                { value: "transit", label: "Sort by transit time" },
+              ]}
+            />
+            <Button
+              className='rate-send-all'
+              icon={<SendOutlined />}
+              onClick={() => openSendDialog()}
+            >
+              Send All
+            </Button>
+            <div className='rate-view-switch' aria-label='Results view'>
+              <button
+                type='button'
+                className={viewMode === "list" ? "active" : ""}
+                aria-pressed={viewMode === "list"}
+                onClick={() => setViewMode("list")}>
+                <BarsOutlined /> List View
+              </button>
+              <button
+                type='button'
+                className={viewMode === "grid" ? "active" : ""}
+                aria-pressed={viewMode === "grid"}
+                onClick={() => setViewMode("grid")}>
+                <AppstoreOutlined /> Grid View
+              </button>
+            </div>
+          </div>
+
+          {!loading && (
+            <p className='rate-results-count'>
+              {`Showing ${quoteMode === "ltl" ? visibleRates.length : 0} of ${rates.length} carriers`}
+            </p>
+          )}
+
+          {loading && (
+            <div style={{ textAlign: "center", padding: "40px 0" }}>
+              <Spin size="large" />
+            </div>
+          )}
+
+          {!loading && quoteMode === "volume" ? (
+            <div className='rate-empty-state'>
+              <Empty description='No volume rates are available for this quote.' />
+            </div>
+          ) : !loading && (validRates.length > 0 || errorRates.length > 0) ? (
+            <>
+              {validRates.length > 0 ? (
+                <div className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
+                  {validRates.map((rate) => (
+                    <CarrierCard
+                      key={rate.id}
+                      rate={rate}
+                      checked={selectedRates.includes(rate.id)}
+                      onCheckedChange={(checked) =>
+                        setRateChecked(rate, checked)
+                      }
+                      onShipIt={() => handleShipIt(rate)}
+                      onSend={() => openSendDialog([rate.id])}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {errorRates.length > 0 ? (
+                <section className='rate-error-section' aria-label='Carriers with errors'>
+                  <h2 className='rate-error-heading'>
+                    <span>With Errors</span>
+                    <span className='rate-error-badge'>{errorRates.length}</span>
+                  </h2>
+                  <div className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
+                    {errorRates.map((rate) => (
+                      <CarrierCard
+                        key={rate.id}
+                        rate={rate}
+                        checked={selectedRates.includes(rate.id)}
+                        onCheckedChange={(checked) =>
+                          setRateChecked(rate, checked)
+                        }
+                        onShipIt={() => handleShipIt(rate)}
+                        onSend={() => openSendDialog([rate.id])}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </>
+          ) : !loading ? (
+            <div className='rate-empty-state'>
+              <Empty description='No carrier quotes available for this reference.' />
+            </div>
+          ) : null}
+        </main>
+      </div>
+
+      <SendRatesDialog
+        open={isSendDialogOpen}
+        rates={rates}
+        recipients={sendRecipients}
+        selectedRateIds={sendRateIds}
+        validationError={sendValidationError}
+        onClose={closeSendDialog}
+        onRecipientsChange={(recipients) => {
+          setSendRecipients(recipients);
+          setSendValidationError("");
+        }}
+        onSelectedRateIdsChange={(rateIds) => {
+          setSendRateIds(rateIds);
+          setSendValidationError("");
+        }}
+        onSubmit={sendRates}
+      />
     </section>
   );
 }

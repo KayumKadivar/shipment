@@ -228,16 +228,18 @@ function QuoteSummary() {
     <section className='quote-summary-page' aria-label='Quote Summary'>
       <div className='quote-summary-filter-card'>
         <div className='quote-summary-filter-topline'>
-          {showMoreFilters ? (
-            <Input
-              value={draftSearch}
-              placeholder='Filter quotes...'
-              allowClear
-              aria-label='Filter quotes'
-              onChange={(event) => setDraftSearch(event.target.value)}
-              onPressEnter={() => setAppliedSearch(draftSearch)}
-            />
-          ) : <div style={{ flex: 1 }} />}
+          <Input
+            value={draftSearch}
+            placeholder='Filter quotes...'
+            allowClear
+            aria-label='Filter quotes'
+            onChange={(event) => {
+              const val = event.target.value;
+              setDraftSearch(val);
+              setAppliedSearch(val);
+            }}
+            onPressEnter={() => setAppliedSearch(draftSearch)}
+          />
           <Button
             icon={<FilterOutlined />}
             aria-expanded={showMoreFilters}

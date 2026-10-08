@@ -30,7 +30,7 @@ import {
   type RouteLocation,
 } from "../lib/googleRoutes";
 
-type CarrierRate = SendRateItem & {
+export type CarrierRate = SendRateItem & {
   warning: string;
   quoteExpiry: string;
   liabilityNew: string;
@@ -41,9 +41,9 @@ type CarrierRate = SendRateItem & {
   accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number }[];
 };
 
-type SortOption = "rate-asc" | "rate-desc" | "transit";
-type QuoteMode = "ltl" | "volume";
-type ViewMode = "list" | "grid";
+export type SortOption = "rate-asc" | "rate-desc" | "transit";
+export type QuoteMode = "ltl" | "volume";
+export type ViewMode = "list" | "grid";
 
 const apiKeyPlaceholder = "PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE";
 const googleLibraries: Libraries = ["marker", "places", "routes"];
@@ -58,7 +58,7 @@ function formatDistance(distanceMeters?: number) {
   return `${Math.round(distanceMeters / 1609.344).toLocaleString("en-US")} miles`;
 }
 
-function RateMap({ originAddress, destinationAddress }: { originAddress: string; destinationAddress: string }) {
+export function RateMap({ originAddress, destinationAddress }: { originAddress: string; destinationAddress: string }) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [route, setRoute] = useState<ComputedRoute | null>(null);
   const [markers, setMarkers] = useState<RouteLocation[]>([]);
@@ -253,40 +253,43 @@ function RateMap({ originAddress, destinationAddress }: { originAddress: string;
   );
 }
 
-function CarrierLogo({ rate }: { rate: CarrierRate }) {
+export function CarrierLogo({ rate }: { rate: CarrierRate }) {
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(!rate.logo);
   const [error, setError] = useState(false);
+  const [localLogo, setLocalLogo] = useState<string | null>(rate.logo || null);
 
   useEffect(() => {
-    if (!rate.logo && rate.code) {
+    if (!rate.logo && !localLogo && rate.code) {
       setLoading(true);
       dispatch(fetchCarrierLogo(rate.code))
         .unwrap()
-        .then(() => {
-           setLoading(false);
+        .then((res: any) => {
+          if (res?.logo) setLocalLogo(res.logo);
+          setLoading(false);
         })
         .catch(() => {
-           setError(true);
-           setLoading(false);
+          setError(true);
+          setLoading(false);
         });
     } else {
       setLoading(false);
     }
-  }, [rate.code, rate.logo, dispatch]);
+  }, [rate.code, rate.logo, localLogo, dispatch]);
 
   if (loading) {
     return <div className="rate-placeholder-logo"><Spin size="small" /></div>;
   }
 
-  if (error || !rate.logo) {
+  const logoToUse = rate.logo || localLogo;
+  if (error || !logoToUse) {
     return <div className="rate-placeholder-logo">{rate.name}</div>;
   }
   
-  return <img src={rate.logo} alt={`${rate.name}`} />;
+  return <img src={logoToUse} alt={`${rate.name}`} />;
 }
 
-function CarrierCard({
+export function CarrierCard({
   rate,
   checked,
   onCheckedChange,
@@ -297,7 +300,7 @@ function CarrierCard({
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   onShipIt: () => void;
-  onSend: () => void;
+  onSend?: () => void;
 }) {
   return (
     <article
@@ -718,11 +721,13 @@ function Rate() {
             </div>
           </div>
 
-          <p className='rate-results-count'>
-            {loadingRates ? "Loading rates..." : `Showing ${quoteMode === "ltl" ? visibleRates.length : 0} of ${(ratesFromStore || []).length} carriers`}
-          </p>
+          {!loadingRates && (
+            <p className='rate-results-count'>
+              {`Showing ${quoteMode === "ltl" ? visibleRates.length : 0} of ${(ratesFromStore || []).length} carriers`}
+            </p>
+          )}
           {loadingRates && (
-            <div style={{ textAlign: "center", padding: "40px" }}>
+            <div style={{ textAlign: "center", padding: "40px 0" }}>
               <Spin size="large" />
             </div>
           )}

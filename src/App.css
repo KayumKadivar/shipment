@@ -552,6 +552,17 @@ body {
   color: #171717;
 }
 
+.new-quote-page__top-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 1rem;
+}
+
+.new-quote-page__top-left .quote-client-dropdown {
+  margin-bottom: 0;
+}
+
 .new-quote-page__top-actions {
   gap: 10px;
   margin-bottom: 1rem;

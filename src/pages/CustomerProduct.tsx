@@ -631,9 +631,16 @@ function CustomerProductPage({
         <div className='product-client-row'>
           <span>Client:</span>
           <Select
+            showSearch
+            placeholder='Search or select client...'
             value={selectedClientCode}
             onChange={handleClientChange}
             style={{ minWidth: 250 }}
+            filterOption={(input, option) =>
+              String((option as any)?.searchValue || "")
+                .toLowerCase()
+                .includes(input.toLowerCase())
+            }
             options={clients.map(client => ({
               label: (
                 <span>
@@ -641,7 +648,8 @@ function CustomerProductPage({
                   {client.clientName}
                 </span>
               ),
-              value: client.clientCode
+              value: client.clientCode,
+              searchValue: `${client.clientName} ${client.clientCode}`,
             }))}
             loading={clients.length === 0}
           />

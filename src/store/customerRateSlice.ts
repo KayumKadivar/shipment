@@ -63,6 +63,7 @@ export interface QuoteFormData {
   destCountry: string;
   packages: any[];
   selectedAccessorials: string[];
+  selectedClientCode?: string;
 }
 
 // Interface for customer rate state
