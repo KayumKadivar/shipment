@@ -6,7 +6,7 @@ import {
   SendOutlined,
 } from "@ant-design/icons";
 import { Button, Empty, Input, Select, Spin, Result, message } from "antd";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
 import {
@@ -26,7 +26,6 @@ import {
   CarrierCard,
   type CarrierRate,
   type SortOption,
-  type QuoteMode,
   type ViewMode,
 } from "./Rate";
 
@@ -36,7 +35,6 @@ function QuoteRateDetail() {
   const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
 
-  const [quoteMode, setQuoteMode] = useState<QuoteMode>("ltl");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("rate-asc");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -158,6 +156,39 @@ function QuoteRateDetail() {
     return visibleRates.filter((rate) => (rate.price ?? 0) <= 0);
   }, [visibleRates]);
 
+  const [activeTab, setActiveTab] = useState<"ltl" | "error">("ltl");
+  const errorSectionRef = useRef<HTMLElement | null>(null);
+  const validSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const totalValidCount = useMemo(() => {
+    return rates.filter((rate) => (rate.price ?? 0) > 0).length;
+  }, [rates]);
+
+  const totalErrorCount = useMemo(() => {
+    return rates.filter((rate) => (rate.price ?? 0) <= 0).length;
+  }, [rates]);
+
+  const displayValidCount = search.trim() ? validRates.length : totalValidCount;
+  const displayErrorCount = search.trim() ? errorRates.length : totalErrorCount;
+
+  const handleScrollToErrors = () => {
+    setActiveTab("error");
+    if (errorSectionRef.current) {
+      errorSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      messageApi.info("No carriers with errors found for this quote.");
+    }
+  };
+
+  const handleScrollToValid = () => {
+    setActiveTab("ltl");
+    if (validSectionRef.current) {
+      validSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   const handleEditQuote = () => {
     if (apiQuote) {
       dispatch(
@@ -223,7 +254,12 @@ function QuoteRateDetail() {
 
     navigate("/shipments/new", {
       state: {
-        quote: quoteToSend,
+        quote: quoteToSend
+          ? {
+              ...quoteToSend,
+              clientCode: quoteToSend.clientCode || "Devts",
+            }
+          : undefined,
         selectedCarrier: rate,
         reference,
       },
@@ -433,10 +469,18 @@ function QuoteRateDetail() {
             <button
               type='button'
               role='tab'
-              aria-selected={quoteMode === "ltl"}
-              className={quoteMode === "ltl" ? "active" : ""}
-              onClick={() => setQuoteMode("ltl")}>
-              LTL <span>{rates.length}</span>
+              aria-selected={activeTab === "ltl"}
+              className={activeTab === "ltl" ? "active" : ""}
+              onClick={handleScrollToValid}>
+              LTL <span>{displayValidCount}</span>
+            </button>
+            <button
+              type='button'
+              role='tab'
+              aria-selected={activeTab === "error"}
+              className={`rate-tab-with-error ${activeTab === "error" ? "active" : ""}`}
+              onClick={handleScrollToErrors}>
+              With Error <span>{displayErrorCount}</span>
             </button>
           </div>
 
@@ -484,7 +528,7 @@ function QuoteRateDetail() {
 
           {!loading && (
             <p className='rate-results-count'>
-              {`Showing ${quoteMode === "ltl" ? visibleRates.length : 0} of ${rates.length} carriers`}
+              {`Showing ${visibleRates.length} of ${rates.length} carriers`}
             </p>
           )}
 
@@ -494,14 +538,10 @@ function QuoteRateDetail() {
             </div>
           )}
 
-          {!loading && quoteMode === "volume" ? (
-            <div className='rate-empty-state'>
-              <Empty description='No volume rates are available for this quote.' />
-            </div>
-          ) : !loading && (validRates.length > 0 || errorRates.length > 0) ? (
+          {!loading && (validRates.length > 0 || errorRates.length > 0) ? (
             <>
               {validRates.length > 0 ? (
-                <div className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
+                <div ref={validSectionRef} className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
                   {validRates.map((rate) => (
                     <CarrierCard
                       key={rate.id}
@@ -518,7 +558,7 @@ function QuoteRateDetail() {
               ) : null}
 
               {errorRates.length > 0 ? (
-                <section className='rate-error-section' aria-label='Carriers with errors'>
+                <section ref={errorSectionRef} className='rate-error-section' aria-label='Carriers with errors'>
                   <h2 className='rate-error-heading'>
                     <span>With Errors</span>
                     <span className='rate-error-badge'>{errorRates.length}</span>

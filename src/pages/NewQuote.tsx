@@ -4,7 +4,7 @@ import {
   TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Button, Checkbox, Input, Select, AutoComplete, Spin, DatePicker, message } from "antd";
+import { Button, Checkbox, Input, Select, AutoComplete, Spin, DatePicker, message, Form, Alert } from "antd";
 import CountrySelect from "../components/CountrySelect";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -14,7 +14,7 @@ import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import { fetchAccessorials } from "../store/accessorialsSlice";
-import { fetchCarrierRates, setQuoteFormData, clearQuoteFormData } from "../store/customerRateSlice";
+import { fetchCarrierRates, setQuoteFormData, clearQuoteFormData, clearRateError } from "../store/customerRateSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import { SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 
@@ -74,7 +74,23 @@ const createPackage = (): QuotePackage => ({
   items: [createItem()],
 });
 
+const formatNMFC = (raw: string): string => {
+  const cleaned = raw.replace(/[^\d-]/g, "");
+  const digits = cleaned.replace(/\D/g, "").slice(0, 8);
 
+  if (digits.length <= 6) {
+    if (digits.length === 6 && cleaned.includes("-")) {
+      return `${digits}-`;
+    }
+    return digits;
+  }
+  return `${digits.slice(0, 6)}-${digits.slice(6, 8)}`;
+};
+
+const isValidNMFC = (val: string): boolean => {
+  if (!val || val.trim() === "") return false;
+  return /^\d{6}-\d{2}$/.test(val.trim());
+};
 
 const handlingUnitOptions = ["Pallet", "Crate", "Carton", "Drum", "Piece"].map(
   (value) => ({ value, label: value }),
@@ -103,27 +119,39 @@ const classOptions = [
 function QuoteLocationCard({
   title,
   zipLabel,
+  postalName,
+  countryName,
+  dateName,
   includeDate = false,
   postal,
   setPostal,
+  city,
   setCity,
+  state,
   setState,
   country,
   setCountry,
   date,
   setDate,
+  form,
 }: {
   title: string;
   zipLabel: string;
+  postalName: string;
+  countryName: string;
+  dateName?: string;
   includeDate?: boolean;
   postal: string;
   setPostal: (val: string) => void;
+  city?: string;
   setCity: (val: string) => void;
+  state?: string;
   setState: (val: string) => void;
   country: string;
   setCountry: (val: string) => void;
   date?: string | null;
   setDate?: (val: string | null) => void;
+  form: any;
 }) {
   const { searchPostals, loadingPostal } = usePostalLookup();
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -140,14 +168,15 @@ function QuoteLocationCard({
         const results = await searchPostals(searchVal, country);
         
         if (results && results.length === 1) {
-          // Exactly 1 result (full postal code usually) -> auto-fill immediately
-          setPostal(`${results[0].postalCode || searchVal} - ${results[0].city}, ${results[0].state}`);
+          const full = `${results[0].postalCode || searchVal} - ${results[0].city}, ${results[0].state}`;
+          setPostal(full);
           setCity(results[0].city);
           setState(results[0].state);
+          form.setFieldsValue({ [postalName]: full });
+          form.validateFields([postalName]).catch(() => {});
           setPostalOptions([]);
           setDropdownOpen(false);
         } else if (results && results.length > 1) {
-          // Multiple results -> show dropdown
           const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || searchVal}|${r.city}|${r.state}`)))
             .map(str => {
               const [p, c, s] = str.split('|');
@@ -180,6 +209,8 @@ function QuoteLocationCard({
     setPostal(value);
     setCity(option.city);
     setState(option.state);
+    form.setFieldsValue({ [postalName]: value });
+    form.validateFields([postalName]).catch(() => {});
     setDropdownOpen(false);
   };
 
@@ -192,9 +223,12 @@ function QuoteLocationCard({
     if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
     const results = await searchPostals(searchVal, country);
     if (results && results.length === 1) {
-      setPostal(`${results[0].postalCode || searchVal} - ${results[0].city}, ${results[0].state}`);
+      const full = `${results[0].postalCode || searchVal} - ${results[0].city}, ${results[0].state}`;
+      setPostal(full);
       setCity(results[0].city);
       setState(results[0].state);
+      form.setFieldsValue({ [postalName]: full });
+      form.validateFields([postalName]).catch(() => {});
       setPostalOptions([]);
       setDropdownOpen(false);
     } else if (results && results.length > 1) {
@@ -212,7 +246,6 @@ function QuoteLocationCard({
           key: `postal-${idx}`
         }))
       );
-      
     }
   };
 
@@ -226,19 +259,51 @@ function QuoteLocationCard({
       </header>
       <div className='quote-location-card__body'>
         {includeDate ? (
-          <label className='new-quote-field quote-location-card__date'>
-            <span>Pickup Date</span>
+          <Form.Item
+            className='new-quote-field quote-location-card__date'
+            label='Pickup Date'
+            name={dateName || 'pickupDate'}
+            required
+            rules={[{ required: true, message: 'Pickup Date is required' }]}
+          >
             <DatePicker
               style={{ width: '100%' }}
               format="MM-DD-YYYY"
               aria-label='Pickup date'
               value={date ? dayjs(date) : null}
-              onChange={(d) => setDate?.(d ? d.format("YYYY-MM-DD") : null)}
+              onChange={(d) => {
+                const val = d ? d.format("YYYY-MM-DD") : null;
+                setDate?.(val);
+                form.setFieldsValue({ [dateName || 'pickupDate']: d });
+                form.validateFields([dateName || 'pickupDate']).catch(() => {});
+              }}
             />
-          </label>
+          </Form.Item>
         ) : null}
-        <label className='new-quote-field'>
-          <span>{zipLabel}</span>
+        <Form.Item
+          className='new-quote-field'
+          label={zipLabel}
+          name={postalName}
+          required
+          rules={[
+            { required: true, message: `${zipLabel} is required` },
+            {
+              validator: (_, value) => {
+                if (!value || String(value).trim() === "") {
+                  return Promise.resolve();
+                }
+                const clean = String(value).split(" - ")[0].trim();
+                if (clean.length < 3) {
+                  return Promise.reject(new Error(`${zipLabel} must be at least 3 digits`));
+                }
+                if (!city || !state) {
+                  return Promise.reject(new Error("Please select location from dropdown"));
+                }
+                return Promise.resolve();
+              },
+            },
+          ]}
+        >
           <AutoComplete
             value={postal}
             options={postalOptions}
@@ -247,6 +312,7 @@ function QuoteLocationCard({
             onChange={(val) => {
               setPostal(val);
               postalRef.current = val;
+              form.setFieldsValue({ [postalName]: val });
             }}
             onFocus={() => {
               isFocusedRef.current = true;
@@ -260,16 +326,26 @@ function QuoteLocationCard({
             open={dropdownOpen}
             onDropdownVisibleChange={(visible) => setDropdownOpen(visible)}
           />
-        </label>
+        </Form.Item>
 
-        <label className='new-quote-field'>
-          <span>Country</span>
+        <Form.Item
+          className='new-quote-field'
+          label='Country'
+          name={countryName}
+          required
+          rules={[{ required: true, message: 'Country is required' }]}
+        >
           <CountrySelect
+            className='quote-country-select'
             value={country}
-            onChange={(val: string) => setCountry(val)}
+            onChange={(val: string) => {
+              setCountry(val);
+              form.setFieldsValue({ [countryName]: val });
+              form.validateFields([countryName]).catch(() => {});
+            }}
             aria-label={`${title} country`}
           />
-        </label>
+        </Form.Item>
       </div>
     </section>
   );
@@ -278,6 +354,7 @@ function QuoteLocationCard({
 function NewQuote() {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
+  const [form] = Form.useForm();
   const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
 
   const [packages, setPackages] = useState<QuotePackage[]>(() =>
@@ -285,6 +362,8 @@ function NewQuote() {
       ? quoteFormData.packages
       : [createPackage()]
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [accessorialSearch, setAccessorialSearch] = useState("");
   const [selectedAccessorials, setSelectedAccessorials] = useState<string[]>(
     () => quoteFormData?.selectedAccessorials || []
@@ -293,10 +372,18 @@ function NewQuote() {
   const { data: accessorialOptions } = useAppSelector((state) => state.accessorials);
   const profileCode = useAppSelector((state) => state.app.profileCode);
   const { clients } = useAppSelector((state) => state.customerLocation);
+  const rateLoading = useAppSelector((state) => state.customerRate.loading);
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
     () => quoteFormData?.selectedClientCode || sessionStorage.getItem("quotes_selectedClientCode") || sessionStorage.getItem("customerLocation_selectedClientCode") || ""
   );
+
+  useEffect(() => {
+    dispatch(clearRateError());
+    return () => {
+      dispatch(clearRateError());
+    };
+  }, [dispatch]);
 
   const [origPostal, setOrigPostal] = useState(() => quoteFormData?.origPostal || "");
   const [origCity, setOrigCity] = useState(() => quoteFormData?.origCity || "");
@@ -353,8 +440,69 @@ function NewQuote() {
       if (quoteFormData.selectedClientCode !== undefined) {
         setSelectedClientCode(quoteFormData.selectedClientCode);
       }
+
+      const itemsMap: Record<string, any> = {};
+      (quoteFormData.packages || packages).forEach((pkg) => {
+        pkg.items?.forEach((item: any) => {
+          itemsMap[item.id] = {
+            units: item.units,
+            handlingUnit: item.handlingUnit,
+            pieces: item.pieces,
+            weight: item.weight,
+            freightClass: item.freightClass,
+            length: item.length,
+            width: item.width,
+            height: item.height,
+            nmfc: item.nmfc,
+            description: item.description,
+            hazMatClass: item.hazMatClass,
+            hazMatUN: item.hazMatUN,
+          };
+        });
+      });
+
+      form.setFieldsValue({
+        pickupDate: quoteFormData.pickupDate ? dayjs(quoteFormData.pickupDate) : (pickupDate ? dayjs(pickupDate) : undefined),
+        origPostal: quoteFormData.origPostal ?? origPostal,
+        origCountry: quoteFormData.origCountry ?? origCountry,
+        destPostal: quoteFormData.destPostal ?? destPostal,
+        destCountry: quoteFormData.destCountry ?? destCountry,
+        items: itemsMap,
+      });
     }
-  }, [quoteFormData]);
+  }, [quoteFormData, form]);
+
+  // Initial population of form values
+  useEffect(() => {
+    const itemsMap: Record<string, any> = {};
+    packages.forEach((pkg) => {
+      pkg.items.forEach((item) => {
+        itemsMap[item.id] = {
+          units: item.units,
+          handlingUnit: item.handlingUnit,
+          pieces: item.pieces,
+          weight: item.weight,
+          freightClass: item.freightClass,
+          length: item.length,
+          width: item.width,
+          height: item.height,
+          nmfc: item.nmfc,
+          description: item.description,
+          hazMatClass: item.hazMatClass,
+          hazMatUN: item.hazMatUN,
+        };
+      });
+    });
+
+    form.setFieldsValue({
+      pickupDate: pickupDate ? dayjs(pickupDate) : undefined,
+      origPostal,
+      origCountry,
+      destPostal,
+      destCountry,
+      items: itemsMap,
+    });
+  }, []);
 
   const visibleAccessorials = useMemo(() => {
     const query = accessorialSearch.trim().toLowerCase();
@@ -377,23 +525,67 @@ function NewQuote() {
         quotePackage.id === packageId
           ? {
               ...quotePackage,
-              items: quotePackage.items.map((item) =>
-                item.id === itemId ? { ...item, [field]: value } : item,
-              ),
+              items: quotePackage.items.map((item) => {
+                if (item.id !== itemId) return item;
+                if (field === "stackable") {
+                  const isStackable = Boolean(value);
+                  return {
+                    ...item,
+                    stackable: isStackable,
+                    hazMat: isStackable ? false : item.hazMat,
+                    hazMatClass: isStackable ? "" : item.hazMatClass,
+                    hazMatUN: isStackable ? "" : item.hazMatUN,
+                  };
+                }
+                if (field === "hazMat") {
+                  const isHazMat = Boolean(value);
+                  return {
+                    ...item,
+                    hazMat: isHazMat,
+                    stackable: isHazMat ? false : item.stackable,
+                    hazMatClass: isHazMat ? item.hazMatClass : "",
+                    hazMatUN: isHazMat ? item.hazMatUN : "",
+                  };
+                }
+                return { ...item, [field]: value };
+              }),
             }
           : quotePackage,
       ),
     );
+
+    if (field === "hazMat" && !value) {
+      form.setFieldValue(["items", itemId, "hazMatClass"], "");
+      form.setFieldValue(["items", itemId, "hazMatUN"], "");
+    } else if (field === "stackable" && value) {
+      form.setFieldValue(["items", itemId, "hazMatClass"], "");
+      form.setFieldValue(["items", itemId, "hazMatUN"], "");
+    }
+
+    if (typeof value === "string") {
+      form.setFieldValue(["items", itemId, field], value);
+      form.validateFields([["items", itemId, field]]).catch(() => {});
+    }
   };
 
   const addItem = (packageId: string) => {
+    const newItem = createItem();
     setPackages((current) =>
       current.map((quotePackage) =>
         quotePackage.id === packageId
-          ? { ...quotePackage, items: [...quotePackage.items, createItem()] }
+          ? { ...quotePackage, items: [...quotePackage.items, newItem] }
           : quotePackage,
       ),
     );
+    form.setFieldValue(["items", newItem.id], {
+      units: newItem.units,
+      handlingUnit: newItem.handlingUnit,
+      pieces: newItem.pieces,
+      weight: newItem.weight,
+      freightClass: newItem.freightClass,
+      nmfc: newItem.nmfc,
+      description: newItem.description,
+    });
   };
 
   const removeItem = (packageId: string, itemId: string) => {
@@ -420,23 +612,29 @@ function NewQuote() {
 
       return current;
     });
+
+    const currentItems = form.getFieldValue("items") || {};
+    const newItems = { ...currentItems };
+    delete newItems[itemId];
+    form.setFieldsValue({ items: newItems });
   };
 
   const isOnlyItem = packages.length === 1 && packages[0].items.length === 1;
 
-  const handleSeeRates = () => {
-    if (!origPostal || !origCity || !origState) {
-      message.error("Please provide complete origin location details (Zip, City, State).");
-      return;
-    }
-    if (!destPostal || !destCity || !destState) {
-      message.error("Please provide complete destination location details (Zip, City, State).");
+  const handleSeeRates = async () => {
+    try {
+      await form.validateFields();
+    } catch (errorInfo) {
+      console.log('Form validation failed:', errorInfo);
+      const firstError = document.querySelector('.ant-form-item-has-error');
+      if (firstError) {
+        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
 
-    const hasItems = packages.some(p => p.items.length > 0);
-    if (!hasItems) {
-      message.error("Please add at least one item to the quote.");
+    if (!packages || packages.length === 0 || !packages.some((p) => p.items.length > 0)) {
+      message.error("Please add at least one item before rating.");
       return;
     }
 
@@ -522,13 +720,47 @@ function NewQuote() {
     );
 
     console.log("Saving API Request Payload:", payload);
-    dispatch(fetchCarrierRates(payload));
-    navigate("/quotes/rate");
+    setIsSubmitting(true);
+    setApiError(null);
+
+    try {
+      const resultAction = await dispatch(fetchCarrierRates(payload));
+
+      if (fetchCarrierRates.fulfilled.match(resultAction)) {
+        const rates = resultAction.payload;
+        if (!rates || rates.length === 0) {
+          const noRatesMsg = "No carrier rates returned from the API for the selected route. Please check shipment and location details.";
+          setApiError(noRatesMsg);
+          message.error(noRatesMsg);
+          return;
+        }
+        navigate("/quotes/rate");
+      } else if (fetchCarrierRates.rejected.match(resultAction)) {
+        const errText =
+          (resultAction.payload as string) ||
+          resultAction.error?.message ||
+          "Failed to fetch rates from backend API.";
+        setApiError(errText);
+        message.error(errText);
+      }
+    } catch (err: any) {
+      const errorText =
+        err?.response?.data?.message ||
+        err?.message ||
+        "An unexpected error occurred while communicating with the server.";
+      setApiError(errorText);
+      message.error(errorText);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleCancelQuote = () => {
+    setApiError(null);
     dispatch(clearQuoteFormData());
-    setPackages([createPackage()]);
+    const freshItem = createItem();
+    const freshPkg = { id: createId("package"), items: [freshItem] };
+    setPackages([freshPkg]);
     setSelectedAccessorials([]);
     setOrigPostal("");
     setOrigCity("");
@@ -538,152 +770,231 @@ function NewQuote() {
     setDestCity("");
     setDestState("");
     setDestCountry("USA");
-    setPickupDate(dayjs().format("YYYY-MM-DD"));
+    const today = dayjs().format("YYYY-MM-DD");
+    setPickupDate(today);
+    form.resetFields();
+    form.setFieldsValue({
+      pickupDate: dayjs(today),
+      origPostal: "",
+      origCountry: "USA",
+      destPostal: "",
+      destCountry: "USA",
+      items: {
+        [freshItem.id]: {
+          units: "",
+          handlingUnit: freshItem.handlingUnit,
+          pieces: "",
+          weight: "",
+          freightClass: freshItem.freightClass,
+          nmfc: "",
+          description: "",
+        }
+      }
+    });
   };
 
   return (
     <div className='new-quote-scroll'>
-      <section className='new-quote-page'>
-        <div className='new-quote-page__topline'>
-          <div className='new-quote-page__top-left'>
-            <button className='new-quote-back' type='button' onClick={() => navigate("/quote-summary")}>
-              &larr; All Quotes
-            </button>
-            <div className='location-client-row quote-client-dropdown'>
-              <span>Client:</span>
-              <Select
-                showSearch
-                allowClear
-                placeholder='Search or select client...'
-                value={selectedClientCode || undefined}
-                onChange={handleClientChange}
-                style={{ minWidth: 260 }}
-                filterOption={(input, option) =>
-                  String((option as any)?.searchValue || "")
-                    .toLowerCase()
-                    .includes(input.toLowerCase())
-                }
-                options={clients.map((client) => ({
-                  label: (
-                    <span>
-                      <UserOutlined style={{ marginRight: 8 }} />
-                      {client.clientName}
-                    </span>
-                  ),
-                  value: client.clientCode,
-                  searchValue: `${client.clientName} ${client.clientCode}`,
-                }))}
-                loading={clients.length === 0}
-              />
-            </div>
-          </div>
-          <div className='new-quote-page__top-actions'>
-            <Button danger onClick={handleCancelQuote}>Cancel Quote</Button>
-          </div>
-        </div>
-
-        <div className='new-quote-layout'>
-          <main className='new-quote-main'>
-            <div className='new-quote-location-grid'>
-              <QuoteLocationCard
-                title='Pickup'
-                zipLabel='Pickup Zip Code'
-                includeDate
-                postal={origPostal}
-                setPostal={setOrigPostal}
-                setCity={setOrigCity}
-                setState={setOrigState}
-                country={origCountry}
-                setCountry={setOrigCountry}
-                date={pickupDate}
-                setDate={setPickupDate}
-              />
-              <QuoteLocationCard
-                title='Destination'
-                zipLabel='Dest. Zip Code'
-                postal={destPostal}
-                setPostal={setDestPostal}
-                setCity={setDestCity}
-                setState={setDestState}
-                country={destCountry}
-                setCountry={setDestCountry}
-              />
-            </div>
-          </main>
-
-          <aside className='new-quote-aside'>
-            <section className='new-quote-card quote-accessorial-card'>
-              <header className='new-quote-card__header'>
-                <h2>Accessorials</h2>
-              </header>
-              <Input
-                className='quote-accessorial-search'
-                value={accessorialSearch}
-                placeholder='Search accessorials...'
-                allowClear
-                onChange={(event) => setAccessorialSearch(event.target.value)}
-              />
-              <div className='quote-accessorial-list'>
-                {visibleAccessorials.map((option) => {
-                  const checked = selectedAccessorials.includes(option);
-                  return (
-                    <label className={checked ? "is-checked" : ""} key={option}>
-                      <Checkbox
-                        checked={checked}
-                        onChange={(event) =>
-                          setSelectedAccessorials((current) =>
-                            event.target.checked
-                              ? [...current, option]
-                              : current.filter((value) => value !== option),
-                          )
-                        }>
-                        {option}
-                      </Checkbox>
-                    </label>
-                  );
-                })}
+      <Spin
+        fullscreen
+        spinning={isSubmitting}
+        size="large"
+        className="ns-fullscreen-spin "
+      />
+      <Form
+        form={form}
+        layout='vertical'
+        colon={false}
+        requiredMark={(label, { required }) => (
+          <span>
+            {label}
+            {required && <span className='quote-required-star'> *</span>}
+          </span>
+        )}
+        scrollToFirstError
+        onFinish={handleSeeRates}
+        className='new-quote-form'
+      >
+        <section className='new-quote-page'>
+          <div className='new-quote-page__topline'>
+            <div className='new-quote-page__top-left'>
+              <button className='new-quote-back' type='button' onClick={() => navigate("/quote-summary")}>
+                &larr; All Quotes
+              </button>
+              <div className='location-client-row quote-client-dropdown'>
+                <span>Client:</span>
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder='Search or select client...'
+                  value={selectedClientCode || undefined}
+                  onChange={handleClientChange}
+                  style={{ minWidth: 260 }}
+                  filterOption={(input, option) =>
+                    String((option as any)?.searchValue || "")
+                      .toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
+                  options={clients.map((client) => ({
+                    label: (
+                      <span>
+                        <UserOutlined style={{ marginRight: 8 }} />
+                        {client.clientName}
+                      </span>
+                    ),
+                    value: client.clientCode,
+                    searchValue: `${client.clientName} ${client.clientCode}`,
+                  }))}
+                  loading={clients.length === 0}
+                />
               </div>
-            </section>
-          </aside>
-        </div>
+            </div>
+            <div className='new-quote-page__top-actions'>
+              <Button danger onClick={handleCancelQuote}>Cancel Quote</Button>
+            </div>
+          </div>
 
-        <div className='new-quote-packages'>
-              {packages.map((quotePackage) => (
-                <section
-                  className='new-quote-card quote-items-card'
-                  key={quotePackage.id}>
-                  <header className='new-quote-card__header quote-items-card__header'>
-                    <h2>Items</h2>
-                    <div className='quote-item-flags'>
-                      <Button size='small' icon={<TeamOutlined />}>
-                        Inventory
-                      </Button>
-                    </div>
-                  </header>
+          {apiError && (
+            <div className="quote-error-message">
+              <Alert
+                type='error'
+                showIcon
+                closable
+                message='Rating API Error'
+                description={apiError}
+                onClose={() => setApiError(null)}
 
-                  <div className='quote-items-table'>
-                    <div className={`quote-items-table__head ${quotePackage.items.some(i => i.hazMat) ? 'has-hazmat' : ''}`} aria-hidden='true'>
-                      <span>Units</span>
-                      <span>Handling Unit</span>
-                      <span>Pieces</span>
-                      <span>Weight [lbs]</span>
-                      <span>Class</span>
-                      <span>Dimensions [inches]</span>
-                      <span>NMFC</span>
-                      <span>Description</span>
-                      <span>Stackable</span>
-                      <span>Hazmat</span>
-                      {quotePackage.items.some(i => i.hazMat) && (
-                        <>
-                          <span>Hazmat Class</span>
-                          <span>Hazmat UN</span>
-                        </>
-                      )}
-                      <span />
-                    </div>
+              />
+            </div>
+          )}
 
-                    {quotePackage.items.map((item) => (
-                      <div className={`quote-item-row ${quotePackage.items.some(i => i.hazMat) ? 'has-hazmat' : ''}`} key={item.id}>
+          <div className='new-quote-layout'>
+            <main className='new-quote-main'>
+              <div className='new-quote-location-grid'>
+                <QuoteLocationCard
+                  title='Pickup'
+                  zipLabel='Pickup Zip Code'
+                  includeDate
+                  postalName='origPostal'
+                  countryName='origCountry'
+                  dateName='pickupDate'
+                  postal={origPostal}
+                  setPostal={setOrigPostal}
+                  city={origCity}
+                  setCity={setOrigCity}
+                  state={origState}
+                  setState={setOrigState}
+                  country={origCountry}
+                  setCountry={setOrigCountry}
+                  date={pickupDate}
+                  setDate={setPickupDate}
+                  form={form}
+                />
+                <QuoteLocationCard
+                  title='Destination'
+                  zipLabel='Dest. Zip Code'
+                  postalName='destPostal'
+                  countryName='destCountry'
+                  postal={destPostal}
+                  setPostal={setDestPostal}
+                  city={destCity}
+                  setCity={setDestCity}
+                  state={destState}
+                  setState={setDestState}
+                  country={destCountry}
+                  setCountry={setDestCountry}
+                  form={form}
+                />
+              </div>
+            </main>
+
+            <aside className='new-quote-aside'>
+              <section className='new-quote-card quote-accessorial-card'>
+                <header className='new-quote-card__header'>
+                  <h2>Accessorials</h2>
+                </header>
+                <Input
+                  className='quote-accessorial-search'
+                  value={accessorialSearch}
+                  placeholder='Search accessorials...'
+                  allowClear
+                  onChange={(event) => setAccessorialSearch(event.target.value)}
+                />
+                <div className='quote-accessorial-list'>
+                  {visibleAccessorials.map((option) => {
+                    const checked = selectedAccessorials.includes(option);
+                    return (
+                      <label className={checked ? "is-checked" : ""} key={option}>
+                        <Checkbox
+                          checked={checked}
+                          onChange={(event) =>
+                            setSelectedAccessorials((current) =>
+                              event.target.checked
+                               ? [...current, option]
+                                : current.filter((value) => value !== option),
+                            )
+                          }>
+                          {option}
+                        </Checkbox>
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+            </aside>
+          </div>
+
+          <div className='new-quote-packages'>
+            {packages.map((quotePackage) => (
+              <section
+                className='new-quote-card quote-items-card'
+                key={quotePackage.id}>
+                <header className='new-quote-card__header quote-items-card__header'>
+                  <h2>Items</h2>
+                  <div className='quote-item-flags'>
+                    <Button size='small' icon={<TeamOutlined />}>
+                      Inventory
+                    </Button>
+                  </div>
+                </header>
+
+                <div className='quote-items-table'>
+                  <div className={`quote-items-table__head ${quotePackage.items.some(i => i.hazMat) ? 'has-hazmat' : ''}`} aria-hidden='true'>
+                    <span>Units <em>*</em></span>
+                    <span>Handling Unit <em>*</em></span>
+                    <span>Pieces <em>*</em></span>
+                    <span>Weight [lbs] <em>*</em></span>
+                    <span>Class <em>*</em></span>
+                    <span>Dimensions [inches]</span>
+                    <span>NMFC <em>*</em></span>
+                    <span>Description</span>
+                    <span>Stackable</span>
+                    <span>Hazmat</span>
+                    {quotePackage.items.some(i => i.hazMat) && (
+                      <>
+                        <span>Hazmat Class <em>*</em></span>
+                        <span>Hazmat UN <em>*</em></span>
+                      </>
+                    )}
+                    <span />
+                  </div>
+
+                  {quotePackage.items.map((item) => (
+                    <div className={`quote-item-row ${quotePackage.items.some(i => i.hazMat) ? 'has-hazmat' : ''}`} key={item.id}>
+                      <Form.Item
+                        name={['items', item.id, 'units']}
+                        rules={[
+                          { required: true, message: "Units is required" },
+                          {
+                            validator: (_, val) => {
+                              if (val !== undefined && val !== "" && (isNaN(Number(val)) || Number(val) <= 0)) {
+                                return Promise.reject(new Error("Must be > 0"));
+                              }
+                              return Promise.resolve();
+                            },
+                          },
+                        ]}
+                      >
                         <Input
                           value={item.units}
                           aria-label='Units'
@@ -696,6 +1007,12 @@ function NewQuote() {
                             )
                           }
                         />
+                      </Form.Item>
+
+                      <Form.Item
+                        name={['items', item.id, 'handlingUnit']}
+                        rules={[{ required: true, message: "Handling unit is required" }]}
+                      >
                         <Select
                           value={item.handlingUnit}
                           options={handlingUnitOptions}
@@ -709,6 +1026,22 @@ function NewQuote() {
                             )
                           }
                         />
+                      </Form.Item>
+
+                      <Form.Item
+                        name={['items', item.id, 'pieces']}
+                        rules={[
+                          { required: true, message: "Pieces is required" },
+                          {
+                            validator: (_, val) => {
+                              if (val !== undefined && val !== "" && (isNaN(Number(val)) || Number(val) <= 0)) {
+                                return Promise.reject(new Error("Must be > 0"));
+                              }
+                              return Promise.resolve();
+                            },
+                          },
+                        ]}
+                      >
                         <Input
                           value={item.pieces}
                           aria-label='Pieces'
@@ -721,6 +1054,22 @@ function NewQuote() {
                             )
                           }
                         />
+                      </Form.Item>
+
+                      <Form.Item
+                        name={['items', item.id, 'weight']}
+                        rules={[
+                          { required: true, message: "Weight is required" },
+                          {
+                            validator: (_, val) => {
+                              if (val !== undefined && val !== "" && (isNaN(Number(val)) || Number(val) <= 0)) {
+                                return Promise.reject(new Error("Must be > 0"));
+                              }
+                              return Promise.resolve();
+                            },
+                          },
+                        ]}
+                      >
                         <Input
                           value={item.weight}
                           aria-label='Weight [lbs]'
@@ -733,6 +1082,12 @@ function NewQuote() {
                             )
                           }
                         />
+                      </Form.Item>
+
+                      <Form.Item
+                        name={['items', item.id, 'freightClass']}
+                        rules={[{ required: true, message: "Class is required" }]}
+                      >
                         <Select
                           value={item.freightClass}
                           options={classOptions}
@@ -746,98 +1101,128 @@ function NewQuote() {
                             )
                           }
                         />
-                        <div className='quote-item-combined quote-item-combined--dimensions'>
-                          <Input
-                            value={item.length}
-                            placeholder='L'
-                            aria-label='Length'
-                            onChange={(event) =>
-                              updateItem(
-                                quotePackage.id,
-                                item.id,
-                                "length",
-                                event.target.value,
-                              )
-                            }
-                          />
-                          <Input
-                            value={item.width}
-                            placeholder='W'
-                            aria-label='Width'
-                            onChange={(event) =>
-                              updateItem(
-                                quotePackage.id,
-                                item.id,
-                                "width",
-                                event.target.value,
-                              )
-                            }
-                          />
-                          <Input
-                            value={item.height}
-                            placeholder='H'
-                            aria-label='Height'
-                            onChange={(event) =>
-                              updateItem(
-                                quotePackage.id,
-                                item.id,
-                                "height",
-                                event.target.value,
-                              )
-                            }
-                          />
-                        </div>
+                      </Form.Item>
+
+                      <div className='quote-item-combined quote-item-combined--dimensions'>
+                        <Input
+                          value={item.length}
+                          placeholder='L'
+                          aria-label='Length'
+                          onChange={(event) =>
+                            updateItem(
+                              quotePackage.id,
+                              item.id,
+                              "length",
+                              event.target.value,
+                            )
+                          }
+                        />
+                        <Input
+                          value={item.width}
+                          placeholder='W'
+                          aria-label='Width'
+                          onChange={(event) =>
+                            updateItem(
+                              quotePackage.id,
+                              item.id,
+                              "width",
+                              event.target.value,
+                            )
+                          }
+                        />
+                        <Input
+                          value={item.height}
+                          placeholder='H'
+                          aria-label='Height'
+                          onChange={(event) =>
+                            updateItem(
+                              quotePackage.id,
+                              item.id,
+                              "height",
+                              event.target.value,
+                            )
+                          }
+                        />
+                      </div>
+
+                      <Form.Item
+                        name={['items', item.id, 'nmfc']}
+                        normalize={(value) => formatNMFC(value || "")}
+                        rules={[
+                          { required: true, message: "NMFC is required" },
+                          {
+                            validator: (_, value) =>
+                              !value || isValidNMFC(value)
+                                ? Promise.resolve()
+                                : Promise.reject(
+                                    new Error("NMFC must be XXXXXX-XX")
+                                  ),
+                          },
+                        ]}
+                      >
                         <Input
                           value={item.nmfc}
-                          placeholder='—'
+                          maxLength={9}
+                          placeholder='XXXXXX-XX'
                           aria-label='NMFC'
                           onChange={(event) =>
                             updateItem(
                               quotePackage.id,
                               item.id,
                               "nmfc",
-                              event.target.value,
+                              formatNMFC(event.target.value),
                             )
                           }
                         />
-                        <Input
-                          value={item.description}
-                          placeholder='Description'
-                          aria-label='Description'
-                          onChange={(event) =>
-                            updateItem(
-                              quotePackage.id,
-                              item.id,
-                              "description",
-                              event.target.value,
-                            )
-                          }
-                        />
-                        <Checkbox
-                          checked={item.stackable}
-                          onChange={(event) =>
-                            updateItem(
-                              quotePackage.id,
-                              item.id,
-                              "stackable",
-                              event.target.checked,
-                            )
-                          }
-                        />
-                        <Checkbox
-                          checked={item.hazMat}
-                          onChange={(event) =>
-                            updateItem(
-                              quotePackage.id,
-                              item.id,
-                              "hazMat",
-                              event.target.checked,
-                            )
-                          }
-                        />
-                        {quotePackage.items.some(i => i.hazMat) && (
-                          item.hazMat ? (
-                            <>
+                      </Form.Item>
+
+                      <Input
+                        value={item.description}
+                        placeholder='Description'
+                        aria-label='Description'
+                        onChange={(event) =>
+                          updateItem(
+                            quotePackage.id,
+                            item.id,
+                            "description",
+                            event.target.value,
+                          )
+                        }
+                      />
+
+                      <Checkbox
+                        checked={item.stackable}
+                        aria-label='Stackable'
+                        onChange={(event) =>
+                          updateItem(
+                            quotePackage.id,
+                            item.id,
+                            "stackable",
+                            event.target.checked,
+                          )
+                        }
+                      />
+
+                      <Checkbox
+                        checked={item.hazMat}
+                        aria-label='Hazmat'
+                        onChange={(event) =>
+                          updateItem(
+                            quotePackage.id,
+                            item.id,
+                            "hazMat",
+                            event.target.checked,
+                          )
+                        }
+                      />
+
+                      {quotePackage.items.some(i => i.hazMat) && (
+                        item.hazMat ? (
+                          <>
+                            <Form.Item
+                              name={['items', item.id, 'hazMatClass']}
+                              rules={[{ required: true, message: "Hazmat Class is required" }]}
+                            >
                               <Input
                                 value={item.hazMatClass}
                                 placeholder='Class'
@@ -851,6 +1236,11 @@ function NewQuote() {
                                   )
                                 }
                               />
+                            </Form.Item>
+                            <Form.Item
+                              name={['items', item.id, 'hazMatUN']}
+                              rules={[{ required: true, message: "Hazmat UN is required" }]}
+                            >
                               <Input
                                 value={item.hazMatUN}
                                 placeholder='UN'
@@ -864,55 +1254,55 @@ function NewQuote() {
                                   )
                                 }
                               />
-                            </>
-                          ) : (
-                            <>
-                              <span />
-                              <span />
-                            </>
-                          )
-                        )}
-                        <Button
-                          type='text'
-                          danger
-                          icon={<DeleteOutlined />}
-                          disabled={isOnlyItem}
-                          aria-label='Delete item'
-                          title={
-                            isOnlyItem
-                              ? "At least one item is required"
-                              : "Delete item"
-                          }
-                          onClick={() => removeItem(quotePackage.id, item.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                            </Form.Item>
+                          </>
+                        ) : (
+                          <>
+                            <span />
+                            <span />
+                          </>
+                        )
+                      )}
 
-                  <Button
-                    className='quote-add-item'
-                    size='small'
-                    icon={<PlusOutlined />}
-                    onClick={() => addItem(quotePackage.id)}>
-                    Add Item
-                  </Button>
-                </section>
-              ))}
-            </div>
+                      <Button
+                        type='text'
+                        danger
+                        icon={<DeleteOutlined />}
+                        disabled={isOnlyItem}
+                        aria-label='Delete item'
+                        title={
+                          isOnlyItem
+                            ? "At least one item is required"
+                            : "Delete item"
+                        }
+                        onClick={() => removeItem(quotePackage.id, item.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
 
-            <div className='new-quote-rate-actions'>
-              {/* <Button
-                icon={<PlusOutlined />}
-                onClick={() =>
-                  setPackages((current) => [...current, createPackage()])
-                }>
-                Add Package
-              </Button> */}
-              <Button type='primary' onClick={handleSeeRates}>
-                See Rates
-              </Button>
-            </div>
-      </section>
+                <Button
+                  className='quote-add-item'
+                  size='small'
+                  icon={<PlusOutlined />}
+                  onClick={() => addItem(quotePackage.id)}>
+                  Add Item
+                </Button>
+              </section>
+            ))}
+          </div>
+
+          <div className='new-quote-rate-actions'>
+            <Button
+              type='primary'
+              htmlType='submit'
+              loading={isSubmitting || rateLoading}
+            >
+              See Rates
+            </Button>
+          </div>
+        </section>
+      </Form>
     </div>
   );
 }

@@ -569,7 +569,9 @@ export const getProductPackageTypes = createAsyncThunk(
         })
         .filter((item: ProductPackageType) => Boolean(item.packageType));
 
-      return mappedList;
+      return mappedList.sort((a, b) =>
+        a.packageType.localeCompare(b.packageType, undefined, { sensitivity: "base" })
+      );
     } catch (error: any) {
       console.error("GetProductPackageTypes API Error:", error);
       return rejectWithValue(

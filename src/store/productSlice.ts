@@ -97,8 +97,31 @@ const productSlice = createSlice({
     setProductItems: (state, action: PayloadAction<ProductItem[]>) => {
       state.items = action.payload;
     },
+    // reset product items to initial blank single row
+    resetProductItems: (state) => {
+      state.items = [
+        {
+          id: "1",
+          pallets: "",
+          pieces: "",
+          packageType: "",
+          description: "",
+          stackable: false,
+          hazmat: false,
+          nmfc: "",
+          length: "",
+          width: "",
+          height: "",
+          pcfDensity: "",
+          class: "",
+          weight: "",
+          hazmatClass: "",
+          hazmatUN: "",
+        },
+      ];
+    },
   },
 });
 
-export const { addProductRow, removeProductRow, updateProductRow, setWeightUnit, setProductItems } = productSlice.actions;
+export const { addProductRow, removeProductRow, updateProductRow, setWeightUnit, setProductItems, resetProductItems } = productSlice.actions;
 export default productSlice.reducer;

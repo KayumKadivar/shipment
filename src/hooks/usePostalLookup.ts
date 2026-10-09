@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/apiConfig';
 import { useAppSelector } from '../app/hooks';
-import { message } from 'antd';
 
 export interface PostalResult {
   city: string;
@@ -15,23 +14,28 @@ export function usePostalLookup() {
   const countries = useAppSelector(state => state.app.countries || []);
 
   const searchPostals = useCallback(async (postalCode: string, countryCode: string): Promise<PostalResult[]> => {
-    if (!postalCode || !countryCode || countries.length === 0) return [];
+    if (!postalCode) return [];
 
     setLoadingPostal(true);
     try {
-      const country = countries.find((c: any) => c.countryCode === countryCode);
-      if (!country) return [];
+      const country = countries.find(
+        (c: any) =>
+          c.countryCode?.toUpperCase() === countryCode?.toUpperCase() ||
+          c.countryName?.toLowerCase() === countryCode?.toLowerCase() ||
+          ((countryCode?.toUpperCase() === "USA" || countryCode?.toLowerCase().includes("united states")) &&
+            (c.countryCode === "USA" || c.countryName?.includes("United States")))
+      );
+      const countryId = country ? country.countryId : 1;
 
       const response = await axios.get(`${API_BASE_URL}/Postals/GetPostalsByPostalCodeAndCountryId`, {
         params: {
           postalCode,
-          countryId: country.countryId,
+          countryId,
         }
       });
 
       if (response.data && response.data.isSuccess) {
         if (!response.data.data || response.data.data.length === 0) {
-          message.error(response.data.message || 'No Record found');
           return [];
         }
         

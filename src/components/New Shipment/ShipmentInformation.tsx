@@ -99,12 +99,12 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }
 
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={12}>
-            <Form.Item label="PRO #" style={{ marginBottom: 0 }}>
+            <Form.Item label="PRO #" className="mb-0">
               <Input placeholder="PRO #" />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item label="Pickup #" style={{ marginBottom: 0 }}>
+            <Form.Item label="Pickup #" className="mb-0">
               <Input placeholder="Pickup #" />
             </Form.Item>
           </Col>

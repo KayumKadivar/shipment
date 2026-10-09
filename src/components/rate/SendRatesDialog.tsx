@@ -4,6 +4,7 @@ import {
   SendOutlined,
 } from "@ant-design/icons";
 import { Button, Checkbox, Input, Modal } from "antd";
+import { formatDateTimeDisplay } from "../../pages/Rate";
 
 export type SendRateItem = {
   id: string;
@@ -187,7 +188,7 @@ export default function SendRatesDialog({
                     </span>
                     <span className='send-rates-dialog__rate-meta'>
                       {rate.transitDays} days <b>{"\u00b7"}</b> Est. delivery{" "}
-                      {rate.estimatedDelivery}
+                      {formatDateTimeDisplay(rate.estimatedDelivery)}
                       <em
                         className={
                           rate.service === "ECONOMY" ? "is-economy" : ""

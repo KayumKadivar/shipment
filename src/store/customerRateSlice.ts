@@ -98,6 +98,19 @@ export const fetchCarrierRates = createAsyncThunk(
         },
       });
 
+      if (response.data && response.data.isSuccess === false) {
+        let msg = response.data.message || response.data.errorMessage || "Failed to fetch rates";
+        if (typeof msg === "string") {
+          msg = msg
+            .replace(/^[\s-]*Severity:\s*Error[\r\n\s-]*/gi, "")
+            .split("\n")
+            .map((line) => line.trim().replace(/^[-–—\s]+/, ""))
+            .filter(Boolean)
+            .join("\n");
+        }
+        return rejectWithValue(msg);
+      }
+
       let apiRates: ApiRate[] = [];
       if (response.data && response.data.data) {
         if (response.data.data.leastCostCarriers) {
@@ -108,9 +121,42 @@ export const fetchCarrierRates = createAsyncThunk(
       }
       console.log("Extracted apiRates:", apiRates);
       return apiRates;
-    } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
-      return rejectWithValue(err.response?.data?.message || "Failed to fetch rates");
+    } catch (error: any) {
+      console.error("fetchCarrierRates error:", error);
+      let errMsg = "Failed to fetch rates";
+      if (error?.response?.data) {
+        const data = error.response.data;
+        if (typeof data === "string") {
+          errMsg = data;
+        } else if (data.message) {
+          errMsg = data.message;
+        } else if (data.errorMessage) {
+          errMsg = data.errorMessage;
+        } else if (data.title) {
+          errMsg = data.title;
+          if (data.errors && typeof data.errors === "object") {
+            const fieldMsgs = Object.values(data.errors).flat().filter(Boolean).join(", ");
+            if (fieldMsgs) errMsg = `${data.title}: ${fieldMsgs}`;
+          }
+        } else if (data.errors) {
+          if (Array.isArray(data.errors)) {
+            errMsg = data.errors.join(", ");
+          } else if (typeof data.errors === "object") {
+            errMsg = Object.values(data.errors).flat().join(", ");
+          }
+        }
+      } else if (error?.message) {
+        errMsg = error.message;
+      }
+      if (typeof errMsg === "string") {
+        errMsg = errMsg
+          .replace(/^[\s-]*Severity:\s*Error[\r\n\s-]*/gi, "")
+          .split("\n")
+          .map((line) => line.trim().replace(/^[-–—\s]+/, ""))
+          .filter(Boolean)
+          .join("\n");
+      }
+      return rejectWithValue(errMsg);
     }
   }
 );
@@ -280,6 +326,9 @@ const customerRateSlice = createSlice({
     clearQuoteFormData: (state) => {
       state.quoteFormData = null;
     },
+    clearRateError: (state) => {
+      state.error = null;
+    },
   },
   // extraReducers is used to handle extra reducers
   extraReducers: (builder) => {
@@ -295,28 +344,71 @@ const customerRateSlice = createSlice({
       .addCase(fetchCarrierRates.fulfilled, (state, action) => {
         state.loading = false;
 
-        state.rates = action.payload.map((rate: ApiRate, index: number) => ({
-          id: `${rate.scac}-${index}-${rate.saasQuoteNumber}`,
-          name: rate.carrierName || "",
-          code: rate.scac || "",
-          service: rate.serviceLevelDescription || rate.rateType || "",
-          price: rate.totalShipmentCost || 0,
-          transitDays: rate.transitDays || 0,
-          estimatedDelivery: rate.deliveryDate || "",
-          warning: rate.errorMessage?.trim() || ((rate.totalShipmentCost ?? 0) <= 0 ? "Rate unavailable or capacity rules exceeded." : ""),
-          quoteExpiry: rate.quoteExpirationDate || "",
-          liabilityNew: "",
-          liabilityUsed: "",
-          grossCharge: rate.grossCharge || 0,
-          discount: rate.discount || 0,
-          fuelSurcharge: rate.fuelSurcharge || 0,
-          accessorialCharges: rate.accessorialCharges || [],
-        }));
+        state.rates = action.payload.map((rate: any, index: number) => {
+          let grossCharge = Number(rate.grossCharge) || 0;
+          let discount = Number(rate.discount) || 0;
+          let fuelSurcharge = Number(rate.fuelSurcharge) || 0;
+          const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[] = [];
+
+          const costDetails = rate.quoteCostDetails || rate.costDetails;
+          if (Array.isArray(costDetails) && costDetails.length > 0) {
+            costDetails.forEach((cd: any) => {
+              const code = (cd.accCode || cd.code || "").trim().toUpperCase();
+              const name = (cd.accName || cd.name || cd.description || "").trim().toLowerCase();
+              const amount = Number(cd.amount ?? cd.charge) || 0;
+
+              if (code === COST_CODE_GROSS || name === COST_NAME_GROSS.toLowerCase() || name.includes("gross") || name.includes("freight")) {
+                grossCharge = amount;
+              } else if (code === COST_CODE_DISC || name === COST_NAME_DISC.toLowerCase() || name.includes("discount")) {
+                discount = amount;
+              } else if (code === COST_CODE_FUEL || name === COST_NAME_FUEL.toLowerCase() || name.includes("fuel")) {
+                fuelSurcharge = amount;
+              } else {
+                otherAccessorials.push({
+                  code: cd.accCode || cd.code || "ACC",
+                  accessorialDescription: cd.accName || cd.name || cd.description || "Accessorial",
+                  accessorialCharge: amount,
+                });
+              }
+            });
+          } else if (Array.isArray(rate.accessorialCharges)) {
+            rate.accessorialCharges.forEach((ac: any) => {
+              otherAccessorials.push({
+                code: ac.code || ac.accessorialCode || "ACC",
+                accessorialDescription: ac.accessorialDescription || ac.description || ac.accName || "Accessorial",
+                accessorialCharge: Number(ac.accessorialCharge ?? ac.amount) || 0,
+              });
+            });
+          }
+
+          const price = Number(rate.totalShipmentCost) || Number(rate.netCharge) || Number(rate.price) || 0;
+          if (!grossCharge && price > 0) {
+            grossCharge = price;
+          }
+
+          return {
+            id: `${rate.scac || rate.carrierCode || "CARRIER"}-${index}-${rate.saasQuoteNumber || index}`,
+            name: rate.carrierName || rate.name || "",
+            code: rate.scac || rate.carrierCode || "",
+            service: rate.serviceLevelDescription || rate.rateType || rate.service || "",
+            price: price > 0 ? price : (grossCharge - discount + fuelSurcharge),
+            transitDays: Number(rate.transitDays) || 0,
+            estimatedDelivery: rate.deliveryDate || rate.estimatedDeliveryDate || "",
+            warning: rate.errorMessage?.trim() || (price <= 0 ? "Rate unavailable or capacity rules exceeded." : ""),
+            quoteExpiry: rate.quoteExpirationDate || "",
+            liabilityNew: "",
+            liabilityUsed: "",
+            grossCharge,
+            discount,
+            fuelSurcharge,
+            accessorialCharges: otherAccessorials,
+          };
+        });
       })
       // fetchCarrierRates.rejected: when request is failed
       .addCase(fetchCarrierRates.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message || "Failed to fetch rates";
+        state.error = (action.payload as string) || action.error.message || "Failed to fetch rates";
       })
       .addCase(fetchCarrierLogo.fulfilled, (state, action) => {
         const { scac, logo } = action.payload;
@@ -327,6 +419,6 @@ const customerRateSlice = createSlice({
   },
 });
 
-export const { clearRates, setQuoteFormData, clearQuoteFormData } = customerRateSlice.actions;
+export const { clearRates, setQuoteFormData, clearQuoteFormData, clearRateError } = customerRateSlice.actions;
 // Export slice reducer
 export default customerRateSlice.reducer;

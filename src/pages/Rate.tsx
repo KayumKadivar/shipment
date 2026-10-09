@@ -14,7 +14,7 @@ import {
   type Libraries,
 } from "@react-google-maps/api";
 import { Button, Empty, Input, Select, Spin, message } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
 import { fetchCarrierLogo, saveCustomerQuote, clearQuoteFormData } from "../store/customerRateSlice";
@@ -289,6 +289,15 @@ export function CarrierLogo({ rate }: { rate: CarrierRate }) {
   return <img src={logoToUse} alt={`${rate.name}`} />;
 }
 
+export const formatDateTimeDisplay = (val?: string | null): string => {
+  if (!val || val === "N/A") return val || "";
+  let str = String(val).trim();
+  str = str.replace(/\.\d+(Z|[+-]\d{2}:\d{2})?$/i, "");
+  str = str.replace(/(Z|[+-]\d{2}:\d{2})$/i, "");
+  str = str.replace(/(\d)T(\d)/i, "$1 $2");
+  return str;
+};
+
 export function CarrierCard({
   rate,
   checked,
@@ -363,11 +372,11 @@ export function CarrierCard({
           <dl className='rate-card__details'>
             <div className='rate-detail-expiry'>
               <dt>Quote Exp. Date</dt>
-              <dd>{rate.quoteExpiry}</dd>
+              <dd>{formatDateTimeDisplay(rate.quoteExpiry)}</dd>
               <dt>Transit Days</dt>
               <dd>{rate.transitDays} business days</dd>
               <dt>Est. Delivery Date</dt>
-              <dd>{rate.estimatedDelivery}</dd>
+              <dd>{formatDateTimeDisplay(rate.estimatedDelivery)}</dd>
             </div>
             <div className='rate-detail-charges'>
               <dt>Gross Charge : {rate.grossCharge}</dt>
@@ -393,7 +402,6 @@ function Rate() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
-  const [quoteMode, setQuoteMode] = useState<QuoteMode>("ltl");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("rate-asc");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -447,6 +455,39 @@ function Rate() {
   const errorRates = useMemo(() => {
     return visibleRates.filter((rate) => (rate.price ?? 0) <= 0);
   }, [visibleRates]);
+
+  const [activeTab, setActiveTab] = useState<"ltl" | "error">("ltl");
+  const errorSectionRef = useRef<HTMLElement | null>(null);
+  const validSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const totalValidCount = useMemo(() => {
+    return (ratesFromStore || []).filter((rate) => (rate.price ?? 0) > 0).length;
+  }, [ratesFromStore]);
+
+  const totalErrorCount = useMemo(() => {
+    return (ratesFromStore || []).filter((rate) => (rate.price ?? 0) <= 0).length;
+  }, [ratesFromStore]);
+
+  const displayValidCount = search.trim() ? validRates.length : totalValidCount;
+  const displayErrorCount = search.trim() ? errorRates.length : totalErrorCount;
+
+  const handleScrollToErrors = () => {
+    setActiveTab("error");
+    if (errorSectionRef.current) {
+      errorSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      messageApi.info("No carriers with errors found for this quote.");
+    }
+  };
+
+  const handleScrollToValid = () => {
+    setActiveTab("ltl");
+    if (validSectionRef.current) {
+      validSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   const handleSaveQuote = () => {
     dispatch(saveCustomerQuote())
@@ -665,19 +706,19 @@ function Rate() {
             <button
               type='button'
               role='tab'
-              aria-selected={quoteMode === "ltl"}
-              className={quoteMode === "ltl" ? "active" : ""}
-              onClick={() => setQuoteMode("ltl")}>
-              LTL <span>{(ratesFromStore || []).length}</span>
+              aria-selected={activeTab === "ltl"}
+              className={activeTab === "ltl" ? "active" : ""}
+              onClick={handleScrollToValid}>
+              LTL <span>{displayValidCount}</span>
             </button>
-            {/* <button
+            <button
               type='button'
               role='tab'
-              aria-selected={quoteMode === "volume"}
-              className={quoteMode === "volume" ? "active" : ""}
-              onClick={() => setQuoteMode("volume")}>
-              Volume <span>0</span>
-            </button> */}
+              aria-selected={activeTab === "error"}
+              className={`rate-tab-with-error ${activeTab === "error" ? "active" : ""}`}
+              onClick={handleScrollToErrors}>
+              With Error <span>{displayErrorCount}</span>
+            </button>
           </div>
 
           <div className='rate-toolbar'>
@@ -723,7 +764,7 @@ function Rate() {
 
           {!loadingRates && (
             <p className='rate-results-count'>
-              {`Showing ${quoteMode === "ltl" ? visibleRates.length : 0} of ${(ratesFromStore || []).length} carriers`}
+              {`Showing ${visibleRates.length} of ${(ratesFromStore || []).length} carriers`}
             </p>
           )}
           {loadingRates && (
@@ -732,14 +773,10 @@ function Rate() {
             </div>
           )}
 
-          {!loadingRates && quoteMode === "volume" ? (
-            <div className='rate-empty-state'>
-              <Empty description='No volume rates are available for this quote.' />
-            </div>
-          ) : !loadingRates && (validRates.length > 0 || errorRates.length > 0) ? (
+          {!loadingRates && (validRates.length > 0 || errorRates.length > 0) ? (
             <>
               {validRates.length > 0 ? (
-                <div className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
+                <div ref={validSectionRef} className={`rate-carrier-list rate-carrier-list--${viewMode}`}>
                   {validRates.map((rate) => (
                     <CarrierCard
                       key={rate.id}
@@ -756,7 +793,7 @@ function Rate() {
               ) : null}
 
               {errorRates.length > 0 && (
-                <section className='rate-error-section' aria-label='Carriers with errors'>
+                <section ref={errorSectionRef} className='rate-error-section' aria-label='Carriers with errors'>
                   <h2 className='rate-error-heading'>
                     <span>With Errors</span>
                     <span className='rate-error-badge'>{errorRates.length}</span>

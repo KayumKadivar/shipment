@@ -1,6 +1,6 @@
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, Form, Input, InputNumber, Select, Switch } from "antd";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { getProductPackageTypes } from "../store/customerProductSlice";
@@ -31,6 +31,24 @@ const PRODUCT_CLASSES = [
   "500",
 ];
 
+const formatNMFC = (raw: string): string => {
+  const cleaned = raw.replace(/[^\d-]/g, "");
+  const digits = cleaned.replace(/\D/g, "").slice(0, 8);
+
+  if (digits.length <= 6) {
+    if (digits.length === 6 && cleaned.includes("-")) {
+      return `${digits}-`;
+    }
+    return digits;
+  }
+  return `${digits.slice(0, 6)}-${digits.slice(6, 8)}`;
+};
+
+const isValidNMFC = (val: string): boolean => {
+  if (!val || val.trim() === "") return false;
+  return /^\d{6}-\d{2}$/.test(val.trim());
+};
+
 function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,6 +62,18 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
   useEffect(() => {
     dispatch(getProductPackageTypes());
   }, [dispatch]);
+
+  const packageTypeOptions = useMemo(() => {
+    return [...packageTypes]
+      .sort((a, b) =>
+        a.packageType.localeCompare(b.packageType, undefined, { sensitivity: "base" })
+      )
+      .map((item) => ({
+        value: item.packageType,
+        label: item.packageType,
+        key: item.packageTypeId,
+      }));
+  }, [packageTypes]);
 
   const [form] = Form.useForm<ProductFormValues>();
   const isHazmat = Form.useWatch("isHazmat", form) ?? false;
@@ -105,10 +135,25 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
                 <Input placeholder='Product description' />
               </Form.Item>
 
-              <Form.Item label='NMFC'>
+              <Form.Item label='NMFC' required>
                 <div className='add-product-nmfc-row'>
-                  <Form.Item name='nmfc' noStyle>
-                    <Input placeholder='e.g. 34550' aria-label='NMFC' />
+                  <Form.Item
+                    name='nmfc'
+                    noStyle
+                    normalize={(value) => formatNMFC(value || "")}
+                    rules={[
+                      { required: true, message: "NMFC is required" },
+                      {
+                        validator: (_, value) =>
+                          !value || isValidNMFC(value)
+                            ? Promise.resolve()
+                            : Promise.reject(
+                                new Error("NMFC must be in XXXXXX-XX format (6 digits - 2 digits, e.g. 123456-01)")
+                              ),
+                      },
+                    ]}
+                  >
+                    <Input placeholder='XXXXXX-XX' maxLength={9} aria-label='NMFC' />
                   </Form.Item>
                   <span>e.g. XXXXXX-XX</span>
                 </div>
@@ -141,11 +186,7 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
                   optionFilterProp='label'
                   loading={loadingPackageTypes}
                   placeholder='-- Select --'
-                  options={packageTypes.map((item) => ({
-                    value: item.packageType,
-                    label: item.packageType,
-                    key: item.packageTypeId,
-                  }))}
+                  options={packageTypeOptions}
                 />
               </Form.Item>
 

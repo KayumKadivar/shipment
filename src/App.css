@@ -501,6 +501,17 @@ body {
   background: #f4f4f5;
 }
 
+/* Global spin styling: hide text and use red icon */
+.ns-fullscreen-spin .ant-spin-text,
+.ant-spin-text {
+  display: none !important;
+}
+
+.ns-fullscreen-spin .ant-spin-dot-item,
+.ant-spin-dot-item {
+  background-color: #d71920 !important;
+}
+
 /* New quote page */
 .new-quote-scroll {
   width: 100%;
@@ -619,6 +630,16 @@ body {
   align-items: start;
 }
 
+.quote-error-message {
+  margin-bottom: 14px;
+}
+
+@media  (max-width: 1380px) {
+  .new-quote-layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+
 .new-quote-main,
 .new-quote-aside,
 .new-quote-packages {
@@ -644,6 +665,12 @@ body {
   border-radius: 7px;
   background: #fff;
   box-shadow: 0 1px 2px rgba(17, 24, 39, 0.02);
+}
+
+.quote-location-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .new-quote-card__header {
@@ -678,15 +705,78 @@ body {
   gap: 12px 10px;
   align-content: end;
   padding: 14px;
+  flex: 1;
+}
+
+.new-quote-page .quote-location-card__body .ant-form-item,
+.quote-location-card__body .ant-form-item {
+  margin-bottom: 0 !important;
+  margin-top: 0 !important;
+}
+
+.quote-location-card__body .ant-form-item-row {
+  margin: 0 !important;
+}
+
+.quote-location-card__body .ant-form-item-control-input {
+  min-height: 34px !important;
+}
+
+.quote-location-card__body .ant-form-item-label {
+  padding-bottom: 2px !important;
+}
+
+.quote-location-card__body .ant-form-item-label > label {
+  height: auto !important;
+  line-height: 1.2 !important;
+}
+
+.new-quote-page .ant-form-item-label > label.ant-form-item-required::before,
+.quote-location-card__body .ant-form-item-label > label.ant-form-item-required::before {
+  display: none !important;
+  content: none !important;
+}
+
+.new-quote-page .ant-form-item-label > label.ant-form-item-required::after,
+.quote-location-card__body .ant-form-item-label > label.ant-form-item-required::after {
+  content: " *" !important;
+  display: inline-block !important;
+  margin-inline-start: 2px !important;
+  color: #df2027 !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+.quote-required-star {
+  color: #df2027;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  margin-left: 3px;
+  display: inline-block;
+}
+
+.quote-location-card__body .ant-form-item-explain {
+  min-height: auto !important;
+  margin-top: 2px !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+}
+
+.quote-location-card__body .ant-form-item-explain-connected {
+  min-height: 0 !important;
 }
 
 .new-quote-field {
   min-width: 0;
-  display: grid;
-  gap: 5px;
+  display: flex;
+  flex-direction: column;
 }
 
-.new-quote-field > span {
+.new-quote-field > span,
+.new-quote-field .ant-form-item-label > label {
   color: #808080;
   font-size: 10px;
   font-weight: 650;
@@ -726,6 +816,37 @@ body {
   border-color: #d71920 !important;
   box-shadow: 0 0 0 2px rgba(215, 25, 32, 0.08) !important;
 }
+
+.quote-country-select.ant-select,
+.quote-location-card .ant-select:not(.ant-select-auto-complete) {
+  font-size: 11px;
+}
+
+.quote-country-select .ant-select-selector,
+.quote-country-select .ant-select-selection-item,
+.quote-country-select .ant-select-selection-placeholder,
+.quote-country-select .ant-select-selection-search-input,
+.quote-location-card .ant-select:not(.ant-select-auto-complete) .ant-select-selector,
+.quote-location-card .ant-select:not(.ant-select-auto-complete) .ant-select-selection-item,
+.quote-location-card .ant-select:not(.ant-select-auto-complete) .ant-select-selection-placeholder,
+.quote-location-card .ant-select:not(.ant-select-auto-complete) .ant-select-selection-search-input {
+  font-size: 11px !important;
+}
+
+.quote-country-select .ant-select-selector,
+.quote-location-card .ant-select:not(.ant-select-auto-complete) .ant-select-selector {
+  padding-inline: 8px !important;
+}
+
+.quote-country-select .ant-select-selection-item,
+.quote-location-card .ant-select:not(.ant-select-auto-complete) .ant-select-selection-item {
+  padding-inline-end: 18px !important;
+}
+
+.quote-country-dropdown .ant-select-item-option-content {
+  font-size: 11px !important;
+}
+
 
 .quote-items-card__header {
   min-height: 47px;
@@ -788,8 +909,18 @@ body {
   text-transform: uppercase;
 }
 
+.quote-items-table__head span em {
+  font-style: normal;
+  color: #df2027;
+  margin-left: 2px;
+}
+
 .quote-item-row {
   padding: 7px 12px 5px;
+  align-items: start;
+}
+.quote-item-row .ant-form-item {
+  margin-bottom: 0;
 }
 
 .quote-item-row + .quote-item-row {
@@ -4808,6 +4939,15 @@ body {
 .rate-mode-tabs button.active span {
   color: #fff;
   background: #df202b;
+}
+
+.rate-tab-with-error:not(.active) span {
+  color: #d71920;
+  background: #fde8e8;
+}
+
+.rate-error-section {
+  scroll-margin-top: 80px;
 }
 
 .rate-toolbar {
