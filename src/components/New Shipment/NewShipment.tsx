@@ -615,6 +615,25 @@ const NewShipment: React.FC = () => {
                   initialData={originData}
                   locationsList={originLocationsList}
                   loading={loadingOrigin}
+                  clientCode={quote?.clientCode}
+                  onLocationSelect={(loc) => {
+                    setOriginData((prev: any) => ({
+                      ...prev,
+                      locationId: loc.locationId,
+                      companyName: loc.locationName || prev?.companyName || "",
+                      address1: loc.address1 || prev?.address1 || "",
+                      address2: loc.address2 || prev?.address2 || "",
+                      city: loc.city || prev?.city || "",
+                      state: loc.stateCode || prev?.state || "",
+                      country: loc.countryCode || prev?.country || "USA",
+                      postal: loc.zipCode || prev?.postal || "",
+                      contactName: loc.contactName || prev?.contactName || "",
+                      phone: loc.contactPhone || prev?.phone || "",
+                      email: loc.contactEmail || prev?.email || "",
+                      openTime: loc.openTime || prev?.openTime || undefined,
+                      closeTime: loc.closeTime || prev?.closeTime || undefined,
+                    }));
+                  }}
                 />
               </Col>
               <Col xs={24} md={12}>
@@ -622,6 +641,25 @@ const NewShipment: React.FC = () => {
                   initialData={destinationData}
                   locationsList={destinationLocationsList}
                   loading={loadingDestination}
+                  clientCode={quote?.clientCode}
+                  onLocationSelect={(loc) => {
+                    setDestinationData((prev: any) => ({
+                      ...prev,
+                      locationId: loc.locationId,
+                      companyName: loc.locationName || prev?.companyName || "",
+                      address1: loc.address1 || prev?.address1 || "",
+                      address2: loc.address2 || prev?.address2 || "",
+                      city: loc.city || prev?.city || "",
+                      state: loc.stateCode || prev?.state || "",
+                      country: loc.countryCode || prev?.country || "USA",
+                      postal: loc.zipCode || prev?.postal || "",
+                      contactName: loc.contactName || prev?.contactName || "",
+                      phone: loc.contactPhone || prev?.phone || "",
+                      email: loc.contactEmail || prev?.email || "",
+                      openTime: loc.openTime || prev?.openTime || undefined,
+                      closeTime: loc.closeTime || prev?.closeTime || undefined,
+                    }));
+                  }}
                 />
               </Col>
             </Row>

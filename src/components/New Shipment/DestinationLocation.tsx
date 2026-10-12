@@ -3,6 +3,8 @@ import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin } from 
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import { formatDisplayTime, TIME_OPTIONS } from './OriginLocation';
+import axios from 'axios';
+import { API_BASE_URL, DEFAULT_CLIENT_CODE } from '../../config/apiConfig';
 
 export interface DestinationLocationProps {
   initialData?: {
@@ -27,17 +29,29 @@ export interface DestinationLocationProps {
   };
   locationsList?: any[];
   loading?: boolean;
+  clientCode?: string;
+  onLocationSelect?: (location: any) => void;
 }
 
-const DestinationLocation: React.FC<DestinationLocationProps> = ({ initialData, locationsList }) => {
+const DestinationLocation: React.FC<DestinationLocationProps> = ({
+  initialData,
+  locationsList,
+  clientCode,
+  onLocationSelect,
+}) => {
   const [form] = Form.useForm();
   const { searchPostals, loadingPostal } = usePostalLookup();
-  const [selectedLocationId, setSelectedLocationId] = useState<string | undefined>(undefined);
+  const [, setSelectedLocationId] = useState<string | undefined>(undefined);
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isFocusedRef = useRef(false);
   const postalRef = useRef("");
+
+  // Company Name Search State
+  const [companyOptions, setCompanyOptions] = useState<{ value: string; label: React.ReactNode; location: any; key: string }[]>([]);
+  const [loadingCompany, setLoadingCompany] = useState(false);
+  const searchCompanyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const timeOptions = useMemo(() => {
     const opts = [...TIME_OPTIONS];
@@ -64,6 +78,29 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({ initialData, 
       }
     }
   }, [initialData?.locationId, initialData?.companyName, locationsList]);
+
+  // Populate company options from locationsList if passed
+  useEffect(() => {
+    if (locationsList && locationsList.length > 0) {
+      setCompanyOptions(
+        locationsList.map((loc: any, idx: number) => ({
+          value: loc.locationName || `Location-${idx + 1}`,
+          key: `prop-dest-loc-${loc.locationId || idx}`,
+          location: loc,
+          label: (
+            <div className="loc-select-option" key={`prop-dest-lbl-${loc.locationId || idx}`}>
+              <span className="loc-select-name">{loc.locationName || "Unnamed Location"}</span>
+              <span className="loc-select-subtext">
+                {[loc.address1, loc.city, loc.stateCode, loc.zipCode]
+                  .filter(Boolean)
+                  .join(", ")}
+              </span>
+            </div>
+          ),
+        }))
+      );
+    }
+  }, [locationsList]);
 
   useEffect(() => {
     if (initialData) {
@@ -93,28 +130,132 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({ initialData, 
     }
   }, [initialData, form]);
 
-  const handleLocationSelect = (locId: string) => {
-    setSelectedLocationId(locId);
-    const selectedLoc = locationsList?.find((loc) => String(loc.locationId) === locId);
-    if (selectedLoc) {
-      const openTimeFormatted = formatDisplayTime(selectedLoc.openTime) || "08:00 AM";
-      const closeTimeFormatted = formatDisplayTime(selectedLoc.closeTime) || "05:00 PM";
-      form.setFieldsValue({
-        companyName: selectedLoc.locationName,
-        address1: selectedLoc.address1 || "",
-        address2: selectedLoc.address2 || "",
-        country: selectedLoc.countryCode || "USA",
-        postal: selectedLoc.zipCode || form.getFieldValue("postal") || "",
-        city: selectedLoc.city || "",
-        state: selectedLoc.stateCode || "",
-        contactName: selectedLoc.contactName || "",
-        phone: selectedLoc.contactPhone || "",
-        email: selectedLoc.contactEmail || "",
-        openTime: openTimeFormatted,
-        closeTime: closeTimeFormatted,
-        delOpenTime: openTimeFormatted,
-        delCloseTime: closeTimeFormatted,
-      });
+  // Handle SearchLocations API for Company Name
+  const handleSearchCompany = (searchText: string) => {
+    if (searchCompanyTimeoutRef.current) {
+      clearTimeout(searchCompanyTimeoutRef.current);
+    }
+
+    const trimmed = (searchText || "").trim();
+    if (!trimmed) {
+      if (locationsList && locationsList.length > 0) {
+        setCompanyOptions(
+          locationsList.map((loc: any, idx: number) => ({
+            value: loc.locationName || `Location-${idx + 1}`,
+            key: `prop-dest-loc-${loc.locationId || idx}`,
+            location: loc,
+            label: (
+              <div className="loc-select-option" key={`prop-dest-lbl-${loc.locationId || idx}`}>
+                <span className="loc-select-name">{loc.locationName || "Unnamed Location"}</span>
+                <span className="loc-select-subtext">
+                  {[loc.address1, loc.city, loc.stateCode, loc.zipCode]
+                    .filter(Boolean)
+                    .join(", ")}
+                </span>
+              </div>
+            ),
+          }))
+        );
+      } else {
+        setCompanyOptions([]);
+      }
+      return;
+    }
+
+    searchCompanyTimeoutRef.current = setTimeout(async () => {
+      setLoadingCompany(true);
+      try {
+        const token = localStorage.getItem("authToken");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          accept: "application/json, text/plain, */*",
+        };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const clientCodeToUse =
+          clientCode ||
+          sessionStorage.getItem("customerLocation_selectedClientCode") ||
+          sessionStorage.getItem("quotes_selectedClientCode") ||
+          DEFAULT_CLIENT_CODE ||
+          "DEVTS";
+
+        const response = await axios.post(
+          `${API_BASE_URL}/Location/SearchLocations`,
+          {
+            clientCode: clientCodeToUse,
+            searchText: trimmed,
+            pageNumber: 1,
+            pageSize: 20,
+          },
+          { headers }
+        );
+
+        let dataList: any[] = [];
+        if (response.data?.isSuccess && response.data?.data) {
+          const raw = response.data.data;
+          dataList = Array.isArray(raw) ? raw : (raw.items || []);
+        }
+
+        if (dataList.length > 0) {
+          setCompanyOptions(
+            dataList.map((loc: any, idx: number) => ({
+              value: loc.locationName || trimmed,
+              key: `search-dest-${loc.locationId || idx}-${idx}`,
+              location: loc,
+              label: (
+                <div className="loc-select-option" key={`search-dest-lbl-${loc.locationId || idx}`}>
+                  <span className="loc-select-name">{loc.locationName || "Unnamed Location"}</span>
+                  <span className="loc-select-subtext">
+                    {[loc.address1, loc.city, loc.stateCode, loc.zipCode]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
+                </div>
+              ),
+            }))
+          );
+        } else {
+          setCompanyOptions([]);
+        }
+      } catch (error) {
+        console.error("Error searching locations for company name:", error);
+        setCompanyOptions([]);
+      } finally {
+        setLoadingCompany(false);
+      }
+    }, 400);
+  };
+
+  const handleSelectCompany = (value: string, option: any) => {
+    const loc = option?.location;
+    if (!loc) return;
+
+    setSelectedLocationId(String(loc.locationId));
+    const openTimeFormatted = formatDisplayTime(loc.openTime) || "08:00 AM";
+    const closeTimeFormatted = formatDisplayTime(loc.closeTime) || "05:00 PM";
+    const fullPostal = loc.zipCode && loc.city && loc.stateCode
+      ? `${loc.zipCode} - ${loc.city}, ${loc.stateCode}`
+      : (loc.zipCode || form.getFieldValue("postal") || "");
+
+    form.setFieldsValue({
+      companyName: loc.locationName || value,
+      address1: loc.address1 || "",
+      address2: loc.address2 || "",
+      country: loc.countryCode || "USA",
+      postal: fullPostal,
+      city: loc.city || "",
+      state: loc.stateCode || "",
+      contactName: loc.contactName || "",
+      phone: loc.contactPhone || "",
+      email: loc.contactEmail || "",
+      openTime: openTimeFormatted,
+      closeTime: closeTimeFormatted,
+      delOpenTime: openTimeFormatted,
+      delCloseTime: closeTimeFormatted,
+    });
+
+    if (onLocationSelect) {
+      onLocationSelect(loc);
     }
   };
 
@@ -230,42 +371,20 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({ initialData, 
       extra={<Button type="link" className="add-master-btn add-line-btn">+ Add to Master</Button>}
     >
       <Form layout="vertical" form={form} initialValues={{ country: "USA" }}>
-        {locationsList && locationsList.length > 0 ? (
-          <Form.Item label="Company Name">
-            <Select
-              showSearch
-              placeholder="Select company name"
-              value={selectedLocationId}
-              onChange={handleLocationSelect}
-              optionLabelProp="label"
-              filterOption={(input, option) =>
-                String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
-              }
-            >
-              {locationsList.map((loc: any) => (
-                <Select.Option
-                  key={loc.locationId}
-                  value={String(loc.locationId)}
-                  label={loc.locationName}
-                >
-                  <div className="loc-select-option">
-                    <span className="loc-select-name">{loc.locationName}</span>
-                    <span className="loc-select-subtext">
-                      {[loc.address1, loc.city, loc.stateCode, loc.zipCode].filter(Boolean).join(", ")}
-                    </span>
-                  </div>
-                </Select.Option>
-              ))}
-            </Select>
-            <Form.Item name="companyName" noStyle>
-              <Input type="hidden" />
-            </Form.Item>
-          </Form.Item>
-        ) : (
-          <Form.Item label="Company Name" name="companyName">
-            <Input placeholder="Company name" />
-          </Form.Item>
-        )}
+        <Form.Item label="Company Name" name="companyName">
+          <AutoComplete
+            options={companyOptions}
+            onSearch={handleSearchCompany}
+            onSelect={handleSelectCompany}
+            placeholder="Company name"
+            allowClear
+          >
+            <Input
+              placeholder="Company name"
+              suffix={loadingCompany ? <Spin size="small" /> : null}
+            />
+          </AutoComplete>
+        </Form.Item>
         <Form.Item label="Address Line 1" name="address1">
           <Input placeholder="Street address" />
         </Form.Item>

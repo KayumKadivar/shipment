@@ -994,6 +994,7 @@ function NewQuote() {
                             },
                           },
                         ]}
+                        className="quote-item-input"
                       >
                         <Input
                           value={item.units}
@@ -1012,6 +1013,7 @@ function NewQuote() {
                       <Form.Item
                         name={['items', item.id, 'handlingUnit']}
                         rules={[{ required: true, message: "Handling unit is required" }]}
+                        className="quote-item-input"
                       >
                         <Select
                           value={item.handlingUnit}
@@ -1041,6 +1043,7 @@ function NewQuote() {
                             },
                           },
                         ]}
+                        className="quote-item-input"
                       >
                         <Input
                           value={item.pieces}
@@ -1069,6 +1072,7 @@ function NewQuote() {
                             },
                           },
                         ]}
+                        className="quote-item-input"
                       >
                         <Input
                           value={item.weight}
@@ -1087,6 +1091,7 @@ function NewQuote() {
                       <Form.Item
                         name={['items', item.id, 'freightClass']}
                         rules={[{ required: true, message: "Class is required" }]}
+                        className="quote-item-input"
                       >
                         <Select
                           value={item.freightClass}
@@ -1159,6 +1164,7 @@ function NewQuote() {
                                   ),
                           },
                         ]}
+                        className="quote-item-input"
                       >
                         <Input
                           value={item.nmfc}
@@ -1222,6 +1228,7 @@ function NewQuote() {
                             <Form.Item
                               name={['items', item.id, 'hazMatClass']}
                               rules={[{ required: true, message: "Hazmat Class is required" }]}
+                              className="quote-item-input"
                             >
                               <Input
                                 value={item.hazMatClass}
@@ -1240,6 +1247,7 @@ function NewQuote() {
                             <Form.Item
                               name={['items', item.id, 'hazMatUN']}
                               rules={[{ required: true, message: "Hazmat UN is required" }]}
+                              className="quote-item-input"
                             >
                               <Input
                                 value={item.hazMatUN}

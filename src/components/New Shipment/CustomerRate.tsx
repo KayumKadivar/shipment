@@ -16,7 +16,7 @@ export interface CustomerRateProps {
     fuelSurcharge?: number;
     accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[];
   };
-  onRate?: () => void;
+  onRate?: () => void | Promise<void>;
   loadingRate?: boolean;
   rateError?: string | null;
   onClearError?: () => void;

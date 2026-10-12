@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
+import { Card, Form, Input, Row, Col, Button, AutoComplete, Spin } from 'antd';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import axios from 'axios';
@@ -14,12 +14,157 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
   const { searchPostals, lookupPostal, loadingPostal } = usePostalLookup();
   const [loading, setLoading] = useState(false);
   const [locationsList, setLocationsList] = useState<any[]>([]);
-  const [selectedLocationId, setSelectedLocationId] = useState<string | undefined>(undefined);
+  const [, setSelectedLocationId] = useState<string | undefined>(undefined);
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isFocusedRef = useRef(false);
   const postalRef = useRef("");
+
+  // Company Name Search State
+  const [companyOptions, setCompanyOptions] = useState<{ value: string; label: React.ReactNode; location: any; key: string }[]>([]);
+  const [loadingCompany, setLoadingCompany] = useState(false);
+  const searchCompanyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync companyOptions with locationsList when zip search updates it
+  useEffect(() => {
+    if (locationsList && locationsList.length > 0) {
+      setCompanyOptions(
+        locationsList.map((loc: any, idx: number) => ({
+          value: loc.locationName || `Location-${idx + 1}`,
+          key: `prop-bill-loc-${loc.locationId || idx}`,
+          location: loc,
+          label: (
+            <div className="loc-select-option" key={`prop-bill-lbl-${loc.locationId || idx}`}>
+              <span className="loc-select-name">{loc.locationName || "Unnamed Location"}</span>
+              <span className="loc-select-subtext">
+                {[loc.address1, loc.city, loc.stateCode, loc.zipCode]
+                  .filter(Boolean)
+                  .join(", ")}
+              </span>
+            </div>
+          ),
+        }))
+      );
+    }
+  }, [locationsList]);
+
+  // Handle SearchLocations API for Company Name
+  const handleSearchCompany = (searchText: string) => {
+    if (searchCompanyTimeoutRef.current) {
+      clearTimeout(searchCompanyTimeoutRef.current);
+    }
+
+    const trimmed = (searchText || "").trim();
+    if (!trimmed) {
+      if (locationsList && locationsList.length > 0) {
+        setCompanyOptions(
+          locationsList.map((loc: any, idx: number) => ({
+            value: loc.locationName || `Location-${idx + 1}`,
+            key: `prop-bill-loc-${loc.locationId || idx}`,
+            location: loc,
+            label: (
+              <div className="loc-select-option" key={`prop-bill-lbl-${loc.locationId || idx}`}>
+                <span className="loc-select-name">{loc.locationName || "Unnamed Location"}</span>
+                <span className="loc-select-subtext">
+                  {[loc.address1, loc.city, loc.stateCode, loc.zipCode]
+                    .filter(Boolean)
+                    .join(", ")}
+                </span>
+              </div>
+            ),
+          }))
+        );
+      } else {
+        setCompanyOptions([]);
+      }
+      return;
+    }
+
+    searchCompanyTimeoutRef.current = setTimeout(async () => {
+      setLoadingCompany(true);
+      try {
+        const token = localStorage.getItem("authToken");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          accept: "application/json, text/plain, */*",
+        };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const clientCodeToUse =
+          clientCode ||
+          sessionStorage.getItem("customerLocation_selectedClientCode") ||
+          sessionStorage.getItem("quotes_selectedClientCode") ||
+          DEFAULT_CLIENT_CODE ||
+          "DEVTS";
+
+        const response = await axios.post(
+          `${API_BASE_URL}/Location/SearchLocations`,
+          {
+            clientCode: clientCodeToUse,
+            searchText: trimmed,
+            pageNumber: 1,
+            pageSize: 20,
+          },
+          { headers }
+        );
+
+        let dataList: any[] = [];
+        if (response.data?.isSuccess && response.data?.data) {
+          const raw = response.data.data;
+          dataList = Array.isArray(raw) ? raw : (raw.items || []);
+        }
+
+        if (dataList.length > 0) {
+          setCompanyOptions(
+            dataList.map((loc: any, idx: number) => ({
+              value: loc.locationName || trimmed,
+              key: `search-bill-${loc.locationId || idx}-${idx}`,
+              location: loc,
+              label: (
+                <div className="loc-select-option" key={`search-bill-lbl-${loc.locationId || idx}`}>
+                  <span className="loc-select-name">{loc.locationName || "Unnamed Location"}</span>
+                  <span className="loc-select-subtext">
+                    {[loc.address1, loc.city, loc.stateCode, loc.zipCode]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
+                </div>
+              ),
+            }))
+          );
+        } else {
+          setCompanyOptions([]);
+        }
+      } catch (error) {
+        console.error("Error searching locations for bill to company name:", error);
+        setCompanyOptions([]);
+      } finally {
+        setLoadingCompany(false);
+      }
+    }, 400);
+  };
+
+  const handleSelectCompany = (value: string, option: any) => {
+    const loc = option?.location;
+    if (!loc) return;
+
+    setSelectedLocationId(String(loc.locationId));
+    const fullPostal = loc.zipCode && loc.city && loc.stateCode
+      ? `${loc.zipCode} - ${loc.city}, ${loc.stateCode}`
+      : (loc.zipCode || form.getFieldValue("postal") || "");
+
+    form.setFieldsValue({
+      companyName: loc.locationName || value,
+      address1: loc.address1 || "",
+      address2: loc.address2 || "",
+      country: loc.countryCode || form.getFieldValue("country") || "USA",
+      postal: fullPostal,
+      city: loc.city || "",
+      state: loc.stateCode || "",
+      fax: loc.fax || "",
+    });
+  };
 
   const fetchLocationsByZip = async (zip: string) => {
     if (!zip || zip.trim().length < 3) return;
@@ -68,7 +213,7 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
           companyName: matched.locationName || "",
           address1: matched.address1 || "",
           address2: matched.address2 || "",
-          country: matched.countryCode || country || "USA",
+          country: matched.countryCode || country || "",
           postal: matched.zipCode || cleanZip,
           city: matched.city || "",
           state: matched.stateCode || "",
@@ -213,65 +358,26 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
     }
   };
 
-  const handleLocationSelect = (locId: string) => {
-    setSelectedLocationId(locId);
-    const selectedLoc = locationsList.find((loc) => String(loc.locationId) === locId);
-    if (selectedLoc) {
-      form.setFieldsValue({
-        companyName: selectedLoc.locationName,
-        address1: selectedLoc.address1 || "",
-        address2: selectedLoc.address2 || "",
-        country: selectedLoc.countryCode || form.getFieldValue("country") || "USA",
-        postal: selectedLoc.zipCode || form.getFieldValue("postal") || "",
-        city: selectedLoc.city || "",
-        state: selectedLoc.stateCode || "",
-        fax: selectedLoc.fax || "",
-      });
-    }
-  };
-
   return (
     <Card 
       title="Bill To Location" 
       extra={<Button type="link" className="add-master-btn">+ Add to Master</Button>}
     >
       <Form layout="vertical" form={form} initialValues={{ country: "USA" }}>
-        {locationsList && locationsList.length > 0 ? (
-          <Form.Item label="Company Name">
-            <Select
-              showSearch
-              placeholder="Select company name"
-              value={selectedLocationId}
-              onChange={handleLocationSelect}
-              optionLabelProp="label"
-              filterOption={(input, option) =>
-                String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
-              }
-            >
-              {locationsList.map((loc: any) => (
-                <Select.Option
-                  key={loc.locationId}
-                  value={String(loc.locationId)}
-                  label={loc.locationName}
-                >
-                  <div className="loc-select-option">
-                    <span className="loc-select-name">{loc.locationName}</span>
-                    <span className="loc-select-subtext">
-                      {[loc.address1, loc.city, loc.stateCode, loc.zipCode].filter(Boolean).join(", ")}
-                    </span>
-                  </div>
-                </Select.Option>
-              ))}
-            </Select>
-            <Form.Item name="companyName" noStyle>
-              <Input type="hidden" />
-            </Form.Item>
-          </Form.Item>
-        ) : (
-          <Form.Item label="Company Name" name="companyName">
-            <Input placeholder='Company Name' />
-          </Form.Item>
-        )}
+        <Form.Item label="Company Name" name="companyName">
+          <AutoComplete
+            options={companyOptions}
+            onSearch={handleSearchCompany}
+            onSelect={handleSelectCompany}
+            placeholder="Company Name"
+            allowClear
+          >
+            <Input
+              placeholder="Company Name"
+              suffix={loadingCompany ? <Spin size="small" /> : null}
+            />
+          </AutoComplete>
+        </Form.Item>
         <Form.Item label="Address Line 1" name="address1">
           <Input placeholder="Address Line 1" />
         </Form.Item>
