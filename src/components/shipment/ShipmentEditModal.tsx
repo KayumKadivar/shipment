@@ -1,6 +1,6 @@
 import { Form, Input, InputNumber, Modal } from "antd";
 import { useEffect } from "react";
-import type { ShipmentRecord } from "../../pages/shipmentData";
+import type { ShipmentRecord } from "../../types/shipment.types";
 
 export type ShipmentEditValues = Omit<ShipmentRecord, "key" | "selected">;
 
@@ -59,9 +59,9 @@ function ShipmentEditModal({
         </Form.Item>
         <div className='shipment-edit-grid'>
           <Form.Item
-            label='BOL #'
-            name='bol'
-            rules={[{ required: true, message: "Enter BOL" }]}>
+            label='Load #'
+            name='loadNumber'
+            rules={[{ required: true, message: "Enter load number" }]}>
             <Input />
           </Form.Item>
           <Form.Item

@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { setProductItems, addProductRow, removeProductRow, updateProductRow, setWeightUnit, resetProductItems, type ProductItem } from '../../store/productSlice';
+import { setProductItems, addProductRow, removeProductRow, updateProductRow, updateProductHazmat, setWeightUnit, resetProductItems, type ProductItem } from '../../store/productSlice';
 import { setSelectedAccessorials, fetchAccessorials, clearSelectedAccessorials } from '../../store/accessorialsSlice';
 import { fetchCarrierRates, clearRateError } from '../../store/customerRateSlice';
 import {
   Button, Card, Input, Segmented, Checkbox, Select,
-  Row, Col, Flex, message, Spin,
+  Row, Col, Flex, message, Spin, AutoComplete, Tooltip, Modal, Form,
 } from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { DownOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -32,6 +32,91 @@ const classOptions = [
   "110", "125", "150", "175", "200", "250", "300", "400", "500",
 ].map((value) => ({ value, label: value }));
 
+interface ShipmentPrefillProduct {
+  quoteProductId?: string | number;
+  packagingGroup?: string;
+  packageType?: string;
+  handlingUnit?: string;
+  length?: string | number;
+  width?: string | number;
+  height?: string | number;
+  weight?: string | number;
+  density?: string | number;
+  pcfDensity?: string | number;
+  pallets?: string | number;
+  units?: string | number;
+  pieces?: string | number;
+  description?: string;
+  stackable?: boolean;
+  isStackable?: boolean;
+  isHazmat?: boolean;
+  hazmat?: boolean;
+  hazMat?: boolean;
+  productNMFC?: string;
+  nmfc?: string;
+  productClass?: string | number;
+  class?: string | number;
+  freightClass?: string | number;
+  hazmatClass?: string;
+  hazMatClass?: string;
+  hazmatUN?: string;
+  hazMatUN?: string;
+}
+
+interface ShipmentPrefillQuote {
+  quoteRequestId?: string | number;
+  quoteProducts?: ShipmentPrefillProduct[];
+  shipments?: ShipmentPrefillProduct[];
+  quoteAccessorials?: Array<{ accCode?: string }>;
+  clientName?: string;
+  clientCode?: string;
+  profileCode?: string;
+  originZip?: string;
+  originCity?: string;
+  originStateCode?: string;
+  originCountry?: string;
+  pickupDate?: string;
+  destinationZip?: string;
+  destinationCity?: string;
+  destinationStateCode?: string;
+  destinationCountry?: string;
+  mode?: string;
+  selectedCarrier?: ShipmentPrefillCarrier;
+  quoteResults?: ShipmentPrefillCarrier[];
+  rate?: ShipmentPrefillCarrier;
+}
+
+interface ShipmentPrefillCarrier {
+  name?: string;
+  code?: string;
+  service?: string;
+  price?: number;
+  grossCharge?: number;
+  discount?: number;
+  fuelSurcharge?: number;
+  carrierName?: string;
+  scac?: string;
+  serviceLevel?: string;
+  totalShipmentCost?: number;
+  netCharge?: number;
+  quoteCostDetails?: Array<any>;
+  costDetails?: Array<any>;
+  accessorialCharges?: Array<{
+    accessorialDescription?: string;
+    accessorialCharge?: number;
+    code?: string;
+    amount?: number;
+    description?: string;
+    accName?: string;
+  }>;
+}
+
+interface NewShipmentLocationState {
+  quote?: ShipmentPrefillQuote;
+  selectedCarrier?: ShipmentPrefillCarrier;
+  rate?: ShipmentPrefillCarrier;
+  reference?: string | number;
+}
 const formatNMFC = (raw: string): string => {
   const cleaned = raw.replace(/[^\d-]/g, "");
   const digits = cleaned.replace(/\D/g, "").slice(0, 8);
@@ -55,7 +140,7 @@ const NewShipment: React.FC = () => {
   const dispatch = useAppDispatch();
   const location = useLocation();
 
-  const prefillData = (location.state as any) || null;
+  const prefillData = location.state as NewShipmentLocationState | null;
   const quote = prefillData?.quote;
   const selectedCarrier = prefillData?.selectedCarrier;
   const reference = prefillData?.reference;
@@ -67,6 +152,25 @@ const NewShipment: React.FC = () => {
   const weightUnit = useAppSelector((state) => state.product.weightUnit);
   const [touchedNMFC, setTouchedNMFC] = useState<Record<string, boolean>>({});
   const [formSubmitted, setFormSubmitted] = useState(false);
+
+  // Description autocomplete state (Products)
+  const [productOptions, setProductOptions] = useState<
+    { value: string; key: string; product: any; label: React.ReactNode }[]
+  >([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const searchProductTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Hazmat modal state
+  const [isHazmatModalOpen, setIsHazmatModalOpen] = useState(false);
+  const [activeHazmatItem, setActiveHazmatItem] = useState<ProductItem | null>(null);
+  const [hazmatForm, setHazmatForm] = useState({
+    hazmatUN: "",
+    hazmatProperShippingName: "",
+    hazmatClass: "",
+    hazmatPackingGroup: "",
+    hazmatPhone: "",
+    hazmatContact: "",
+  });
 
   // Carrier rate modal state
   const ratesFromStore = useAppSelector((state) => state.customerRate.rates) as CarrierRate[];
@@ -94,7 +198,7 @@ const NewShipment: React.FC = () => {
       : (quote?.shipments && quote.shipments.length > 0 ? quote.shipments : null);
 
     if (productsSource && productsSource.length > 0) {
-      const mapped: ProductItem[] = productsSource.map((p: any, idx: number) => {
+      const mapped: ProductItem[] = productsSource.map((p, idx) => {
         const rawPackage = String(p.packagingGroup || p.packageType || p.handlingUnit || "").trim();
         const matchedPackage = handlingUnitOptions.find(
           (opt) => opt.value.toLowerCase() === rawPackage.toLowerCase()
@@ -134,7 +238,7 @@ const NewShipment: React.FC = () => {
 
   useEffect(() => {
     if (quote?.quoteAccessorials && quote.quoteAccessorials.length > 0 && accessorialsList.length > 0) {
-      const quoteAccCodes = quote.quoteAccessorials.map((a: any) => String(a.accCode || "").toUpperCase());
+      const quoteAccCodes = quote.quoteAccessorials.map((a) => String(a.accCode || "").toUpperCase());
       const matched = accessorialsList
         .filter((item) => {
           const c = String(item.accesorialCode || "").toUpperCase();
@@ -157,7 +261,7 @@ const NewShipment: React.FC = () => {
       companyName: "",
       address1: "",
       address2: "",
-      postal: quote?.originZip || "",
+      postal: (quote?.originZip || "").split(' - ')[0].trim(),
       city: quote?.originCity || "",
       state: quote?.originStateCode || "",
       country: quote?.originCountry || "USA",
@@ -171,7 +275,7 @@ const NewShipment: React.FC = () => {
       companyName: "",
       address1: "",
       address2: "",
-      postal: quote?.destinationZip || "",
+      postal: (quote?.destinationZip || "").split(' - ')[0].trim(),
       city: quote?.destinationCity || "",
       state: quote?.destinationStateCode || "",
       country: quote?.destinationCountry || "USA",
@@ -230,19 +334,9 @@ const NewShipment: React.FC = () => {
               if (matched) {
                 setOriginData((prev: any) => ({
                   ...prev,
-                  locationId: matched.locationId,
-                  companyName: matched.locationName || prev?.companyName || "",
-                  address1: matched.address1 || prev?.address1 || "",
-                  address2: matched.address2 || prev?.address2 || "",
-                  city: matched.city || prev?.city || "",
-                  state: matched.stateCode || prev?.state || "",
-                  country: matched.countryCode || prev?.country || "USA",
-                  postal: matched.zipCode || prev?.postal || origZip,
-                  contactName: matched.contactName || prev?.contactName || "",
-                  phone: matched.contactPhone || prev?.phone || "",
-                  email: matched.contactEmail || prev?.email || "",
-                  openTime: matched.openTime || prev?.openTime || undefined,
-                  closeTime: matched.closeTime || prev?.closeTime || undefined,
+                  city: prev?.city || matched.city || "",
+                  state: prev?.state || matched.stateCode || "",
+                  country: prev?.country || matched.countryCode || "USA",
                 }));
               }
             }
@@ -289,19 +383,9 @@ const NewShipment: React.FC = () => {
               if (matched) {
                 setDestinationData((prev: any) => ({
                   ...prev,
-                  locationId: matched.locationId,
-                  companyName: matched.locationName || prev?.companyName || "",
-                  address1: matched.address1 || prev?.address1 || "",
-                  address2: matched.address2 || prev?.address2 || "",
-                  city: matched.city || prev?.city || "",
-                  state: matched.stateCode || prev?.state || "",
-                  country: matched.countryCode || prev?.country || "USA",
-                  postal: matched.zipCode || prev?.postal || destZip,
-                  contactName: matched.contactName || prev?.contactName || "",
-                  phone: matched.contactPhone || prev?.phone || "",
-                  email: matched.contactEmail || prev?.email || "",
-                  openTime: matched.openTime || prev?.openTime || undefined,
-                  closeTime: matched.closeTime || prev?.closeTime || undefined,
+                  city: prev?.city || matched.city || "",
+                  state: prev?.state || matched.stateCode || "",
+                  country: prev?.country || matched.countryCode || "USA",
                 }));
               }
             }
@@ -319,13 +403,105 @@ const NewShipment: React.FC = () => {
     fetchLocationsData();
   }, [quote]);
 
+  const fetchProducts = async (query = "") => {
+    setLoadingProducts(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const clientCodeToUse =
+        quote?.clientCode ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "DEVTS";
+
+      const payload = {
+        clientCode: clientCodeToUse,
+        searchText: query || "",
+        pageNumber: 0,
+        pageSize: 0,
+      };
+
+      const response = await axios.post(
+        `${API_BASE_URL}/Product/SearchProducts`,
+        payload,
+        { headers }
+      );
+
+      let dataList: any[] = [];
+      if (response.data?.isSuccess && response.data?.data) {
+        const raw = response.data.data;
+        dataList = Array.isArray(raw) ? raw : (raw.items || []);
+      }
+
+      if (dataList.length > 0) {
+        const options = dataList.map((prod: any, idx: number) => {
+          const prodDesc = prod.productDescription || prod.description || "";
+          const subtext = [
+            prod.productClass ? `Class: ${prod.productClass}` : "",
+            prod.productNMFC ? `NMFC: ${prod.productNMFC}` : "",
+            prod.weight ? `${prod.weight} lbs` : "",
+            prod.commodity || "",
+          ]
+            .filter(Boolean)
+            .join(" | ");
+
+          return {
+            value: prodDesc,
+            key: `prod-opt-${prod.productId || idx}-${idx}`,
+            product: prod,
+            label: (
+              <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "2px 0" }}>
+                <span style={{ fontWeight: 600, color: "#1f2937", fontSize: 12 }}>
+                  {prodDesc || "Unnamed Product"}
+                </span>
+                {subtext && (
+                  <span style={{ fontSize: 11, color: "#808080" }}>
+                    {subtext}
+                  </span>
+                )}
+              </div>
+            ),
+          };
+        });
+        setProductOptions(options);
+      } else {
+        setProductOptions([]);
+      }
+    } catch (error) {
+      console.error("Error calling SearchProducts API for description:", error);
+      setProductOptions([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts("");
+  }, []);
+
+  const handleSearchProducts = (searchText: string) => {
+    if (searchProductTimeoutRef.current) {
+      clearTimeout(searchProductTimeoutRef.current);
+    }
+    const trimmed = (searchText || "").trim();
+    searchProductTimeoutRef.current = setTimeout(() => {
+      fetchProducts(trimmed);
+    }, 350);
+  };
+
   const shipmentInfoData = {
     serviceLevel: selectedCarrier?.service || "",
     customerRef: String(reference || quote?.quoteRequestId || ""),
     mode: quote?.mode || "",
   };
 
-  const rawCarrier = selectedCarrierRate || prefillData?.selectedCarrier || prefillData?.rate || quote?.selectedCarrier || quote?.quoteResults?.[0];
+  const rawCarrier: any = selectedCarrierRate || prefillData?.selectedCarrier || prefillData?.rate || quote?.selectedCarrier || quote?.quoteResults?.[0];
 
   const handleSelectRateFromModal = (rate: CarrierRate) => {
     setSelectedCarrierRate(rate);
@@ -412,6 +588,10 @@ const NewShipment: React.FC = () => {
       hazMat: Boolean(i.hazmat),
       hazMatClass: i.hazmatClass || undefined,
       hazMatUN: i.hazmatUN || undefined,
+      hazMatProperShippingName: i.hazmatProperShippingName || undefined,
+      hazMatPackingGroup: i.hazmatPackingGroup || undefined,
+      hazMatPhone: i.hazmatPhone || undefined,
+      hazMatContact: i.hazmatContact || undefined,
       nmfc: i.nmfc || undefined,
       description: i.description || "Freight",
       pallets: i.packageType === "Pallet" ? Number(i.pallets) || 1 : 0,
@@ -462,8 +642,6 @@ const NewShipment: React.FC = () => {
       totalHeight: 0,
       isAudit: false,
       shipmentValue: 0,
-      originPortCode: undefined,
-      destPortCode: undefined,
       equipment: undefined,
       codAmount: 0,
       totalLinearFeet: 0,
@@ -499,28 +677,82 @@ const NewShipment: React.FC = () => {
     }
   };
 
+  const handleOpenHazmatModal = (item: ProductItem) => {
+    setActiveHazmatItem(item);
+    setHazmatForm({
+      hazmatUN: item.hazmatUN || "",
+      hazmatProperShippingName: item.hazmatProperShippingName || "",
+      hazmatClass: item.hazmatClass || "",
+      hazmatPackingGroup: item.hazmatPackingGroup || "",
+      hazmatPhone: item.hazmatPhone || "",
+      hazmatContact: item.hazmatContact || "",
+    });
+    setIsHazmatModalOpen(true);
+  };
+
+  const handleHazmatModalOk = () => {
+    if (activeHazmatItem) {
+      dispatch(
+        updateProductHazmat({
+          id: activeHazmatItem.id,
+          hazmat: true,
+          hazmatUN: hazmatForm.hazmatUN,
+          hazmatProperShippingName: hazmatForm.hazmatProperShippingName,
+          hazmatClass: hazmatForm.hazmatClass,
+          hazmatPackingGroup: hazmatForm.hazmatPackingGroup,
+          hazmatPhone: hazmatForm.hazmatPhone,
+          hazmatContact: hazmatForm.hazmatContact,
+        })
+      );
+    }
+    setIsHazmatModalOpen(false);
+    setActiveHazmatItem(null);
+  };
+
+  const handleHazmatModalCancel = () => {
+    setIsHazmatModalOpen(false);
+    setActiveHazmatItem(null);
+  };
+
+  const renderWithTooltip = (
+    child: React.ReactElement,
+    errorMessage: string,
+    hasError: boolean
+  ) => (
+    <Tooltip
+      title={hasError ? errorMessage : ""}
+      open={hasError ? undefined : false}
+      placement="top"
+      trigger={["hover", "focus"]}
+      color="#df2027"
+      overlayClassName="quote-item-error-tooltip"
+      arrow={{ pointAtCenter: true }}
+    >
+      <div style={{ width: "100%" }}>{child}</div>
+    </Tooltip>
+  );
+
   const handleUpdateField = (id: string, field: keyof ProductItem, value: any) => {
     if (field === 'stackable') {
       const isStackable = Boolean(value);
       dispatch(updateProductRow({ id, field: 'stackable', value: isStackable }));
       if (isStackable) {
-        dispatch(updateProductRow({ id, field: 'hazmat', value: false }));
-        dispatch(updateProductRow({ id, field: 'hazmatClass', value: '' }));
-        dispatch(updateProductRow({ id, field: 'hazmatUN', value: '' }));
+        dispatch(
+          updateProductHazmat({
+            id,
+            hazmat: false,
+            hazmatClass: '',
+            hazmatUN: '',
+            hazmatProperShippingName: '',
+            hazmatPackingGroup: '',
+            hazmatPhone: '',
+            hazmatContact: '',
+          })
+        );
       }
       return;
     }
-    if (field === 'hazmat') {
-      const isHazmat = Boolean(value);
-      dispatch(updateProductRow({ id, field: 'hazmat', value: isHazmat }));
-      if (isHazmat) {
-        dispatch(updateProductRow({ id, field: 'stackable', value: false }));
-      } else {
-        dispatch(updateProductRow({ id, field: 'hazmatClass', value: '' }));
-        dispatch(updateProductRow({ id, field: 'hazmatUN', value: '' }));
-      }
-      return;
-    }
+
     dispatch(updateProductRow({ id, field, value }));
   };
 
@@ -570,7 +802,6 @@ const NewShipment: React.FC = () => {
     return true;
   };
 
-  const hasHazmat = items.some((i) => i.hazmat);
   const totalPallets = items.reduce((sum, item) => sum + (Number(item.pallets) || 0), 0);
   const totalPieces = items.reduce((sum, item) => sum + (Number(item.pieces) || 0), 0);
   const totalWeight = items.reduce((sum, item) => sum + (Number(item.weight) || 0), 0);
@@ -626,7 +857,7 @@ const NewShipment: React.FC = () => {
                       city: loc.city || prev?.city || "",
                       state: loc.stateCode || prev?.state || "",
                       country: loc.countryCode || prev?.country || "USA",
-                      postal: loc.zipCode || prev?.postal || "",
+                      postal: String(loc.zipCode || prev?.postal || "").split(' - ')[0].trim(),
                       contactName: loc.contactName || prev?.contactName || "",
                       phone: loc.contactPhone || prev?.phone || "",
                       email: loc.contactEmail || prev?.email || "",
@@ -652,7 +883,7 @@ const NewShipment: React.FC = () => {
                       city: loc.city || prev?.city || "",
                       state: loc.stateCode || prev?.state || "",
                       country: loc.countryCode || prev?.country || "USA",
-                      postal: loc.zipCode || prev?.postal || "",
+                      postal: String(loc.zipCode || prev?.postal || "").split(' - ')[0].trim(),
                       contactName: loc.contactName || prev?.contactName || "",
                       phone: loc.contactPhone || prev?.phone || "",
                       email: loc.contactEmail || prev?.email || "",
@@ -695,7 +926,7 @@ const NewShipment: React.FC = () => {
           <Flex align="center" gap={8} className="ns-product-extra">
             <span>Weight Unit</span>
             <Segmented 
-              options={['Lbs', 'Kgs']} 
+              options={['Lbs']} 
               value={weightUnit} 
               onChange={(val) => dispatch(setWeightUnit(val as "Lbs" | "Kgs"))} 
             />
@@ -703,7 +934,8 @@ const NewShipment: React.FC = () => {
         }
       >
         <div className="shipment-product-table">
-          <div className={`shipment-product-table__head ${hasHazmat ? 'has-hazmat' : ''}`}>
+          <div className="shipment-product-table__head">
+            <span>Description</span>
             <span>Units <em>*</em></span>
             <span>Handling Unit <em>*</em></span>
             <span>Pieces <em>*</em></span>
@@ -712,78 +944,96 @@ const NewShipment: React.FC = () => {
             <span>Dimensions [in]</span>
             <span>PCF/Density</span>
             <span>NMFC <em>*</em></span>
-            <span>Description</span>
             <span className="col-center">Stackable</span>
             <span className="col-center">Hazmat</span>
-            {hasHazmat && (
-              <>
-                <span>Hazmat Class <em>*</em></span>
-                <span>Hazmat UN <em>*</em></span>
-              </>
-            )}
             <span />
           </div>
 
           {items.map((item) => (
-            <div key={item.id} className={`shipment-product-item-row ${hasHazmat ? 'has-hazmat' : ''}`}>
-              <div>
+            <div key={item.id} className="shipment-product-item-row">
+              <AutoComplete
+                value={item.description}
+                options={productOptions}
+                placeholder="Description"
+                aria-label="Description"
+                onSearch={handleSearchProducts}
+                onFocus={() => {
+                  if (productOptions.length === 0) {
+                    fetchProducts("");
+                  }
+                }}
+                onChange={(val) => handleUpdateField(item.id, 'description', val)}
+                onSelect={(val, option) => {
+                  handleUpdateField(item.id, 'description', val);
+                  const prod = (option as any)?.product;
+                  if (prod) {
+                    if (prod.productClass) handleUpdateField(item.id, 'class', String(prod.productClass));
+                    if (prod.productNMFC) handleUpdateField(item.id, 'nmfc', String(prod.productNMFC));
+                    if (prod.weight) handleUpdateField(item.id, 'weight', String(prod.weight));
+                    if (prod.length) handleUpdateField(item.id, 'length', String(prod.length));
+                    if (prod.width) handleUpdateField(item.id, 'width', String(prod.width));
+                    if (prod.height) handleUpdateField(item.id, 'height', String(prod.height));
+                    if (prod.isHazmat || prod.hazmat) handleUpdateField(item.id, 'hazmat', true);
+                  }
+                }}
+                notFoundContent={loadingProducts ? <div style={{ padding: '6px 12px', textAlign: 'center' }}><Spin size="small" /></div> : undefined}
+                allowClear
+                className="quote-item-autocomplete"
+              />
+
+              {renderWithTooltip(
                 <Input
                   value={item.pallets ?? ''}
                   status={formSubmitted && (!item.pallets || Number(item.pallets) <= 0) ? 'error' : undefined}
                   onChange={(e) => handleUpdateField(item.id, 'pallets', e.target.value)}
-                />
-                {formSubmitted && (!item.pallets || Number(item.pallets) <= 0) && (
-                  <div className="ns-field-error">Units is required</div>
-                )}
-              </div>
+                />,
+                "Units is required",
+                Boolean(formSubmitted && (!item.pallets || Number(item.pallets) <= 0))
+              )}
 
-              <div>
+              {renderWithTooltip(
                 <Select
                   value={item.packageType || undefined}
                   placeholder="Package"
                   options={handlingUnitOptions}
                   status={formSubmitted && !item.packageType ? 'error' : undefined}
                   onChange={(val) => handleUpdateField(item.id, 'packageType', val)}
-                />
-                {formSubmitted && !item.packageType && (
-                  <div className="ns-field-error">Handling unit is required</div>
-                )}
-              </div>
+                />,
+                "Handling unit is required",
+                Boolean(formSubmitted && !item.packageType)
+              )}
 
-              <div>
+              {renderWithTooltip(
                 <Input
                   value={item.pieces ?? ''}
                   status={formSubmitted && (!item.pieces || Number(item.pieces) <= 0) ? 'error' : undefined}
                   onChange={(e) => handleUpdateField(item.id, 'pieces', e.target.value)}
-                />
-                {formSubmitted && (!item.pieces || Number(item.pieces) <= 0) && (
-                  <div className="ns-field-error">Pieces is required</div>
-                )}
-              </div>
+                />,
+                "Pieces is required",
+                Boolean(formSubmitted && (!item.pieces || Number(item.pieces) <= 0))
+              )}
 
-              <div>
+              {renderWithTooltip(
                 <Input
                   value={item.weight ?? ''}
                   status={formSubmitted && (!item.weight || Number(item.weight) <= 0) ? 'error' : undefined}
                   onChange={(e) => handleUpdateField(item.id, 'weight', e.target.value)}
-                />
-                {formSubmitted && (!item.weight || Number(item.weight) <= 0) && (
-                  <div className="ns-field-error">Weight is required</div>
-                )}
-              </div>
+                />,
+                `Weight [${weightUnit.toLowerCase()}] is required`,
+                Boolean(formSubmitted && (!item.weight || Number(item.weight) <= 0))
+              )}
 
-              <div>
+              {renderWithTooltip(
                 <Select
                   value={item.class ? String(item.class) : undefined}
                   placeholder="Class"
                   options={classOptions}
                   status={formSubmitted && !item.class ? 'error' : undefined}
                   onChange={(val) => handleUpdateField(item.id, 'class', val)}
-                />
-                {formSubmitted && !item.class && (
-                  <div className="ns-field-error">Class is required</div>
-                )}
-              </div>
+                />,
+                "Class is required",
+                Boolean(formSubmitted && !item.class)
+              )}
 
               <div className="quote-item-combined quote-item-combined--dimensions">
                 <Input
@@ -809,34 +1059,26 @@ const NewShipment: React.FC = () => {
                 onChange={(e) => handleUpdateField(item.id, 'pcfDensity', e.target.value)}
               />
 
-              <div>
-                <Input
-                  placeholder="XXXXXX-XX"
-                  maxLength={9}
-                  status={
-                    ((formSubmitted || touchedNMFC[item.id]) && (!item.nmfc || !isValidNMFC(item.nmfc))) ||
-                    (item.nmfc && !isValidNMFC(item.nmfc) && (touchedNMFC[item.id] || formSubmitted || item.nmfc.length >= 9))
-                      ? "error"
-                      : undefined
-                  }
-                  value={item.nmfc || ''}
-                  onBlur={() => {
-                    setTouchedNMFC((prev) => ({ ...prev, [item.id]: true }));
-                  }}
-                  onChange={(e) => handleUpdateField(item.id, 'nmfc', formatNMFC(e.target.value))}
-                />
-                {(formSubmitted || touchedNMFC[item.id]) && !item.nmfc ? (
-                  <div className="ns-field-error">NMFC is required</div>
-                ) : item.nmfc && !isValidNMFC(item.nmfc) && (touchedNMFC[item.id] || formSubmitted || item.nmfc.length >= 9) ? (
-                  <div className="ns-field-error">NMFC is invalid</div>
-                ) : null}
-              </div>
-
-              <Input
-                placeholder="Description"
-                value={item.description || ''}
-                onChange={(e) => handleUpdateField(item.id, 'description', e.target.value)}
-              />
+              {(() => {
+                const isNmfcError =
+                  Boolean(((formSubmitted || touchedNMFC[item.id]) && (!item.nmfc || !isValidNMFC(item.nmfc))) ||
+                  (item.nmfc && !isValidNMFC(item.nmfc) && (touchedNMFC[item.id] || formSubmitted || item.nmfc.length >= 9)));
+                const nmfcMsg = !item.nmfc ? "NMFC is required" : "NMFC must be XXXXXX-XX";
+                return renderWithTooltip(
+                  <Input
+                    placeholder="XXXXXX-XX"
+                    maxLength={9}
+                    status={isNmfcError ? "error" : undefined}
+                    value={item.nmfc || ''}
+                    onBlur={() => {
+                      setTouchedNMFC((prev) => ({ ...prev, [item.id]: true }));
+                    }}
+                    onChange={(e) => handleUpdateField(item.id, 'nmfc', formatNMFC(e.target.value))}
+                  />,
+                  nmfcMsg,
+                  isNmfcError
+                );
+              })()}
 
               <div className="col-center">
                 <Checkbox
@@ -845,47 +1087,44 @@ const NewShipment: React.FC = () => {
                 />
               </div>
 
-              <div className="col-center">
+              <div className="col-center" style={{ gap: 4 }}>
                 <Checkbox
                   checked={item.hazmat}
-                  onChange={(e) => handleUpdateField(item.id, 'hazmat', e.target.checked)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      handleOpenHazmatModal(item);
+                    } else {
+                      dispatch(
+                        updateProductHazmat({
+                          id: item.id,
+                          hazmat: false,
+                          hazmatUN: "",
+                          hazmatProperShippingName: "",
+                          hazmatClass: "",
+                          hazmatPackingGroup: "",
+                          hazmatPhone: "",
+                          hazmatContact: "",
+                        })
+                      );
+                    }
+                  }}
                 />
+                {item.hazmat && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#c9302c",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      textDecoration: "underline",
+                    }}
+                    onClick={() => handleOpenHazmatModal(item)}
+                  >
+                    Edit
+                  </span>
+                )}
               </div>
 
-              {hasHazmat && (
-                item.hazmat ? (
-                  <>
-                    <div>
-                      <Input
-                        placeholder="Class"
-                        value={item.hazmatClass || ''}
-                        status={formSubmitted && !item.hazmatClass ? 'error' : undefined}
-                        onChange={(e) => handleUpdateField(item.id, 'hazmatClass', e.target.value)}
-                      />
-                      {formSubmitted && !item.hazmatClass && (
-                        <div className="ns-field-error">Hazmat Class is required</div>
-                      )}
-                    </div>
-
-                    <div>
-                      <Input
-                        placeholder="UN"
-                        value={item.hazmatUN || ''}
-                        status={formSubmitted && !item.hazmatUN ? 'error' : undefined}
-                        onChange={(e) => handleUpdateField(item.id, 'hazmatUN', e.target.value)}
-                      />
-                      {formSubmitted && !item.hazmatUN && (
-                        <div className="ns-field-error">Hazmat UN is required</div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span />
-                    <span />
-                  </>
-                )
-              )}
               <Button
                 type="text"
                 danger
@@ -937,6 +1176,68 @@ const NewShipment: React.FC = () => {
         onSelectRate={handleSelectRateFromModal}
         selectedRateId={selectedCarrierRate?.id}
       />
+
+      {/* ══ Hazmat Details Modal Popup ══ */}
+      <Modal
+        title="Hazmat Details"
+        open={isHazmatModalOpen}
+        onCancel={handleHazmatModalCancel}
+        centered
+        width={500}
+        footer={[
+          <Button key="ok" type="primary" danger onClick={handleHazmatModalOk}>
+            OK
+          </Button>,
+        ]}
+      >
+        <div style={{ paddingTop: 16 }}>
+          <Form layout="horizontal" labelCol={{ span: 11 }} wrapperCol={{ span: 13 }} labelAlign="left">
+            <Form.Item label="HAZMAT UN/NA#" style={{ marginBottom: 12 }}>
+              <Input
+                value={hazmatForm.hazmatUN}
+                onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatUN: e.target.value }))}
+                placeholder="HAZMAT UN/NA#"
+                autoFocus
+              />
+            </Form.Item>
+            <Form.Item label="Hazmat Proper Shipping Name" style={{ marginBottom: 12 }}>
+              <Input
+                value={hazmatForm.hazmatProperShippingName}
+                onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatProperShippingName: e.target.value }))}
+                placeholder="Hazmat Proper Shipping Name"
+              />
+            </Form.Item>
+            <Form.Item label="Hazmat Class" style={{ marginBottom: 12 }}>
+              <Input
+                value={hazmatForm.hazmatClass}
+                onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatClass: e.target.value }))}
+                placeholder="Hazmat Class"
+              />
+            </Form.Item>
+            <Form.Item label="Hazmat Packing Group" style={{ marginBottom: 12 }}>
+              <Input
+                value={hazmatForm.hazmatPackingGroup}
+                onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatPackingGroup: e.target.value }))}
+                placeholder="Hazmat Packing Group"
+              />
+            </Form.Item>
+            <Form.Item label="Hazmat Phone" style={{ marginBottom: 12 }}>
+              <Input
+                value={hazmatForm.hazmatPhone}
+                onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatPhone: e.target.value }))}
+                placeholder="Hazmat Phone"
+              />
+            </Form.Item>
+            <Form.Item label="Hazmat Contact" style={{ marginBottom: 4 }}>
+              <Input
+                value={hazmatForm.hazmatContact}
+                onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatContact: e.target.value }))}
+                placeholder="Hazmat Contact"
+              />
+            </Form.Item>
+          </Form>
+        </div>
+      </Modal>
 
       {/* ══ FOOTER BUTTONS ══ */}
       <Flex justify="flex-end" gap={12} wrap="wrap">

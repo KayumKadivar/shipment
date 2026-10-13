@@ -1,6 +1,94 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { API_BASE_URL } from "../config/apiConfig";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
+
+type ApiResponse<T> = {
+  isSuccess: boolean;
+  message?: string | null;
+  data?: T | null;
+};
+
+type FetchQuotesArgs = {
+  clientCode: string;
+  pageNumber?: number;
+  pageSize?: number;
+};
+
+export interface QuoteProductResult {
+  quoteProductId?: number;
+  quoteRequestId?: number;
+  productClass?: string | number;
+  productNMFC?: string;
+  weight?: string | number;
+  pallets?: string | number;
+  isHazmat?: boolean;
+  hazmatClass?: string;
+  hazmatUN?: string;
+  packagingGroup?: string;
+  pieces?: string | number;
+  length?: string | number;
+  height?: string | number;
+  width?: string | number;
+  description?: string;
+  isStackable?: boolean;
+  units?: string | number;
+  packageType?: string;
+  class?: string | number;
+  nmfc?: string;
+  stackable?: boolean;
+  hazMat?: boolean;
+}
+
+export interface QuoteAccessorialResult {
+  quoteAccessorialId?: number;
+  quoteRequestId?: number;
+  accCode?: string;
+  accName?: string;
+  accesorialCode?: string;
+  accessorialName?: string;
+  description?: string;
+}
+
+export interface QuoteCostDetailResult {
+  quoteCostDetailsId?: number;
+  quoteResultId?: number;
+  accCode?: string;
+  accName?: string;
+  amount?: number;
+}
+
+export interface QuoteCarrierResult {
+  quoteResultId?: number;
+  quoteRequestId?: number;
+  scac?: string;
+  carrierName?: string;
+  serviceLevel?: string;
+  carrierQuoteNo?: string;
+  brokerCode?: string;
+  brokerName?: string;
+  transitDays?: string;
+  serviceType?: string;
+  saasQuoteId?: string;
+  originTerminalCode?: string;
+  originTerminalName?: string;
+  originTerminalZip?: string;
+  originTerminalPhone?: string;
+  destinationTerminalCode?: string;
+  destinationTerminalName?: string;
+  destinationTerminalZip?: string;
+  destinationTerminalPhone?: string;
+  quoteCostDetails?: QuoteCostDetailResult[] | null;
+  grossCharge?: number;
+  discount?: number;
+  fuelSurcharge?: number;
+  totalShipmentCost?: number;
+  netCharge?: number;
+  price?: number;
+  estimatedDeliveryDate?: string;
+  errorMessage?: string;
+  warning?: string;
+}
 
 export interface QuoteResult {
   quoteRequestId: number;
@@ -12,15 +100,17 @@ export interface QuoteResult {
   destinationCity: string;
   destinationStateCode: string;
   destinationZip: string;
+  originCountry?: string;
+  destinationCountry?: string;
   clientName: string;
   clientCode: string;
   profileCode: string;
   isAgentQuote: boolean;
   marginType: string;
   marginPercent: number;
-  quoteProducts: any[];
-  quoteAccessorials: any[];
-  quoteResults: any[];
+  quoteProducts: QuoteProductResult[];
+  quoteAccessorials: QuoteAccessorialResult[];
+  quoteResults: QuoteCarrierResult[];
 }
 
 interface QuoteState {
@@ -37,34 +127,46 @@ const initialState: QuoteState = {
   error: null,
 };
 
-export const fetchQuotes = createAsyncThunk(
+export const fetchQuotes = createAsyncThunk<
+  QuoteResult[],
+  FetchQuotesArgs,
+  { rejectValue: string }
+>(
   "quote/fetchQuotes",
   async ({ clientCode, pageNumber = 1, pageSize = 100 }: { clientCode: string; pageNumber?: number; pageSize?: number }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(
+      const response = await axios.get<ApiResponse<QuoteResult[]>>(
         `${API_BASE_URL}/Quote/GetQuotesByClientCode/${clientCode}?pageNumber=${pageNumber}&pageSize=${pageSize}`
       );
       if (response.data && response.data.isSuccess) {
         return response.data.data || [];
       }
       return rejectWithValue(response.data?.message || "Failed to fetch quotes");
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || "Failed to fetch quotes");
+    } catch (error: unknown) {
+      return rejectWithValue(getApiErrorMessage(error, "Failed to fetch quotes"));
     }
   }
 );
 
-export const fetchQuoteById = createAsyncThunk(
+export const fetchQuoteById = createAsyncThunk<
+  QuoteResult,
+  string,
+  { rejectValue: string }
+>(
   "quote/fetchQuoteById",
   async (quoteId: string, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/Quote/${quoteId}`);
-      if (response.data && response.data.isSuccess) {
+      const response = await axios.get<ApiResponse<QuoteResult>>(
+        `${API_BASE_URL}/Quote/${quoteId}`,
+      );
+      if (response.data && response.data.isSuccess && response.data.data) {
         return response.data.data;
       }
       return rejectWithValue(response.data?.message || "Failed to fetch quote by id");
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || "Failed to fetch quote by id");
+    } catch (error: unknown) {
+      return rejectWithValue(
+        getApiErrorMessage(error, "Failed to fetch quote by id"),
+      );
     }
   }
 );
@@ -85,7 +187,8 @@ const quoteSlice = createSlice({
       })
       .addCase(fetchQuotes.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error =
+          action.payload || action.error.message || "Failed to fetch quotes";
       })
       .addCase(fetchQuoteById.pending, (state) => {
         state.loading = true;
@@ -98,7 +201,10 @@ const quoteSlice = createSlice({
       })
       .addCase(fetchQuoteById.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string;
+        state.error =
+          action.payload ||
+          action.error.message ||
+          "Failed to fetch quote by id";
       });
   },
 });

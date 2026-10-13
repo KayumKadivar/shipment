@@ -3,6 +3,18 @@ import type { LocationAccessorial } from "../types/customerLocation.types";
 import axios from "axios";
 import { API_BASE_URL, SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 
+interface AccessorialApiItem
+  extends Omit<LocationAccessorial, "accessorialName" | "description" | "accesorialCode"> {
+  description?: string | null;
+  accesorialCode?: string | null;
+}
+
+interface AccessorialApiResponse {
+  isSuccess: boolean;
+  message?: string | null;
+  data?: AccessorialApiItem[] | null;
+}
+
 interface AccessorialsState {
   data: LocationAccessorial[];
   selectedAccessorialIds: number[];
@@ -17,14 +29,21 @@ const initialState: AccessorialsState = {
   error: null,
 };
 
-export const fetchAccessorials = createAsyncThunk(
+export const fetchAccessorials = createAsyncThunk<
+  LocationAccessorial[],
+  string | void,
+  {
+    state: { accessorials: AccessorialsState };
+    rejectValue: string;
+  }
+>(
   "accessorials/fetchAccessorials",
   async (clientCode: string | void, { rejectWithValue }) => {
     try {
       const code = clientCode || DEFAULT_CLIENT_CODE;
       const token = localStorage.getItem("authToken");
 
-      const response = await axios.get(
+      const response = await axios.get<AccessorialApiResponse>(
         `${API_BASE_URL}/GetAccessorials?srvToken=${SRV_TOKEN}&clientCode=${code}`,
         {
           headers: {
@@ -34,25 +53,35 @@ export const fetchAccessorials = createAsyncThunk(
         }
       );
 
-      console.log("GetAccessorials Response:", response.data);
-
-      if (response.data && response.data.isSuccess) {
+      if (response.data.isSuccess) {
         const rawList = response.data.data || [];
-        const mappedList: LocationAccessorial[] = rawList.map((item: any) => ({
+        const mappedList: LocationAccessorial[] = rawList.map((item) => ({
           ...item,
           accessorialID: item.accessorialID,
           accessorialName: (item.description || item.accesorialCode || "").trim(),
+          description: item.description ?? undefined,
+          accesorialCode: item.accesorialCode ?? undefined,
         }));
         return mappedList;
       }
       return rejectWithValue(response.data?.message || "Failed to fetch accessorials");
-    } catch (error: any) {
-      console.error("GetAccessorials API Error:", error);
+    } catch (error: unknown) {
+      if (axios.isAxiosError<AccessorialApiResponse>(error)) {
+        return rejectWithValue(
+          error.response?.data?.message ||
+            error.message ||
+            "Failed to fetch accessorials",
+        );
+      }
+
       return rejectWithValue(
-        error?.response?.data?.message || error.message || "Failed to fetch accessorials"
+        error instanceof Error ? error.message : "Failed to fetch accessorials",
       );
     }
-  }
+  },
+  {
+    condition: (_, { getState }) => !getState().accessorials.loading,
+  },
 );
 
 const accessorialsSlice = createSlice({
@@ -97,7 +126,8 @@ const accessorialsSlice = createSlice({
       })
       .addCase(fetchAccessorials.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message || "Failed to fetch accessorials";
+        state.error =
+          action.payload || action.error.message || "Failed to fetch accessorials";
       });
   },
 });

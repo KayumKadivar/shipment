@@ -150,16 +150,14 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
     if (!loc) return;
 
     setSelectedLocationId(String(loc.locationId));
-    const fullPostal = loc.zipCode && loc.city && loc.stateCode
-      ? `${loc.zipCode} - ${loc.city}, ${loc.stateCode}`
-      : (loc.zipCode || form.getFieldValue("postal") || "");
+    const onlyZip = String(loc.zipCode || form.getFieldValue("postal") || "").split(' - ')[0].trim();
 
     form.setFieldsValue({
       companyName: loc.locationName || value,
       address1: loc.address1 || "",
       address2: loc.address2 || "",
       country: loc.countryCode || form.getFieldValue("country") || "USA",
-      postal: fullPostal,
+      postal: onlyZip,
       city: loc.city || "",
       state: loc.stateCode || "",
       fax: loc.fax || "",
@@ -208,16 +206,11 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
           (loc: any) => String(loc.zipCode || "").trim() === cleanZip
         ) || foundLocations[0];
 
-        setSelectedLocationId(String(matched.locationId));
         form.setFieldsValue({
-          companyName: matched.locationName || "",
-          address1: matched.address1 || "",
-          address2: matched.address2 || "",
-          country: matched.countryCode || country || "",
-          postal: matched.zipCode || cleanZip,
-          city: matched.city || "",
-          state: matched.stateCode || "",
-          fax: matched.fax || "",
+          country: matched.countryCode || country || "USA",
+          postal: String(matched.zipCode || cleanZip).split(' - ')[0].trim(),
+          city: matched.city || form.getFieldValue("city") || "",
+          state: matched.stateCode || form.getFieldValue("state") || "",
         });
       } else {
         // Fallback to usePostalLookup if no master location was found
@@ -260,16 +253,16 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
         const results = await searchPostals(cleanZip, country);
 
         if (results && results.length === 1) {
-          const fullPostal = `${results[0].postalCode || cleanZip} - ${results[0].city}, ${results[0].state}`;
+          const onlyZip = String(results[0].postalCode || cleanZip).split(' - ')[0].trim();
           form.setFieldsValue({
-            postal: fullPostal,
+            postal: onlyZip,
             city: results[0].city,
             state: results[0].state,
           });
-          postalRef.current = fullPostal;
+          postalRef.current = onlyZip;
           setPostalOptions([]);
           setDropdownOpen(false);
-          fetchLocationsByZip(results[0].postalCode || cleanZip);
+          fetchLocationsByZip(onlyZip);
         } else if (results && results.length > 1) {
           const uniqueResults = Array.from(
             new Set(results.map((r) => `${r.postalCode || cleanZip}|${r.city}|${r.state}`))
@@ -280,7 +273,7 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
 
           setPostalOptions(
             uniqueResults.map((r, idx) => ({
-              value: `${r.postalCode} - ${r.city}, ${r.state}`,
+              value: String(r.postalCode || cleanZip).split(' - ')[0].trim(),
               label: `${r.postalCode} - ${r.city}, ${r.state}`,
               city: r.city,
               state: r.state,
@@ -302,16 +295,16 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
   };
 
   const handleSelectPostal = (value: string, option: any) => {
+    const onlyZip = String(value || "").split(' - ')[0].trim();
     form.setFieldsValue({
-      postal: value,
+      postal: onlyZip,
       city: option.city,
       state: option.state,
     });
-    postalRef.current = value;
+    postalRef.current = onlyZip;
     setPostalOptions([]);
     setDropdownOpen(false);
-    const cleanZip = value.split(' - ')[0].trim();
-    fetchLocationsByZip(cleanZip);
+    fetchLocationsByZip(onlyZip);
   };
 
   const handlePostalBlur = async () => {
@@ -328,16 +321,16 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
 
     const results = await searchPostals(cleanZip, country);
     if (results && results.length === 1) {
-      const fullPostal = `${results[0].postalCode || cleanZip} - ${results[0].city}, ${results[0].state}`;
+      const onlyZip = String(results[0].postalCode || cleanZip).split(' - ')[0].trim();
       form.setFieldsValue({
-        postal: fullPostal,
+        postal: onlyZip,
         city: results[0].city,
         state: results[0].state,
       });
-      postalRef.current = fullPostal;
+      postalRef.current = onlyZip;
       setPostalOptions([]);
       setDropdownOpen(false);
-      fetchLocationsByZip(results[0].postalCode || cleanZip);
+      fetchLocationsByZip(onlyZip);
     } else if (results && results.length > 1) {
       const uniqueResults = Array.from(
         new Set(results.map((r) => `${r.postalCode || cleanZip}|${r.city}|${r.state}`))
@@ -348,7 +341,7 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
 
       setPostalOptions(
         uniqueResults.map((r, idx) => ({
-          value: `${r.postalCode} - ${r.city}, ${r.state}`,
+          value: String(r.postalCode || cleanZip).split(' - ')[0].trim(),
           label: `${r.postalCode} - ${r.city}, ${r.state}`,
           city: r.city,
           state: r.state,

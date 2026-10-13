@@ -4,9 +4,10 @@ import {
   TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Button, Checkbox, Input, Select, AutoComplete, Spin, DatePicker, message, Form, Alert } from "antd";
+import { Button, Checkbox, Input, Select, AutoComplete, Spin, DatePicker, message, Form, Alert, Tooltip, Modal } from "antd";
+import type { FormItemProps } from "antd";
 import CountrySelect from "../components/CountrySelect";
-import { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import { usePostalLookup } from "../hooks/usePostalLookup";
@@ -14,9 +15,10 @@ import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import { fetchAccessorials } from "../store/accessorialsSlice";
-import { fetchCarrierRates, setQuoteFormData, clearQuoteFormData, clearRateError } from "../store/customerRateSlice";
+import { fetchCarrierRates, setQuoteFormData, clearQuoteFormData, clearRateError, type QuoteFormPackage } from "../store/customerRateSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
-import { SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
+import { API_BASE_URL, SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
+import axios from "axios";
 
 type ItemField =
   | "units"
@@ -32,7 +34,11 @@ type ItemField =
   | "nmfc"
   | "description"
   | "hazMatClass"
-  | "hazMatUN";
+  | "hazMatUN"
+  | "hazMatProperShippingName"
+  | "hazMatPackingGroup"
+  | "hazMatPhone"
+  | "hazMatContact";
 
 type QuoteItem = Record<ItemField, string> & {
   id: string;
@@ -67,12 +73,31 @@ const createItem = (): QuoteItem => ({
   hazMat: false,
   hazMatClass: "",
   hazMatUN: "",
+  hazMatProperShippingName: "",
+  hazMatPackingGroup: "",
+  hazMatPhone: "",
+  hazMatContact: "",
 });
 
 const createPackage = (): QuotePackage => ({
   id: createId("package"),
   items: [createItem()],
 });
+
+const normalizePackages = (pkgs?: QuoteFormPackage[]): QuotePackage[] => {
+  if (!pkgs || pkgs.length === 0) return [createPackage()];
+  return pkgs.map((pkg) => ({
+    id: pkg.id || createId("package"),
+    items: (pkg.items || []).map((item) => ({
+      ...createItem(),
+      ...item,
+      hazMatProperShippingName: item.hazMatProperShippingName ?? "",
+      hazMatPackingGroup: item.hazMatPackingGroup ?? "",
+      hazMatPhone: item.hazMatPhone ?? "",
+      hazMatContact: item.hazMatContact ?? "",
+    })),
+  }));
+};
 
 const formatNMFC = (raw: string): string => {
   const cleaned = raw.replace(/[^\d-]/g, "");
@@ -351,6 +376,74 @@ function QuoteLocationCard({
   );
 }
 
+interface ItemTooltipWrapperProps {
+  children?: any;
+  [key: string]: any;
+}
+
+const ItemTooltipWrapper: React.FC<ItemTooltipWrapperProps> = ({
+  children,
+  ...fieldProps
+}) => {
+  const { status, errors } = Form.Item.useStatus();
+  const hasError = status === "error" && Boolean(errors && errors.length > 0);
+  const errorMessage = hasError ? (errors[0] as string) : "";
+  const validChild = React.isValidElement(children) ? (children as React.ReactElement<any>) : null;
+  const childProps = (validChild ? validChild.props : {}) as Record<string, any>;
+
+  return (
+    <Tooltip
+      title={hasError ? errorMessage : ""}
+      open={hasError ? undefined : false}
+      placement="top"
+      trigger={["hover", "focus"]}
+      color="#df2027"
+      rootClassName="quote-item-error-tooltip"
+      overlayClassName="quote-item-error-tooltip"
+      arrow={{ pointAtCenter: true }}
+    >
+      <div className="quote-item-tooltip-wrapper">
+        {validChild
+          ? React.cloneElement(validChild, {
+              ...fieldProps,
+              ...childProps,
+              status: status || fieldProps.status || childProps.status,
+              onChange: (...args: any[]) => {
+                childProps.onChange?.(...args);
+                fieldProps.onChange?.(...args);
+              },
+              onBlur: (...args: any[]) => {
+                childProps.onBlur?.(...args);
+                fieldProps.onBlur?.(...args);
+              },
+              onFocus: (...args: any[]) => {
+                childProps.onFocus?.(...args);
+                fieldProps.onFocus?.(...args);
+              },
+            })
+          : children}
+      </div>
+    </Tooltip>
+  );
+};
+
+const ItemFormItem: React.FC<FormItemProps> = ({
+  children,
+  className,
+  ...restProps
+}) => {
+  return (
+    <Form.Item
+      {...restProps}
+      className={`quote-item-input ${className || ""}`}
+    >
+      <ItemTooltipWrapper>
+        {children}
+      </ItemTooltipWrapper>
+    </Form.Item>
+  );
+};
+
 function NewQuote() {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
@@ -359,7 +452,7 @@ function NewQuote() {
 
   const [packages, setPackages] = useState<QuotePackage[]>(() =>
     quoteFormData?.packages && quoteFormData.packages.length > 0
-      ? quoteFormData.packages
+      ? normalizePackages(quoteFormData.packages)
       : [createPackage()]
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -403,16 +496,12 @@ function NewQuote() {
     dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
 
-  useEffect(() => {
-    if (clients.length > 0) {
-      const isClientValid = clients.some(c => c.clientCode === selectedClientCode);
-      if (!isClientValid) {
-        const defaultClient = clients.find(c => c.clientCode === DEFAULT_CLIENT_CODE)?.clientCode || clients[0].clientCode;
-        setSelectedClientCode(defaultClient);
-        sessionStorage.setItem("quotes_selectedClientCode", defaultClient);
-      }
-    }
-  }, [clients, selectedClientCode]);
+  const activeClientCode = clients.some(
+    (client) => client.clientCode === selectedClientCode,
+  )
+    ? selectedClientCode
+    : clients.find((client) => client.clientCode === DEFAULT_CLIENT_CODE)
+        ?.clientCode || clients[0]?.clientCode || "";
 
   const handleClientChange = (value: string) => {
     setSelectedClientCode(value);
@@ -420,10 +509,114 @@ function NewQuote() {
     sessionStorage.setItem("customerLocation_selectedClientCode", value);
   };
 
+  const [productOptions, setProductOptions] = useState<
+    { value: string; key: string; product: any; label: React.ReactNode }[]
+  >([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const searchProductTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchProducts = async (query = "") => {
+    setLoadingProducts(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const clientCodeToUse =
+        selectedClientCode ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "DEVTS";
+
+      const payload = {
+        clientCode: clientCodeToUse,
+        searchText: query || "",
+        pageNumber: 0,
+        pageSize: 0,
+      };
+
+      console.log("Calling SearchProducts API:", payload);
+
+      const response = await axios.post(
+        `${API_BASE_URL}/Product/SearchProducts`,
+        payload,
+        { headers }
+      );
+
+      console.log("SearchProducts API response:", response.data);
+
+      let dataList: any[] = [];
+      if (response.data?.isSuccess && response.data?.data) {
+        const raw = response.data.data;
+        dataList = Array.isArray(raw) ? raw : (raw.items || []);
+      }
+
+      if (dataList.length > 0) {
+        const options = dataList.map((prod: any, idx: number) => {
+          const prodDesc = prod.productDescription || prod.description || "";
+          const subtext = [
+            prod.productClass ? `Class: ${prod.productClass}` : "",
+            prod.productNMFC ? `NMFC: ${prod.productNMFC}` : "",
+            prod.weight ? `${prod.weight} lbs` : "",
+            prod.commodity || "",
+          ]
+            .filter(Boolean)
+            .join(" | ");
+
+          return {
+            value: prodDesc,
+            key: `prod-opt-${prod.productId || idx}-${idx}`,
+            product: prod,
+            label: (
+              <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "2px 0" }}>
+                <span style={{ fontWeight: 600, color: "#1f2937", fontSize: 12 }}>
+                  {prodDesc || "Unnamed Product"}
+                </span>
+                {subtext && (
+                  <span style={{ fontSize: 11, color: "#808080" }}>
+                    {subtext}
+                  </span>
+                )}
+              </div>
+            ),
+          };
+        });
+        setProductOptions(options);
+      } else {
+        setProductOptions([]);
+      }
+    } catch (error) {
+      console.error("Error calling SearchProducts API for description:", error);
+      setProductOptions([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts("");
+  }, [selectedClientCode]);
+
+  const handleSearchProducts = (searchText: string) => {
+    if (searchProductTimeoutRef.current) {
+      clearTimeout(searchProductTimeoutRef.current);
+    }
+
+    const trimmed = (searchText || "").trim();
+
+    searchProductTimeoutRef.current = setTimeout(() => {
+      fetchProducts(trimmed);
+    }, 350);
+  };
+
   useEffect(() => {
     if (quoteFormData) {
       if (quoteFormData.packages && quoteFormData.packages.length > 0) {
-        setPackages(quoteFormData.packages);
+        setPackages(normalizePackages(quoteFormData.packages));
       }
       if (quoteFormData.origPostal !== undefined) setOrigPostal(quoteFormData.origPostal);
       if (quoteFormData.origCity !== undefined) setOrigCity(quoteFormData.origCity);
@@ -514,6 +707,93 @@ function NewQuote() {
       : options;
   }, [accessorialSearch, accessorialOptions]);
 
+  const [isHazmatModalOpen, setIsHazmatModalOpen] = useState(false);
+  const [activeHazmatPackageId, setActiveHazmatPackageId] = useState<string | null>(null);
+  const [activeHazmatItem, setActiveHazmatItem] = useState<QuoteItem | null>(null);
+  const [hazmatForm, setHazmatForm] = useState({
+    hazMatUN: "",
+    hazMatProperShippingName: "",
+    hazMatClass: "",
+    hazMatPackingGroup: "",
+    hazMatPhone: "",
+    hazMatContact: "",
+  });
+
+  const handleOpenHazmatModal = (packageId: string, item: QuoteItem) => {
+    setActiveHazmatPackageId(packageId);
+    setActiveHazmatItem(item);
+    setHazmatForm({
+      hazMatUN: item.hazMatUN || "",
+      hazMatProperShippingName: item.hazMatProperShippingName || "",
+      hazMatClass: item.hazMatClass || "",
+      hazMatPackingGroup: item.hazMatPackingGroup || "",
+      hazMatPhone: item.hazMatPhone || "",
+      hazMatContact: item.hazMatContact || "",
+    });
+    setIsHazmatModalOpen(true);
+  };
+
+  const handleHazmatModalOk = () => {
+    if (activeHazmatPackageId && activeHazmatItem) {
+      updateItemHazmat(activeHazmatPackageId, activeHazmatItem.id, {
+        hazMat: true,
+        hazMatUN: hazmatForm.hazMatUN,
+        hazMatProperShippingName: hazmatForm.hazMatProperShippingName,
+        hazMatClass: hazmatForm.hazMatClass,
+        hazMatPackingGroup: hazmatForm.hazMatPackingGroup,
+        hazMatPhone: hazmatForm.hazMatPhone,
+        hazMatContact: hazmatForm.hazMatContact,
+      });
+    }
+    setIsHazmatModalOpen(false);
+    setActiveHazmatPackageId(null);
+    setActiveHazmatItem(null);
+  };
+
+  const handleHazmatModalCancel = () => {
+    setIsHazmatModalOpen(false);
+    setActiveHazmatPackageId(null);
+    setActiveHazmatItem(null);
+  };
+
+  const updateItemHazmat = (
+    packageId: string,
+    itemId: string,
+    hazmatData: {
+      hazMat: boolean;
+      hazMatUN: string;
+      hazMatProperShippingName: string;
+      hazMatClass: string;
+      hazMatPackingGroup: string;
+      hazMatPhone: string;
+      hazMatContact: string;
+    }
+  ) => {
+    setPackages((current) =>
+      current.map((quotePackage) =>
+        quotePackage.id === packageId
+          ? {
+              ...quotePackage,
+              items: quotePackage.items.map((item) => {
+                if (item.id !== itemId) return item;
+                return {
+                  ...item,
+                  hazMat: hazmatData.hazMat,
+                  stackable: hazmatData.hazMat ? false : item.stackable,
+                  hazMatUN: hazmatData.hazMatUN,
+                  hazMatProperShippingName: hazmatData.hazMatProperShippingName,
+                  hazMatClass: hazmatData.hazMatClass,
+                  hazMatPackingGroup: hazmatData.hazMatPackingGroup,
+                  hazMatPhone: hazmatData.hazMatPhone,
+                  hazMatContact: hazmatData.hazMatContact,
+                };
+              }),
+            }
+          : quotePackage
+      )
+    );
+  };
+
   const updateItem = (
     packageId: string,
     itemId: string,
@@ -535,16 +815,10 @@ function NewQuote() {
                     hazMat: isStackable ? false : item.hazMat,
                     hazMatClass: isStackable ? "" : item.hazMatClass,
                     hazMatUN: isStackable ? "" : item.hazMatUN,
-                  };
-                }
-                if (field === "hazMat") {
-                  const isHazMat = Boolean(value);
-                  return {
-                    ...item,
-                    hazMat: isHazMat,
-                    stackable: isHazMat ? false : item.stackable,
-                    hazMatClass: isHazMat ? item.hazMatClass : "",
-                    hazMatUN: isHazMat ? item.hazMatUN : "",
+                    hazMatProperShippingName: isStackable ? "" : item.hazMatProperShippingName,
+                    hazMatPackingGroup: isStackable ? "" : item.hazMatPackingGroup,
+                    hazMatPhone: isStackable ? "" : item.hazMatPhone,
+                    hazMatContact: isStackable ? "" : item.hazMatContact,
                   };
                 }
                 return { ...item, [field]: value };
@@ -553,14 +827,6 @@ function NewQuote() {
           : quotePackage,
       ),
     );
-
-    if (field === "hazMat" && !value) {
-      form.setFieldValue(["items", itemId, "hazMatClass"], "");
-      form.setFieldValue(["items", itemId, "hazMatUN"], "");
-    } else if (field === "stackable" && value) {
-      form.setFieldValue(["items", itemId, "hazMatClass"], "");
-      form.setFieldValue(["items", itemId, "hazMatUN"], "");
-    }
 
     if (typeof value === "string") {
       form.setFieldValue(["items", itemId, field], value);
@@ -629,6 +895,10 @@ function NewQuote() {
       const firstError = document.querySelector('.ant-form-item-has-error');
       if (firstError) {
         firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const inputToFocus = firstError.querySelector('input, .ant-select-selector') as HTMLElement;
+        if (inputToFocus) {
+          inputToFocus.focus();
+        }
       }
       return;
     }
@@ -658,6 +928,10 @@ function NewQuote() {
           hazMat: i.hazMat,
           hazMatClass: i.hazMatClass || undefined,
           hazMatUN: i.hazMatUN || undefined,
+          hazMatProperShippingName: i.hazMatProperShippingName || undefined,
+          hazMatPackingGroup: i.hazMatPackingGroup || undefined,
+          hazMatPhone: i.hazMatPhone || undefined,
+          hazMatContact: i.hazMatContact || undefined,
           nmfc: i.nmfc || undefined,
           description: i.description || "Freight",
           pallets: i.handlingUnit === "Pallet" ? Number(i.units) || 0 : 0,
@@ -695,8 +969,6 @@ function NewQuote() {
       totalHeight: 0,
       isAudit: false,
       shipmentValue: 0,
-      originPortCode: undefined,
-      destPortCode: undefined,
       equipment: undefined,
       codAmount: 0,
       totalLinearFeet: 0,
@@ -715,7 +987,7 @@ function NewQuote() {
         destCountry,
         packages,
         selectedAccessorials,
-        selectedClientCode,
+        selectedClientCode: activeClientCode,
       })
     );
 
@@ -959,29 +1231,89 @@ function NewQuote() {
                 </header>
 
                 <div className='quote-items-table'>
-                  <div className={`quote-items-table__head ${quotePackage.items.some(i => i.hazMat) ? 'has-hazmat' : ''}`} aria-hidden='true'>
-                    <span>Units <em>*</em></span>
-                    <span>Handling Unit <em>*</em></span>
-                    <span>Pieces <em>*</em></span>
-                    <span>Weight [lbs] <em>*</em></span>
-                    <span>Class <em>*</em></span>
-                    <span>Dimensions [inches]</span>
-                    <span>NMFC <em>*</em></span>
+                  <div className='quote-items-table__head' aria-hidden='true'>
                     <span>Description</span>
+                    <span>Units <span className='required'>*</span></span>
+                    <span>Handling Unit <span className='required'>*</span></span>
+                    <span>Pieces <span className='required'>*</span></span>
+                    <span>Weight [lbs] <span className='required'>*</span></span>
+                    <span>Class <span className='required'>*</span></span>
+                    <span>Dimensions [inches]</span>
+                    <span>NMFC <span className='required'>*</span></span>
                     <span>Stackable</span>
                     <span>Hazmat</span>
-                    {quotePackage.items.some(i => i.hazMat) && (
-                      <>
-                        <span>Hazmat Class <em>*</em></span>
-                        <span>Hazmat UN <em>*</em></span>
-                      </>
-                    )}
                     <span />
                   </div>
 
                   {quotePackage.items.map((item) => (
-                    <div className={`quote-item-row ${quotePackage.items.some(i => i.hazMat) ? 'has-hazmat' : ''}`} key={item.id}>
-                      <Form.Item
+                    <div className='quote-item-row' key={item.id}>
+                      <AutoComplete
+                        value={item.description}
+                        options={productOptions}
+                        placeholder='Description'
+                        aria-label='Description'
+                        onSearch={handleSearchProducts}
+                        onFocus={() => {
+                          if (productOptions.length === 0) {
+                            fetchProducts("");
+                          }
+                        }}
+                        onChange={(value) => {
+                          updateItem(
+                            quotePackage.id,
+                            item.id,
+                            "description",
+                            value,
+                          );
+                          form.setFieldValue(["items", item.id, "description"], value);
+                        }}
+                        onSelect={(value, option) => {
+                          updateItem(
+                            quotePackage.id,
+                            item.id,
+                            "description",
+                            value,
+                          );
+                          form.setFieldValue(["items", item.id, "description"], value);
+
+                          const prod = (option as any)?.product;
+                          if (prod) {
+                            if (prod.productClass) {
+                              updateItem(quotePackage.id, item.id, "freightClass", String(prod.productClass));
+                              form.setFieldValue(["items", item.id, "freightClass"], String(prod.productClass));
+                            }
+                            if (prod.productNMFC) {
+                              updateItem(quotePackage.id, item.id, "nmfc", String(prod.productNMFC));
+                              form.setFieldValue(["items", item.id, "nmfc"], String(prod.productNMFC));
+                            }
+                            if (prod.weight) {
+                              updateItem(quotePackage.id, item.id, "weight", String(prod.weight));
+                              form.setFieldValue(["items", item.id, "weight"], String(prod.weight));
+                            }
+                            if (prod.length) {
+                              updateItem(quotePackage.id, item.id, "length", String(prod.length));
+                              form.setFieldValue(["items", item.id, "length"], String(prod.length));
+                            }
+                            if (prod.width) {
+                              updateItem(quotePackage.id, item.id, "width", String(prod.width));
+                              form.setFieldValue(["items", item.id, "width"], String(prod.width));
+                            }
+                            if (prod.height) {
+                              updateItem(quotePackage.id, item.id, "height", String(prod.height));
+                              form.setFieldValue(["items", item.id, "height"], String(prod.height));
+                            }
+                            if (prod.isHazmat || prod.hazmat) {
+                              updateItem(quotePackage.id, item.id, "hazMat", true);
+                              form.setFieldValue(["items", item.id, "hazMat"], true);
+                            }
+                          }
+                        }}
+                        notFoundContent={loadingProducts ? <div style={{ padding: '6px 12px', textAlign: 'center' }}><Spin size="small" /></div> : undefined}
+                        allowClear
+                        className="quote-item-autocomplete"
+                      />
+
+                      <ItemFormItem
                         name={['items', item.id, 'units']}
                         rules={[
                           { required: true, message: "Units is required" },
@@ -994,7 +1326,6 @@ function NewQuote() {
                             },
                           },
                         ]}
-                        className="quote-item-input"
                       >
                         <Input
                           value={item.units}
@@ -1008,12 +1339,11 @@ function NewQuote() {
                             )
                           }
                         />
-                      </Form.Item>
+                      </ItemFormItem>
 
-                      <Form.Item
+                      <ItemFormItem
                         name={['items', item.id, 'handlingUnit']}
                         rules={[{ required: true, message: "Handling unit is required" }]}
-                        className="quote-item-input"
                       >
                         <Select
                           value={item.handlingUnit}
@@ -1028,9 +1358,9 @@ function NewQuote() {
                             )
                           }
                         />
-                      </Form.Item>
+                      </ItemFormItem>
 
-                      <Form.Item
+                      <ItemFormItem
                         name={['items', item.id, 'pieces']}
                         rules={[
                           { required: true, message: "Pieces is required" },
@@ -1043,7 +1373,6 @@ function NewQuote() {
                             },
                           },
                         ]}
-                        className="quote-item-input"
                       >
                         <Input
                           value={item.pieces}
@@ -1057,9 +1386,9 @@ function NewQuote() {
                             )
                           }
                         />
-                      </Form.Item>
+                      </ItemFormItem>
 
-                      <Form.Item
+                      <ItemFormItem
                         name={['items', item.id, 'weight']}
                         rules={[
                           { required: true, message: "Weight is required" },
@@ -1072,7 +1401,6 @@ function NewQuote() {
                             },
                           },
                         ]}
-                        className="quote-item-input"
                       >
                         <Input
                           value={item.weight}
@@ -1086,12 +1414,11 @@ function NewQuote() {
                             )
                           }
                         />
-                      </Form.Item>
+                      </ItemFormItem>
 
-                      <Form.Item
+                      <ItemFormItem
                         name={['items', item.id, 'freightClass']}
                         rules={[{ required: true, message: "Class is required" }]}
-                        className="quote-item-input"
                       >
                         <Select
                           value={item.freightClass}
@@ -1106,7 +1433,7 @@ function NewQuote() {
                             )
                           }
                         />
-                      </Form.Item>
+                      </ItemFormItem>
 
                       <div className='quote-item-combined quote-item-combined--dimensions'>
                         <Input
@@ -1150,7 +1477,7 @@ function NewQuote() {
                         />
                       </div>
 
-                      <Form.Item
+                      <ItemFormItem
                         name={['items', item.id, 'nmfc']}
                         normalize={(value) => formatNMFC(value || "")}
                         rules={[
@@ -1164,7 +1491,6 @@ function NewQuote() {
                                   ),
                           },
                         ]}
-                        className="quote-item-input"
                       >
                         <Input
                           value={item.nmfc}
@@ -1180,21 +1506,7 @@ function NewQuote() {
                             )
                           }
                         />
-                      </Form.Item>
-
-                      <Input
-                        value={item.description}
-                        placeholder='Description'
-                        aria-label='Description'
-                        onChange={(event) =>
-                          updateItem(
-                            quotePackage.id,
-                            item.id,
-                            "description",
-                            event.target.value,
-                          )
-                        }
-                      />
+                      </ItemFormItem>
 
                       <Checkbox
                         checked={item.stackable}
@@ -1209,68 +1521,41 @@ function NewQuote() {
                         }
                       />
 
-                      <Checkbox
-                        checked={item.hazMat}
-                        aria-label='Hazmat'
-                        onChange={(event) =>
-                          updateItem(
-                            quotePackage.id,
-                            item.id,
-                            "hazMat",
-                            event.target.checked,
-                          )
-                        }
-                      />
-
-                      {quotePackage.items.some(i => i.hazMat) && (
-                        item.hazMat ? (
-                          <>
-                            <Form.Item
-                              name={['items', item.id, 'hazMatClass']}
-                              rules={[{ required: true, message: "Hazmat Class is required" }]}
-                              className="quote-item-input"
-                            >
-                              <Input
-                                value={item.hazMatClass}
-                                placeholder='Class'
-                                aria-label='Hazmat Class'
-                                onChange={(event) =>
-                                  updateItem(
-                                    quotePackage.id,
-                                    item.id,
-                                    "hazMatClass",
-                                    event.target.value,
-                                  )
-                                }
-                              />
-                            </Form.Item>
-                            <Form.Item
-                              name={['items', item.id, 'hazMatUN']}
-                              rules={[{ required: true, message: "Hazmat UN is required" }]}
-                              className="quote-item-input"
-                            >
-                              <Input
-                                value={item.hazMatUN}
-                                placeholder='UN'
-                                aria-label='Hazmat UN'
-                                onChange={(event) =>
-                                  updateItem(
-                                    quotePackage.id,
-                                    item.id,
-                                    "hazMatUN",
-                                    event.target.value,
-                                  )
-                                }
-                              />
-                            </Form.Item>
-                          </>
-                        ) : (
-                          <>
-                            <span />
-                            <span />
-                          </>
-                        )
-                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Checkbox
+                          checked={item.hazMat}
+                          aria-label='Hazmat'
+                          onChange={(event) => {
+                            if (event.target.checked) {
+                              handleOpenHazmatModal(quotePackage.id, item);
+                            } else {
+                              updateItemHazmat(quotePackage.id, item.id, {
+                                hazMat: false,
+                                hazMatUN: "",
+                                hazMatProperShippingName: "",
+                                hazMatClass: "",
+                                hazMatPackingGroup: "",
+                                hazMatPhone: "",
+                                hazMatContact: "",
+                              });
+                            }
+                          }}
+                        />
+                        {item.hazMat && (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#c9302c",
+                              cursor: "pointer",
+                              fontWeight: 600,
+                              textDecoration: "underline",
+                            }}
+                            onClick={() => handleOpenHazmatModal(quotePackage.id, item)}
+                          >
+                            Edit
+                          </span>
+                        )}
+                      </div>
 
                       <Button
                         type='text'
@@ -1310,6 +1595,67 @@ function NewQuote() {
             </Button>
           </div>
         </section>
+
+        <Modal
+          title="Hazmat Details"
+          open={isHazmatModalOpen}
+          onCancel={handleHazmatModalCancel}
+          centered
+          width={500}
+          footer={[
+            <Button key="ok" type="primary" danger onClick={handleHazmatModalOk}>
+              OK
+            </Button>,
+          ]}
+        >
+          <div style={{ paddingTop: 16 }}>
+            <Form layout="horizontal" labelCol={{ span: 11 }} wrapperCol={{ span: 13 }} labelAlign="left">
+              <Form.Item label="HAZMAT UN/NA#" style={{ marginBottom: 12 }}>
+                <Input
+                  value={hazmatForm.hazMatUN}
+                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatUN: e.target.value }))}
+                  placeholder="HAZMAT UN/NA#"
+                  autoFocus
+                />
+              </Form.Item>
+              <Form.Item label="Hazmat Proper Shipping Name" style={{ marginBottom: 12 }}>
+                <Input
+                  value={hazmatForm.hazMatProperShippingName}
+                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatProperShippingName: e.target.value }))}
+                  placeholder="Hazmat Proper Shipping Name"
+                />
+              </Form.Item>
+              <Form.Item label="Hazmat Class" style={{ marginBottom: 12 }}>
+                <Input
+                  value={hazmatForm.hazMatClass}
+                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatClass: e.target.value }))}
+                  placeholder="Hazmat Class"
+                />
+              </Form.Item>
+              <Form.Item label="Hazmat Packing Group" style={{ marginBottom: 12 }}>
+                <Input
+                  value={hazmatForm.hazMatPackingGroup}
+                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatPackingGroup: e.target.value }))}
+                  placeholder="Hazmat Packing Group"
+                />
+              </Form.Item>
+              <Form.Item label="Hazmat Phone" style={{ marginBottom: 12 }}>
+                <Input
+                  value={hazmatForm.hazMatPhone}
+                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatPhone: e.target.value }))}
+                  placeholder="Hazmat Phone"
+                />
+              </Form.Item>
+              <Form.Item label="Hazmat Contact" style={{ marginBottom: 4 }}>
+                <Input
+                  value={hazmatForm.hazMatContact}
+                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatContact: e.target.value }))}
+                  placeholder="Hazmat Contact"
+                />
+              </Form.Item>
+            </Form>
+          </div>
+        </Modal>
       </Form>
     </div>
   );

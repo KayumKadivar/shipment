@@ -16,7 +16,6 @@ export interface DestinationLocationProps {
     city?: string;
     state?: string;
     country?: string;
-    port?: string;
     contactName?: string;
     phone?: string;
     ext?: string;
@@ -69,10 +68,12 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
   useEffect(() => {
     if (initialData?.locationId) {
       setSelectedLocationId(String(initialData.locationId));
-    } else if (locationsList && locationsList.length > 0) {
+    } else if (locationsList && locationsList.length > 0 && (initialData?.companyName || initialData?.locationId)) {
       const matched = locationsList.find(
-        (loc) => loc.locationName === initialData?.companyName || String(loc.locationId) === String(initialData?.locationId)
-      ) || locationsList[0];
+        (loc) =>
+          (initialData?.companyName && loc.locationName === initialData.companyName) ||
+          (initialData?.locationId && String(loc.locationId) === String(initialData.locationId))
+      );
       if (matched) {
         setSelectedLocationId(String(matched.locationId));
       }
@@ -110,11 +111,10 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         companyName: initialData.companyName || "",
         address1: initialData.address1 || "",
         address2: initialData.address2 || "",
-        postal: initialData.postal || "",
+        postal: (initialData.postal || "").split(' - ')[0].trim(),
         city: initialData.city || "",
         state: initialData.state || "",
         country: initialData.country || "USA",
-        port: initialData.port || "",
         contactName: initialData.contactName || "",
         phone: initialData.phone || "",
         ext: initialData.ext || "",
@@ -233,16 +233,14 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
     setSelectedLocationId(String(loc.locationId));
     const openTimeFormatted = formatDisplayTime(loc.openTime) || "08:00 AM";
     const closeTimeFormatted = formatDisplayTime(loc.closeTime) || "05:00 PM";
-    const fullPostal = loc.zipCode && loc.city && loc.stateCode
-      ? `${loc.zipCode} - ${loc.city}, ${loc.stateCode}`
-      : (loc.zipCode || form.getFieldValue("postal") || "");
+    const onlyZip = String(loc.zipCode || form.getFieldValue("postal") || "").split(' - ')[0].trim();
 
     form.setFieldsValue({
       companyName: loc.locationName || value,
       address1: loc.address1 || "",
       address2: loc.address2 || "",
       country: loc.countryCode || "USA",
-      postal: fullPostal,
+      postal: onlyZip,
       city: loc.city || "",
       state: loc.stateCode || "",
       contactName: loc.contactName || "",
@@ -274,13 +272,13 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         const results = await searchPostals(cleanZip, country);
         
         if (results && results.length === 1) {
-          const fullPostal = `${results[0].postalCode || cleanZip} - ${results[0].city}, ${results[0].state}`;
+          const onlyZip = String(results[0].postalCode || cleanZip).split(' - ')[0].trim();
           form.setFieldsValue({
-            postal: fullPostal,
+            postal: onlyZip,
             city: results[0].city,
             state: results[0].state,
           });
-          postalRef.current = fullPostal;
+          postalRef.current = onlyZip;
           setPostalOptions([]);
           setDropdownOpen(false);
         } else if (results && results.length > 1) {
@@ -292,7 +290,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
 
           setPostalOptions(
             uniqueResults.map((r, idx) => ({
-              value: `${r.postalCode} - ${r.city}, ${r.state}`,
+              value: String(r.postalCode || cleanZip).split(' - ')[0].trim(),
               label: `${r.postalCode} - ${r.city}, ${r.state}`,
               city: r.city,
               state: r.state,
@@ -314,12 +312,13 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
   };
 
   const handleSelectPostal = (value: string, option: any) => {
+    const onlyZip = String(value || "").split(' - ')[0].trim();
     form.setFieldsValue({
-      postal: value,
+      postal: onlyZip,
       city: option.city,
       state: option.state,
     });
-    postalRef.current = value;
+    postalRef.current = onlyZip;
     setPostalOptions([]);
     setDropdownOpen(false);
   };
@@ -337,13 +336,13 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
     const cleanZip = postal.split(' - ')[0].trim();
     const results = await searchPostals(cleanZip, country);
     if (results && results.length === 1) {
-      const fullPostal = `${results[0].postalCode || cleanZip} - ${results[0].city}, ${results[0].state}`;
+      const onlyZip = String(results[0].postalCode || cleanZip).split(' - ')[0].trim();
       form.setFieldsValue({
-        postal: fullPostal,
+        postal: onlyZip,
         city: results[0].city,
         state: results[0].state,
       });
-      postalRef.current = fullPostal;
+      postalRef.current = onlyZip;
       setPostalOptions([]);
       setDropdownOpen(false);
     } else if (results && results.length > 1) {
@@ -355,7 +354,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
 
       setPostalOptions(
         uniqueResults.map((r, idx) => ({
-          value: `${r.postalCode} - ${r.city}, ${r.state}`,
+          value: String(r.postalCode || cleanZip).split(' - ')[0].trim(),
           label: `${r.postalCode} - ${r.city}, ${r.state}`,
           city: r.city,
           state: r.state,
@@ -391,18 +390,9 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         <Form.Item label="Address Line 2" name="address2">
           <Input placeholder="Suite, dock, etc." />
         </Form.Item>
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={16}>
-            <Form.Item label="Country" name="country">
-              <CountrySelect />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={8}>
-            <Form.Item label="Port" name="port">
-              <Input placeholder="Port" />
-            </Form.Item>
-          </Col>
-        </Row>
+        <Form.Item label="Country" name="country">
+          <CountrySelect />
+        </Form.Item>
         <Row gutter={[12, 12]}>
           <Col xs={24} md={8}>
             <Form.Item label="Postal / ZIP" name="postal">

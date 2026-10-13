@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 import { API_BASE_URL } from "../config/apiConfig";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 // Interface for rate item
 export const COST_CODE_GROSS = "GROSS";
@@ -10,6 +11,15 @@ export const COST_CODE_FUEL = "FUEL";
 export const COST_NAME_GROSS = "Gross Charge";
 export const COST_NAME_DISC = "Discount";
 export const COST_NAME_FUEL = "Fuel Surcharge";
+
+export interface RateAccessorialCharge {
+  accessorialCode?: string;
+  accCode?: string;
+  accessorialDescription?: string;
+  accName?: string;
+  accessorialCharge?: number;
+  amount?: number;
+}
 
 export interface RateItem {
   id: string;
@@ -28,7 +38,7 @@ export interface RateItem {
   grossCharge?: number;
   discount?: number;
   fuelSurcharge?: number;
-  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number }[];
+  accessorialCharges?: RateAccessorialCharge[];
 }
 
 // Interface for API response rate
@@ -47,8 +57,79 @@ export interface ApiRate {
   deliveryDate?: string;
   errorMessage?: string;
   quoteExpirationDate?: string;
-  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number }[];
+  accessorialCharges?: RateAccessorialCharge[];
+  saasQuoteNumber?: string;
   [key: string]: unknown;
+}
+
+export interface QuoteFormItem {
+  id: string;
+  units: string;
+  handlingUnit: string;
+  pieces: string;
+  weight: string;
+  weightUnit: string;
+  freightClass: string;
+  length: string;
+  width: string;
+  height: string;
+  dimensionUnit: string;
+  nmfc: string;
+  description: string;
+  stackable: boolean;
+  hazMat: boolean;
+  hazMatClass: string;
+  hazMatUN: string;
+  hazMatProperShippingName?: string;
+  hazMatPackingGroup?: string;
+  hazMatPhone?: string;
+  hazMatContact?: string;
+}
+
+export interface QuoteFormPackage {
+  id: string;
+  items: QuoteFormItem[];
+}
+
+export interface RatingShipment {
+  class?: string;
+  weight?: string | number;
+  weightUnit?: string;
+  units?: string | number;
+  pallets?: string | number;
+  pieces?: string | number;
+  length?: string | number;
+  width?: string | number;
+  height?: string | number;
+  packageType?: string;
+  packagingGroup?: string;
+  nmfc?: string;
+  description?: string;
+  hazMat?: boolean;
+  isHazmat?: boolean;
+  hazMatClass?: string;
+  hazmatClass?: string;
+  hazMatUN?: string;
+  hazmatUN?: string;
+  stackable?: boolean;
+}
+
+export interface CarrierRateRequest extends Record<string, unknown> {
+  shipmentDate?: string;
+  origCity?: string;
+  origState?: string;
+  origZip?: string;
+  origCountry?: string;
+  destCity?: string;
+  destState?: string;
+  destZip?: string;
+  destCountry?: string;
+  clientName?: string;
+  clientCode?: string;
+  profileCode?: string | null;
+  shipments?: RatingShipment[];
+  accessorialCodes?: string[];
+  totalLinearFeet?: number;
 }
 
 export interface QuoteFormData {
@@ -61,7 +142,7 @@ export interface QuoteFormData {
   destCity: string;
   destState: string;
   destCountry: string;
-  packages: any[];
+  packages: QuoteFormPackage[];
   selectedAccessorials: string[];
   selectedClientCode?: string;
 }
@@ -71,7 +152,7 @@ interface CustomerRateState {
   rates: RateItem[];
   loading: boolean;
   error: string | null;
-  quoteRequest: any | null;
+  quoteRequest: CarrierRateRequest | null;
   quoteFormData: QuoteFormData | null;
 }
 
@@ -84,19 +165,45 @@ const initialState: CustomerRateState = {
   quoteFormData: null,
 };
 
+type RateApiResponse = {
+  isSuccess?: boolean;
+  message?: string | null;
+  errorMessage?: string | null;
+  data?: ApiRate[] | { leastCostCarriers?: ApiRate[] } | null;
+};
+
+type CarrierLogoApiResponse = {
+  isSuccess: boolean;
+  data?: string | { logo?: string } | null;
+};
+
+export interface QuoteSaveApiResponse {
+  isSuccess: boolean;
+  message?: string | null;
+  data?: unknown;
+}
+
 // async thunk for fetching rates
-export const fetchCarrierRates = createAsyncThunk(
+export const fetchCarrierRates = createAsyncThunk<
+  ApiRate[],
+  CarrierRateRequest,
+  { rejectValue: string }
+>(
   "customerRate/fetchCarrierRates",
-  async (payload: Record<string, unknown>, { rejectWithValue }) => {
+  async (payload, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("authToken");
-      const response = await axios.post(`${API_BASE_URL}/Rating/GetRates`, payload, {
-        headers: {
-          accept: "*/*",
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      const response = await axios.post<RateApiResponse>(
+        `${API_BASE_URL}/Rating/GetRates`,
+        payload,
+        {
+          headers: {
+            accept: "*/*",
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
         },
-      });
+      );
 
       if (response.data && response.data.isSuccess === false) {
         let msg = response.data.message || response.data.errorMessage || "Failed to fetch rates";
@@ -112,11 +219,12 @@ export const fetchCarrierRates = createAsyncThunk(
       }
 
       let apiRates: ApiRate[] = [];
-      if (response.data && response.data.data) {
-        if (response.data.data.leastCostCarriers) {
-          apiRates = response.data.data.leastCostCarriers;
-        } else if (Array.isArray(response.data.data)) {
-          apiRates = response.data.data;
+      const responseData = response.data.data;
+      if (responseData) {
+        if (Array.isArray(responseData)) {
+          apiRates = responseData;
+        } else if (responseData.leastCostCarriers) {
+          apiRates = responseData.leastCostCarriers;
         }
       }
       console.log("Extracted apiRates:", apiRates);
@@ -161,11 +269,17 @@ export const fetchCarrierRates = createAsyncThunk(
   }
 );
 
-export const fetchCarrierLogo = createAsyncThunk(
+export const fetchCarrierLogo = createAsyncThunk<
+  { scac: string; logo: string },
+  string,
+  { rejectValue: string }
+>(
   "customerRate/fetchCarrierLogo",
   async (scac: string, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/Carrier/GetCarrierLogoByCarrierId/${scac}`);
+      const response = await axios.get<CarrierLogoApiResponse>(
+        `${API_BASE_URL}/Carrier/GetCarrierLogoByCarrierId/${scac}`,
+      );
       if (response.data && response.data.isSuccess && response.data.data) {
         let data = response.data.data;
         if (typeof data === "string") {
@@ -178,18 +292,24 @@ export const fetchCarrierLogo = createAsyncThunk(
         }
       }
       return rejectWithValue("Logo not found");
-    } catch (error) {
+    } catch {
       return rejectWithValue("Failed to fetch logo");
     }
   }
 );
 
-export const saveCustomerQuote = createAsyncThunk(
+export const saveCustomerQuote = createAsyncThunk<
+  QuoteSaveApiResponse,
+  void,
+  {
+    state: { customerRate: CustomerRateState };
+    rejectValue: string;
+  }
+>(
   "customerRate/saveCustomerQuote",
   async (_, { getState, rejectWithValue }) => {
     try {
-      const state = getState() as any;
-      const { quoteRequest, rates } = state.customerRate;
+      const { quoteRequest, rates } = getState().customerRate;
 
       if (!quoteRequest) {
         return rejectWithValue("No quote request found to save.");
@@ -211,7 +331,7 @@ export const saveCustomerQuote = createAsyncThunk(
         isAgentQuote: true,
         marginType: quoteRequest.shipments?.[0]?.weightUnit || "",
         marginPercent: 0,
-        quoteProducts: (quoteRequest.shipments || []).map((s: any) => ({
+        quoteProducts: (quoteRequest.shipments || []).map((s) => ({
           quoteProductId: 0,
           quoteRequestId: 0,
           productClass: s.class || "",
@@ -234,8 +354,8 @@ export const saveCustomerQuote = createAsyncThunk(
           quoteRequestId: 0,
           accCode: acc
         })),
-        quoteResults: (rates || []).map((rate: any) => {
-          const existingAccessorials = (rate.accessorialCharges || []).filter((charge: any) => {
+        quoteResults: (rates || []).map((rate) => {
+          const existingAccessorials = (rate.accessorialCharges || []).filter((charge) => {
             const code = (charge.accessorialCode || charge.accCode || "").trim().toUpperCase();
             return (
               code !== COST_CODE_GROSS &&
@@ -266,7 +386,7 @@ export const saveCustomerQuote = createAsyncThunk(
               accName: COST_NAME_FUEL,
               amount: Number(rate.fuelSurcharge) || 0,
             },
-            ...existingAccessorials.map((charge: any) => ({
+            ...existingAccessorials.map((charge) => ({
               quoteCostDetailsId: 0,
               quoteResultId: 0,
               accCode: charge.accessorialCode || charge.accCode || "",
@@ -300,14 +420,16 @@ export const saveCustomerQuote = createAsyncThunk(
         }),
       };
 
-      const response = await axios.post(`${API_BASE_URL}/Quote`, payload);
+      const response = await axios.post<QuoteSaveApiResponse>(
+        `${API_BASE_URL}/Quote`,
+        payload,
+      );
       if (response.data && response.data.isSuccess) {
         return response.data;
       }
       return rejectWithValue(response.data?.message || "Failed to save quote");
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
-      return rejectWithValue(err.response?.data?.message || "Failed to save quote");
+      return rejectWithValue(getApiErrorMessage(error, "Failed to save quote"));
     }
   }
 );

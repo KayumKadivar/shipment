@@ -8,16 +8,18 @@ import {
   TruckOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Button, Card, Space, Typography } from "antd";
-import { useState } from "react";
+import { Alert, Button, Card, Space, Typography } from "antd";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "../app/hooks";
 import ShipmentEditModal, {
   type ShipmentEditValues,
 } from "../components/shipment/ShipmentEditModal";
 import ShipmentTable from "../components/shipment/ShipmentTable";
-import { shipmentDataSource, type ShipmentRecord } from "./shipmentData";
+import { fetchShipments } from "../store/shipmentSlice";
+import type { ShipmentRecord } from "../types/shipment.types";
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 20;
 
 const stats = [
   { label: "Quotes", value: "38", note: "12 awaiting response", dot: "#888" },
@@ -40,9 +42,58 @@ const filters = [
 
 function Shipment() {
   const navigate = useNavigate();
-  const [shipments, setShipments] = useState(shipmentDataSource);
+  const dispatch = useAppDispatch();
+  const {
+    shipmentsLoading,
+    shipmentsError,
+    hasNextShipmentsPage,
+  } = useAppSelector((state) => state.shipment);
+  const [shipments, setShipments] = useState<ShipmentRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [editingShipment, setEditingShipment] = useState<ShipmentRecord | null>(null);
+  const activeRequestRef = useRef<{ abort: () => void } | null>(null);
+
+  const requestShipments = useCallback(
+    (pageNumber: number) => {
+      activeRequestRef.current?.abort();
+      const request = dispatch(
+        fetchShipments({ pageNumber, pageSize: PAGE_SIZE }),
+      );
+      activeRequestRef.current = request;
+      void request
+        .unwrap()
+        .then(({ shipments: fetchedShipments }) => {
+          if (activeRequestRef.current !== request) return;
+
+          if (fetchedShipments.length === 0 && pageNumber > 1) {
+            setShipments([]);
+            setCurrentPage(Math.max(1, pageNumber - 1));
+            return;
+          }
+
+          setShipments(fetchedShipments);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (activeRequestRef.current === request) {
+            activeRequestRef.current = null;
+          }
+        });
+      return request;
+    },
+    [dispatch],
+  );
+
+  useEffect(() => {
+    void requestShipments(currentPage);
+    return () => activeRequestRef.current?.abort();
+  }, [currentPage, requestShipments]);
+
+  const changePage = (page: number) => {
+    setEditingShipment(null);
+    setShipments([]);
+    setCurrentPage(page);
+  };
 
   const setShipmentSelected = (key: string, selected: boolean) => {
     setShipments((currentShipments) =>
@@ -80,7 +131,12 @@ function Shipment() {
           </Typography.Text>
         </div>
         <Space wrap>
-          <Button icon={<ReloadOutlined />}>Refresh</Button>
+          <Button
+            icon={<ReloadOutlined />}
+            loading={shipmentsLoading}
+            onClick={() => requestShipments(currentPage)}>
+            Refresh
+          </Button>
           <Button icon={<ClockCircleOutlined />}>Quick Quote</Button>
           <Button type="primary" onClick={() => navigate("/shipments/new")}>+ New Shipment</Button>
         </Space>
@@ -107,15 +163,33 @@ function Shipment() {
         ))}
       </div>
 
+      {shipmentsError ? (
+        <Alert
+          style={{ marginBottom: 16 }}
+          type='error'
+          showIcon
+          title='Unable to load shipments'
+          description={shipmentsError}
+          action={
+            <Button size='small' onClick={() => requestShipments(currentPage)}>
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
+
       <ShipmentTable
         shipments={shipments}
         currentPage={currentPage}
-        pageSize={PAGE_SIZE}
-        onPageChange={setCurrentPage}
+        loading={shipmentsLoading}
+        hasNextPage={hasNextShipmentsPage}
+        onPageChange={changePage}
         onShipmentSelected={setShipmentSelected}
         onVisibleShipmentsSelected={setVisibleShipmentsSelected}
         onEdit={setEditingShipment}
-        onOpenShipment={(key) => navigate(`/shipments/${key}`)}
+        onOpenShipment={(loadNumber) =>
+          navigate(`/shipments/${encodeURIComponent(loadNumber)}`)
+        }
       />
 
       <ShipmentEditModal

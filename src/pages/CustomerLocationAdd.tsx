@@ -26,6 +26,14 @@ interface CustomerLocationAddProps {
   onCreate: (values: LocationFormValues) => void;
 }
 
+interface PostalOption {
+  value: string;
+  label: string;
+  city: string;
+  state: string;
+  key: string;
+}
+
 // const LOCATION_TYPES: LocationType[] = [
 //   "All",
 //   "Origin",
@@ -72,7 +80,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const [, contextHolder] = message.useMessage();
   const { searchPostals, loadingPostal } = usePostalLookup();
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
+  const [postalOptions, setPostalOptions] = useState<PostalOption[]>([]);
 
   // Handle postal code search with debounce
   const handleSearchPostal = (value: string) => {
@@ -119,7 +127,7 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
     }
   };
 
-  const handleSelectPostal = (value: string, option: any) => {
+  const handleSelectPostal = (value: string, option: PostalOption) => {
     form.setFieldsValue({
       postal: value,
       city: option.city,
@@ -179,7 +187,6 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
     state: "",
     city: "",
     postal: "",
-    port: "",
     contactName: "",
     phone: "",
     phoneExtension: "",
@@ -293,10 +300,6 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                 rules={[{ required: true, message: "Enter the city" }]}>
                 <Input placeholder='City' readOnly />
               </Form.Item>
-
-              {/* <Form.Item className='add-location-field--compact' label='Port' name='port'>
-                <Input placeholder='Port (optional)' />
-              </Form.Item> */}
 
               <Form.Item label='Contact Name' name='contactName'>
                 <Input placeholder='Contact person' />

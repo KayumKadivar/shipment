@@ -1,13 +1,13 @@
 import { ClockCircleOutlined, TruckOutlined } from "@ant-design/icons";
-import { Button, Checkbox, Table } from "antd";
+import { Button, Checkbox, Empty, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useMemo } from "react";
-import type { ShipmentRecord } from "../../pages/shipmentData";
+import type { ShipmentRecord } from "../../types/shipment.types";
 
 type ShipmentTableProps = {
   shipments: ShipmentRecord[];
   currentPage: number;
-  pageSize: number;
+  loading: boolean;
+  hasNextPage: boolean;
   onPageChange: (page: number) => void;
   onShipmentSelected: (key: string, selected: boolean) => void;
   onVisibleShipmentsSelected: (keys: string[], selected: boolean) => void;
@@ -34,30 +34,20 @@ function Multiline({
 function ShipmentTable({
   shipments,
   currentPage,
-  pageSize,
+  loading,
+  hasNextPage,
   onPageChange,
   onShipmentSelected,
   onVisibleShipmentsSelected,
   onEdit,
   onOpenShipment,
 }: ShipmentTableProps) {
-  const totalPages = Math.max(1, Math.ceil(shipments.length / pageSize));
-  const pageStartIndex = (currentPage - 1) * pageSize;
-  const pageEndIndex = Math.min(pageStartIndex + pageSize, shipments.length);
-  const pageNumbers = Array.from(
-    { length: totalPages },
-    (_, index) => index + 1,
-  );
-  const visibleShipments = useMemo(
-    () => shipments.slice(pageStartIndex, pageEndIndex),
-    [pageEndIndex, pageStartIndex, shipments],
-  );
-  const hasVisibleShipments = visibleShipments.length > 0;
-  const selectedVisibleCount = visibleShipments.filter(
+  const hasVisibleShipments = shipments.length > 0;
+  const selectedVisibleCount = shipments.filter(
     (shipment) => shipment.selected,
   ).length;
   const areVisibleShipmentsSelected =
-    hasVisibleShipments && selectedVisibleCount === visibleShipments.length;
+    hasVisibleShipments && selectedVisibleCount === shipments.length;
 
   const columns: ColumnsType<ShipmentRecord> = [
     {
@@ -66,14 +56,13 @@ function ShipmentTable({
           checked={areVisibleShipmentsSelected}
           disabled={!hasVisibleShipments}
           indeterminate={
-            selectedVisibleCount > 0 &&
-            selectedVisibleCount < visibleShipments.length
+            selectedVisibleCount > 0 && selectedVisibleCount < shipments.length
           }
           aria-label='Select visible shipments'
           onClick={(event) => event.stopPropagation()}
           onChange={(event) =>
             onVisibleShipmentsSelected(
-              visibleShipments.map((shipment) => shipment.key),
+              shipments.map((shipment) => shipment.key),
               event.target.checked,
             )
           }
@@ -84,7 +73,7 @@ function ShipmentTable({
       render: (_, record) => (
         <Checkbox
           checked={record.selected}
-          aria-label={`Select shipment ${record.bol}`}
+          aria-label={`Select shipment ${record.loadNumber}`}
           onClick={(event) => event.stopPropagation()}
           onChange={(event) =>
             onShipmentSelected(record.key, event.target.checked)
@@ -115,11 +104,11 @@ function ShipmentTable({
     },
     { title: "Customer #", dataIndex: "customerNo", width: 115 },
     {
-      title: "BOL #",
+      title: "Load #",
       width: 112,
       render: (_, record) => (
         <span className='bol-cell'>
-          <strong>{record.bol}</strong>
+          <strong>{record.loadNumber}</strong>
           <small>Pro&nbsp;&nbsp;{record.pro}</small>
         </span>
       ),
@@ -140,7 +129,7 @@ function ShipmentTable({
       render: (_, record) => (
         <span className='date-cell'>
           <Multiline text={record.carrier} strong />
-          <Multiline text={record.carrierNote} />
+          {record.carrierNote ? <Multiline text={record.carrierNote} /> : null}
         </span>
       ),
     },
@@ -199,38 +188,34 @@ function ShipmentTable({
     <div className='shipment-table-card'>
       <Table<ShipmentRecord>
         columns={columns}
-        dataSource={visibleShipments}
+        dataSource={shipments}
+        loading={{ spinning: loading, tip: "Loading shipments..." }}
+        locale={{
+          emptyText: loading ? null : <Empty description='No shipments found' />,
+        }}
         pagination={false}
         rowClassName={(record) =>
           `shipment-clickable-row${record.selected ? " selected-row" : ""}`
         }
         onRow={(record) => ({
-          onClick: () => onOpenShipment(record.key),
+          onClick: () => onOpenShipment(record.loadNumber),
         })}
         scroll={{ x: 1280 }}
       />
       <div className='shipment-pagination'>
         <span>
-          Showing {pageStartIndex + 1}-{pageEndIndex} of{" "}
-          <strong>{shipments.length}</strong> shipments
+          Page {currentPage} · Showing <strong>{shipments.length}</strong>{" "}
+          shipments
         </span>
         <div>
           <button
-            disabled={currentPage === 1}
+            disabled={loading || currentPage === 1}
             onClick={() => onPageChange(Math.max(1, currentPage - 1))}>
             Prev
           </button>
-          {pageNumbers.map((page) => (
-            <button
-              key={page}
-              className={page === currentPage ? "current" : ""}
-              onClick={() => onPageChange(page)}>
-              {page}
-            </button>
-          ))}
           <button
-            disabled={currentPage === totalPages}
-            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}>
+            disabled={loading || !hasNextPage}
+            onClick={() => onPageChange(currentPage + 1)}>
             Next
           </button>
         </div>

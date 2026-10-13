@@ -42,7 +42,6 @@ export interface CustomerLocation {
   deactivateDate: string;
   group: string;
   locationType: LocationType;
-  port?: string;
   locationRef?: string;
   inboundAccount?: string;
   outboundAccount?: string;

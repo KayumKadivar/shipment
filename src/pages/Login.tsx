@@ -1,33 +1,43 @@
 import { EyeInvisibleOutlined, EyeTwoTone } from "@ant-design/icons";
-import { Alert, Button, Input } from "antd";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Alert, Button, Checkbox, Input } from "antd";
+import { useState, type AnimationEvent, type FormEvent } from "react";
 
-import inlandLogo from "../assets/inland1.png";
+import loginLogoDown from "../assets/login-logo-down.svg";
+import loginLogo from "../assets/login-logo.png";
 import nicoLogo from "../assets/nico1.png";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { loginUser } from "../store/appSlice";
+
+const REMEMBER_USERNAME_PREFERENCE_KEY = "rememberUsername";
+const REMEMBERED_USERNAME_KEY = "rememberedUsername";
 
 type LoginProps = {
   onLogin: () => void;
 };
 
 function Login({ onLogin }: LoginProps) {
-  const [username, setUsername] = useState("");
+  const rememberUsernameByDefault =
+    localStorage.getItem(REMEMBER_USERNAME_PREFERENCE_KEY) !== "false";
+  const [username, setUsername] = useState(() =>
+    rememberUsernameByDefault
+      ? localStorage.getItem(REMEMBERED_USERNAME_KEY) ?? ""
+      : "",
+  );
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const loginTimerRef = useRef<number | null>(null);
+  const [rememberMe, setRememberMe] = useState(rememberUsernameByDefault);
 
   const dispatch = useAppDispatch();
   const isSubmitting = useAppSelector((state) => state.app.loading);
 
-  useEffect(() => {
-    return () => {
-      if (loginTimerRef.current !== null) {
-        window.clearTimeout(loginTimerRef.current);
-      }
-    };
-  }, []);
+  const handleProgressAnimationEnd = (
+    event: AnimationEvent<HTMLDivElement>,
+  ) => {
+    if (event.animationName === "login-progress-fill") {
+      onLogin();
+    }
+  };
 
   const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -51,12 +61,19 @@ function Login({ onLogin }: LoginProps) {
         })
       ).unwrap();
 
+      localStorage.setItem(
+        REMEMBER_USERNAME_PREFERENCE_KEY,
+        String(rememberMe),
+      );
+      if (rememberMe) {
+        localStorage.setItem(REMEMBERED_USERNAME_KEY, username.trim());
+      } else {
+        localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+      }
+
       // Show sync animation screen after successful API login
       setIsLoggingIn(true);
-      loginTimerRef.current = window.setTimeout(() => {
-        onLogin();
-      }, 2000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setLoginError(
         typeof error === "string"
           ? error
@@ -79,7 +96,10 @@ function Login({ onLogin }: LoginProps) {
 
           <div className='login-progress-row'>
             <div className='login-progress-track' aria-hidden='true'>
-              <div className='login-progress-fill' />
+              <div
+                className='login-progress-fill'
+                onAnimationEnd={handleProgressAnimationEnd}
+              />
               <div className='login-progress-dot' />
             </div>
             <p className='login-progress-status'>SYNCING CARRIER RATES...</p>
@@ -93,7 +113,7 @@ function Login({ onLogin }: LoginProps) {
     <main className='login-page' aria-label='Login page'>
       <section className='login-card' aria-labelledby='login-title'>
         <div className='login-logo' id='login-title'>
-          <img src={nicoLogo} alt='NICO' />
+          <img src={loginLogo} alt='NICO LTL' />
         </div>
 
         <form className='login-form' onSubmit={handleLoginSubmit}>
@@ -101,7 +121,7 @@ function Login({ onLogin }: LoginProps) {
             <Alert
               className='login-alert'
               type='error'
-              message={loginError}
+              title={loginError}
               showIcon
             />
           ) : null}
@@ -113,7 +133,7 @@ function Login({ onLogin }: LoginProps) {
             <Input
               size='large'
               className='login-input'
-              placeholder='Enter username'
+              placeholder='name@company.com'
               autoComplete='username'
               value={username}
               disabled={isSubmitting}
@@ -139,9 +159,19 @@ function Login({ onLogin }: LoginProps) {
             />
           </label>
 
-          <button className='login-link' type='button'>
-            Forgot password?
-          </button>
+          <div className='login-options'>
+            <Checkbox
+              className='login-remember'
+              checked={rememberMe}
+              disabled={isSubmitting}
+              onChange={(event) => setRememberMe(event.target.checked)}>
+              Remember me
+            </Checkbox>
+
+            <button className='login-link' type='button'>
+              Forgot Password?
+            </button>
+          </div>
 
           <Button
             className='login-submit'
@@ -153,18 +183,10 @@ function Login({ onLogin }: LoginProps) {
             block>
             {isSubmitting ? "Logging in..." : "Continue"}
           </Button>
-
-          <div className='login-divider'>
-            <span>or</span>
-          </div>
-
-          <p className='login-signup'>
-            Don&apos;t have an account? <strong>Sign up</strong>
-          </p>
         </form>
 
         <div className='login-footer-logo'>
-          <img src={inlandLogo} alt='Inland' />
+          <img src={loginLogoDown} alt='Powered by Inland' />
         </div>
       </section>
     </main>

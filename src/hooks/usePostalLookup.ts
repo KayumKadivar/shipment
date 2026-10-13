@@ -3,6 +3,18 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config/apiConfig';
 import { useAppSelector } from '../app/hooks';
 
+type PostalApiItem = {
+  cityName: string;
+  stateCode?: string | null;
+  postalCode?: string | null;
+};
+
+type PostalApiResponse = {
+  isSuccess: boolean;
+  message?: string | null;
+  data?: PostalApiItem[] | null;
+};
+
 export interface PostalResult {
   city: string;
   state: string;
@@ -27,7 +39,7 @@ export function usePostalLookup() {
       );
       const countryId = country ? country.countryId : 1;
 
-      const response = await axios.get(`${API_BASE_URL}/Postals/GetPostalsByPostalCodeAndCountryId`, {
+      const response = await axios.get<PostalApiResponse>(`${API_BASE_URL}/Postals/GetPostalsByPostalCodeAndCountryId`, {
         params: {
           postalCode,
           countryId,
@@ -40,7 +52,7 @@ export function usePostalLookup() {
         }
         
         if (Array.isArray(response.data.data)) {
-          return response.data.data.map((data: any) => ({
+          return response.data.data.map((data: PostalApiItem) => ({
             city: data.cityName,
             state: data.stateCode?.trim() || "",
             postalCode: data.postalCode || postalCode,

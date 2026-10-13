@@ -45,6 +45,7 @@ import type {
   CustomerLocation,
   LocationType,
 } from "../types/customerLocation.types";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 type LocationFormValues = Omit<CustomerLocation, "key">;
 type LocationView = "detail" | "group";
@@ -63,6 +64,14 @@ interface GroupSummary {
   origins: number;
   destinations: number;
   billTo: number;
+}
+
+interface PostalOption {
+  value: string;
+  label: string;
+  city: string;
+  state: string;
+  key: string;
 }
 
 const CSV_COLUMNS: Array<{
@@ -170,7 +179,7 @@ function CustomerLocationPage({
   const [modalApi, modalContext] = Modal.useModal();
   const { searchPostals, loadingPostal } = usePostalLookup();
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
+  const [postalOptions, setPostalOptions] = useState<PostalOption[]>([]);
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
     () => sessionStorage.getItem("customerLocation_selectedClientCode") || ""
@@ -180,14 +189,11 @@ function CustomerLocationPage({
     dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
 
-  useEffect(() => {
-    if (clients.length > 0) {
-      const isClientValid = clients.some(c => c.clientCode === selectedClientCode);
-      if (!isClientValid) {
-        setSelectedClientCode(clients[0].clientCode);
-      }
-    }
-  }, [clients, selectedClientCode]);
+  const activeClientCode = clients.some(
+    (client) => client.clientCode === selectedClientCode,
+  )
+    ? selectedClientCode
+    : clients[0]?.clientCode || "";
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -201,16 +207,16 @@ function CustomerLocationPage({
   }, [query]);
 
   useEffect(() => {
-    if (selectedClientCode) {
-      sessionStorage.setItem("customerLocation_selectedClientCode", selectedClientCode);
+    if (activeClientCode) {
+      sessionStorage.setItem("customerLocation_selectedClientCode", activeClientCode);
       dispatch(getAllCustomerLocations({
-        clientCode: selectedClientCode,
+        clientCode: activeClientCode,
         searchText: debouncedQuery,
-        pageNumber: currentPage,
+        pageNumber: ,
         pageSize: pageSize
       }));
     }
-  }, [dispatch, selectedClientCode, debouncedQuery, currentPage, pageSize]);
+  }, [dispatch, activeClientCode, debouncedQuery, currentPage, pageSize]);
 
   // Locations are filtered and paginated from the backend
   const filteredLocations = locations;
@@ -274,7 +280,7 @@ function CustomerLocationPage({
   };
 
   const openAddForm = () => {
-    const selectedClient = clients.find(c => c.clientCode === selectedClientCode);
+    const selectedClient = clients.find(c => c.clientCode === activeClientCode);
     navigate("/customer-location/add", {
       state: {
         clientName: selectedClient?.clientName || ""
@@ -295,7 +301,7 @@ function CustomerLocationPage({
       setEditingLocation(response);
       form.setFieldsValue(response);
       setIsFormOpen(true);
-    } catch (error) {
+    } catch {
       messageApi.error({ content: 'Failed to fetch location details from API.', key: 'fetchLoc', duration: 3 });
     }
   };
@@ -314,7 +320,7 @@ function CustomerLocationPage({
       messageApi.loading({ content: 'Saving changes...', key: 'saveLoc' });
 
       
-      const locId = editingLocation.locationID || (editingLocation as any).locationId || editingLocation.key;
+      const locId = editingLocation.locationID || editingLocation.locationId || editingLocation.key;
 
       const payload = {
         ...values,
@@ -332,8 +338,8 @@ function CustomerLocationPage({
       );
       messageApi.success({ content: "Location updated successfully", key: 'saveLoc', duration: 2 });
       closeForm();
-    } catch (error: any) {
-      messageApi.error({ content: error || "Failed to save changes", key: 'saveLoc', duration: 3 });
+    } catch (error: unknown) {
+      messageApi.error({ content: getApiErrorMessage(error, "Failed to save changes"), key: 'saveLoc', duration: 3 });
     }
   };
 
@@ -353,8 +359,8 @@ function CustomerLocationPage({
             const loc = locations.find(l => l.key === key);
             if (loc && loc.locationID) {
                idsToDelete.push(Number(loc.locationID));
-            } else if (loc && (loc as any).locationId) {
-               idsToDelete.push(Number((loc as any).locationId));
+            } else if (loc && loc.locationId) {
+               idsToDelete.push(Number(loc.locationId));
             } else if (!isNaN(Number(key))) {
                idsToDelete.push(Number(key)); // Fallback if key is the ID
             }
@@ -369,8 +375,8 @@ function CustomerLocationPage({
           );
           setSelectedKeys(new Set());
           messageApi.success({ content: "Selected locations deleted", key: 'deleteLoc' });
-        } catch (error: any) {
-           messageApi.error({ content: error || "Failed to delete locations", key: 'deleteLoc' });
+        } catch (error: unknown) {
+           messageApi.error({ content: getApiErrorMessage(error, "Failed to delete locations"), key: 'deleteLoc' });
         }
       },
     });
@@ -410,7 +416,7 @@ function CustomerLocationPage({
     }
   };
 
-  const handleSelectPostal = (value: string, option: any) => {
+  const handleSelectPostal = (value: string, option: PostalOption) => {
     form.setFieldsValue({
       postal: value,
       city: option.city,
@@ -459,7 +465,7 @@ function CustomerLocationPage({
     messageApi.loading({ content: "Fetching locations from server...", key: "refreshLoc" });
     try {
       await dispatch(getAllCustomerLocations({
-        clientCode: selectedClientCode,
+        clientCode: activeClientCode,
         searchText: debouncedQuery,
         pageNumber: 1,
         pageSize: pageSize
@@ -469,9 +475,9 @@ function CustomerLocationPage({
       setCurrentPage(1);
       setPageSize(10);
       messageApi.success({ content: "Locations refreshed successfully", key: "refreshLoc" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       messageApi.error({
-        content: `Network Error: ${err || "Cannot connect to server"}`,
+        content: `Network Error: ${getApiErrorMessage(err, "Cannot connect to server")}`,
         key: "refreshLoc",
         duration: 4,
       });
@@ -733,11 +739,11 @@ function CustomerLocationPage({
           <Select
             showSearch
             placeholder='Search or select client...'
-            value={selectedClientCode}
+            value={activeClientCode}
             onChange={setSelectedClientCode}
             style={{ minWidth: 250 }}
             filterOption={(input, option) =>
-              String((option as any)?.searchValue || "")
+              String(option?.searchValue || "")
                 .toLowerCase()
                 .includes(input.toLowerCase())
             }

@@ -7,6 +7,53 @@ import axios from "axios";
 
 import { API_BASE_URL } from "../config/apiConfig";
 import type { CustomerProduct, ProductPackageType } from "../types/customerProduct.types";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
+
+type ApiResponse<T> = {
+  isSuccess: boolean;
+  message?: string | null;
+  data?: T | null;
+  totalCount?: number;
+  TotalCount?: number;
+};
+
+type ProductApiItem = {
+  productId?: number;
+  productID?: number;
+  productDescription?: string;
+  description?: string;
+  productClass?: string;
+  productNMFC?: string;
+  nmfc?: string;
+  weight?: number;
+  pallets?: number;
+  isHazmat?: boolean;
+  hazmat?: boolean;
+  packagingGroup?: string;
+  packageGroup?: string;
+  length?: number;
+  height?: number;
+  width?: number;
+  isActive?: boolean;
+  commodity?: string;
+  hazmatContact?: string;
+  productGroup?: string;
+  notes?: string;
+  isApproved?: boolean;
+};
+
+type PackageTypeApiItem =
+  | string
+  | {
+      packageTypeId?: number;
+      PackageTypeId?: number;
+      packageType?: string;
+      PackageType?: string;
+    };
+
+type PackageTypesApiResponse =
+  | PackageTypeApiItem[]
+  | ApiResponse<PackageTypeApiItem[]>;
 
 interface CustomerProductState {
   products: CustomerProduct[];
@@ -56,7 +103,7 @@ export const saveCustomerProduct = createAsyncThunk(
         isActive: payloadData.isActive ?? true,
       };
 
-      const response = await axios.post(
+      const response = await axios.post<ApiResponse<unknown>>(
         `${API_BASE_URL}/Product`,
         payload,
         {
@@ -76,12 +123,10 @@ export const saveCustomerProduct = createAsyncThunk(
       }
 
       return response.data?.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("AddProduct API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to save product."
+        getApiErrorMessage(error, "Failed to save product.")
       );
     }
   }
@@ -115,7 +160,7 @@ export const updateCustomerProduct = createAsyncThunk(
         isActive: payloadData.isActive ?? true,
       };
 
-      const response = await axios.put(
+      const response = await axios.put<ApiResponse<unknown>>(
         `${API_BASE_URL}/Product`,
         payload,
         {
@@ -133,12 +178,10 @@ export const updateCustomerProduct = createAsyncThunk(
       }
 
       return payloadData;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("UpdateProduct API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to update product."
+        getApiErrorMessage(error, "Failed to update product.")
       );
     }
   }
@@ -185,7 +228,7 @@ export const getCustomerProducts = createAsyncThunk<
           pageSize
         };
 
-        response = await axios.post(
+        response = await axios.post<ApiResponse<ProductApiItem[]>>(
           `${API_BASE_URL}/Product/SearchProducts`,
           payload,
           {
@@ -196,7 +239,7 @@ export const getCustomerProducts = createAsyncThunk<
           }
         );
       } else {
-        response = await axios.get(
+        response = await axios.get<ApiResponse<ProductApiItem[]>>(
           `${API_BASE_URL}/Product/GetProductsByClientCode/${encodeURIComponent(clientCode)}`,
           {
             params: {
@@ -222,7 +265,7 @@ export const getCustomerProducts = createAsyncThunk<
 
       const products: CustomerProduct[] = (
         response.data?.data || []
-      ).map((product: any) => ({
+      ).map((product) => ({
         key: String(product.productId || Date.now()),
         productID: product.productId,
         description: product.productDescription ?? "",
@@ -246,12 +289,10 @@ export const getCustomerProducts = createAsyncThunk<
       const totalCount = response.data?.totalCount ?? response.data?.TotalCount ?? products.length;
 
       return { products, totalCount };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("GetProducts API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to retrieve products."
+        getApiErrorMessage(error, "Failed to retrieve products.")
       );
     }
   }
@@ -273,7 +314,7 @@ export const getCustomerProductByDesc = createAsyncThunk<
         Description: description,
       });
 
-      const response = await axios.get(
+      const response = await axios.get<ApiResponse<ProductApiItem>>(
         `${API_BASE_URL}/Product/GetProductByDesc`,
         {
           params: {
@@ -321,12 +362,10 @@ export const getCustomerProductByDesc = createAsyncThunk<
       };
 
       return mappedProduct;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("GetProductByDesc API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to retrieve product details."
+        getApiErrorMessage(error, "Failed to retrieve product details.")
       );
     }
   }
@@ -343,7 +382,7 @@ export const deleteCustomerProducts = createAsyncThunk<
   "customerProduct/deleteCustomerProducts",
   async (productIds: number[], { rejectWithValue }) => {
     try {
-      const response = await axios.delete(
+      const response = await axios.delete<ApiResponse<unknown>>(
         `${API_BASE_URL}/Product/DeleteMultiple`,
         {
           data: productIds,
@@ -361,12 +400,10 @@ export const deleteCustomerProducts = createAsyncThunk<
       }
 
       return productIds;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("DeleteMultiple API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to delete products."
+        getApiErrorMessage(error, "Failed to delete products.")
       );
     }
   }
@@ -385,7 +422,7 @@ export const getCustomerProductByID = createAsyncThunk<
     try {
       console.log("Getting product by ID:", id);
 
-      const response = await axios.get(
+      const response = await axios.get<ApiResponse<ProductApiItem>>(
         `${API_BASE_URL}/Product/${id}`,
         {
           headers: {
@@ -429,12 +466,10 @@ export const getCustomerProductByID = createAsyncThunk<
       };
 
       return mappedProduct;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("GetProductByID API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to retrieve product details."
+        getApiErrorMessage(error, "Failed to retrieve product details.")
       );
     }
   }
@@ -463,7 +498,7 @@ export const searchCustomerProducts = createAsyncThunk<
         }
       );
 
-      const response = await axios.get(
+      const response = await axios.get<ApiResponse<ProductApiItem[]>>(
         `${API_BASE_URL}/Product/GetProductByDesc`,
         {
           params: {
@@ -491,7 +526,7 @@ export const searchCustomerProducts = createAsyncThunk<
 
       const products: CustomerProduct[] = (
         response.data?.data || []
-      ).map((product: any) => ({
+      ).map((product) => ({
         key: String(product.productID || Date.now()),
         productID: product.productID,
         description: product.description ?? "",
@@ -513,15 +548,13 @@ export const searchCustomerProducts = createAsyncThunk<
       }));
 
       return products;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(
         "GetProductByDesc API Error:",
         error
       );
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to search products."
+        getApiErrorMessage(error, "Failed to search products.")
       );
     }
   }
@@ -535,7 +568,7 @@ export const getProductPackageTypes = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("authToken");
-      const response = await axios.get(
+      const response = await axios.get<PackageTypesApiResponse>(
         `${API_BASE_URL}/ProductPackageType`,
         {
           headers: {
@@ -555,7 +588,7 @@ export const getProductPackageTypes = createAsyncThunk(
         : [];
 
       const mappedList: ProductPackageType[] = rawData
-        .map((item: any, index: number) => {
+        .map((item, index: number) => {
           if (typeof item === "string") {
             return {
               packageTypeId: index + 1,
@@ -575,9 +608,7 @@ export const getProductPackageTypes = createAsyncThunk(
     } catch (error: any) {
       console.error("GetProductPackageTypes API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to retrieve product package types."
+        getApiErrorMessage(error, "Failed to retrieve product package types.")
       );
     }
   }

@@ -1,13 +1,13 @@
 import {
   CheckOutlined,
   CloseOutlined,
-  EditOutlined,
-  PlusOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { Button, Checkbox, DatePicker, Input, Select } from "antd";
-import { useState } from "react";
-import type { ShipmentRecord } from "../../pages/shipmentData";
+import { Alert, Button, Checkbox, DatePicker, Input, Select, Spin } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { fetchCarrierTracking } from "../../store/carrierTrackingSlice";
+import type { ShipmentDetails } from "../../types/shipment.types";
 
 type NotificationMethod = "Email";
 
@@ -28,73 +28,107 @@ type TrackingReminder = ReminderDraft & {
   id: string;
 };
 
-type TrackingEvent = {
-  id: string;
-  status: string;
-  type: string;
-  source: string;
-  description: string;
-  location: string;
-  date: string;
-};
-
-type EventEditor = {
-  event: TrackingEvent;
-  isNew: boolean;
+type TrackingProps = {
+  shipment: ShipmentDetails;
+  onChangeCommitted: () => void;
+  onEditorStateChange: (isEditing: boolean) => void;
 };
 
 const initialNotifications: NotificationPreferences = {
-  methods: ["Email"],
-  email: "Byoung@priority1inc.net",
-  event: "Shipment tendered",
+  methods: [],
+  email: "",
+  event: "",
 };
 
-const initialReminderDraft: ReminderDraft = {
-  user: "Gregory Bonomo",
-  dateRange: null,
-  time: "00:00",
-  timezone: "CT",
-};
-
-const initialTrackingEvents: TrackingEvent[] = Array.from(
-  { length: 4 },
-  (_, index) => ({
-    id: `tracking-event-${index + 1}`,
-    status: "In Transit",
-    type: "Departed",
-    source: "?",
-    description: "Weight Changed",
-    location: "Las Vegas, Nevada",
-    date: "4/25/26 - 4:00 A.M.",
-  }),
-);
-
-function createEmptyEvent(): TrackingEvent {
-  return {
-    id: `tracking-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    status: "",
-    type: "",
-    source: "?",
-    description: "",
-    location: "",
-    date: "",
-  };
+function notificationPreferencesAreEqual(
+  first: NotificationPreferences,
+  second: NotificationPreferences,
+) {
+  return (
+    first.email === second.email &&
+    first.event === second.event &&
+    first.methods.length === second.methods.length &&
+    first.methods.every((method, index) => method === second.methods[index])
+  );
 }
 
-function Tracking({ shipment }: { shipment: ShipmentRecord }) {
+function formatTrackingDate(value: string) {
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return value;
+
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return [
+    `${pad(parsedDate.getMonth() + 1)}/${pad(parsedDate.getDate())}/${parsedDate.getFullYear()}`,
+    `${pad(parsedDate.getHours())}:${pad(parsedDate.getMinutes())}:${pad(parsedDate.getSeconds())}`,
+  ].join(" ");
+}
+
+function Tracking({
+  shipment,
+  onChangeCommitted,
+  onEditorStateChange,
+}: TrackingProps) {
+  const dispatch = useAppDispatch();
+  const { data, loading, error, requestedLoadNumber, loadedLoadNumber } =
+    useAppSelector((state) => state.carrierTracking);
   const [notifications, setNotifications] =
     useState<NotificationPreferences>(initialNotifications);
   const [notificationDraft, setNotificationDraft] =
     useState<NotificationPreferences | null>(null);
-  const [reminderDraft, setReminderDraft] = useState<ReminderDraft>(
-    initialReminderDraft,
-  );
+  const [reminderDraft, setReminderDraft] = useState<ReminderDraft>(() => ({
+    user: shipment.userName ?? "",
+    dateRange: null,
+    time: "",
+    timezone: "CT",
+  }));
   const [reminders, setReminders] = useState<TrackingReminder[]>([]);
   const [reminderError, setReminderError] = useState("");
   const [datePickerKey, setDatePickerKey] = useState(0);
-  const [events, setEvents] = useState<TrackingEvent[]>(initialTrackingEvents);
-  const [eventEditor, setEventEditor] = useState<EventEditor | null>(null);
   const [notificationInput, setNotificationInput] = useState("");
+  const activeRequestRef = useRef<{ abort: () => void } | null>(null);
+
+  const trackingData = loadedLoadNumber === shipment.loadNumber ? data : null;
+  const isTrackingLoading =
+    loading && requestedLoadNumber === shipment.loadNumber;
+  const trackingError =
+    requestedLoadNumber === shipment.loadNumber ? error : null;
+  const trackingRecords = useMemo(
+    () =>
+      [...(trackingData?.trackRecords ?? [])].sort((left, right) => {
+        const leftTime = Date.parse(left.statusDate);
+        const rightTime = Date.parse(right.statusDate);
+
+        if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) return 0;
+        return rightTime - leftTime;
+      }),
+    [trackingData],
+  );
+
+  const loadCarrierTracking = useCallback(() => {
+    const request = dispatch(
+      fetchCarrierTracking({
+        loadNumber: shipment.loadNumber,
+        clientCode: shipment.clientCode,
+      }),
+    );
+    activeRequestRef.current = request;
+    void request.finally(() => {
+      if (activeRequestRef.current === request) {
+        activeRequestRef.current = null;
+      }
+    });
+  }, [dispatch, shipment.clientCode, shipment.loadNumber]);
+
+  useEffect(
+    () => () => {
+      activeRequestRef.current?.abort();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    onEditorStateChange(notificationDraft !== null);
+  }, [notificationDraft, onEditorStateChange]);
 
   const toggleNotificationMethod = (
     method: NotificationMethod,
@@ -116,8 +150,14 @@ function Tracking({ shipment }: { shipment: ShipmentRecord }) {
 
   const saveNotificationSettings = () => {
     if (!notificationDraft) return;
+    const hasChanges = !notificationPreferencesAreEqual(
+      notificationDraft,
+      notifications,
+    );
+
     setNotifications(notificationDraft);
     setNotificationDraft(null);
+    if (hasChanges) onChangeCommitted();
   };
 
   const createReminder = () => {
@@ -138,89 +178,10 @@ function Tracking({ shipment }: { shipment: ShipmentRecord }) {
     setDatePickerKey((current) => current + 1);
   };
 
-  const updateEventDraft = (
-    field: keyof TrackingEvent,
-    value: string,
-  ) => {
-    setEventEditor((current) =>
-      current
-        ? { ...current, event: { ...current.event, [field]: value } }
-        : current,
-    );
-  };
-
-  const saveEvent = () => {
-    if (!eventEditor) return;
-    setEvents((current) =>
-      eventEditor.isNew
-        ? [...current, eventEditor.event]
-        : current.map((event) =>
-            event.id === eventEditor.event.id ? eventEditor.event : event,
-          ),
-    );
-    setEventEditor(null);
-  };
-
-  const beginNewEvent = () => {
-    if (eventEditor) return;
-    setEventEditor({ event: createEmptyEvent(), isNew: true });
-  };
-
-  const renderEventInputs = (trackingEvent: TrackingEvent) => (
-    <>
-      <td>
-        <Input
-          value={trackingEvent.status}
-          aria-label='Tracking status'
-          onChange={(event) => updateEventDraft("status", event.target.value)}
-        />
-      </td>
-      <td>
-        <Input
-          value={trackingEvent.type}
-          aria-label='Tracking type'
-          onChange={(event) => updateEventDraft("type", event.target.value)}
-        />
-      </td>
-      <td>
-        <Input
-          value={trackingEvent.source}
-          aria-label='Tracking source'
-          onChange={(event) => updateEventDraft("source", event.target.value)}
-        />
-      </td>
-      <td>
-        <div className='shipment-tracking-description-inputs'>
-          <Input
-            value={trackingEvent.description}
-            aria-label='Tracking description'
-            onChange={(event) =>
-              updateEventDraft("description", event.target.value)
-            }
-          />
-          <Input
-            value={trackingEvent.location}
-            aria-label='Tracking location'
-            onChange={(event) =>
-              updateEventDraft("location", event.target.value)
-            }
-          />
-        </div>
-      </td>
-      <td>
-        <Input
-          value={trackingEvent.date}
-          aria-label='Tracking date'
-          onChange={(event) => updateEventDraft("date", event.target.value)}
-        />
-      </td>
-    </>
-  );
-
   return (
     <section
       className='shipment-tracking-tab'
-      aria-label={`Tracking for shipment ${shipment.bol}`}>
+      aria-label={`Tracking for shipment ${shipment.loadNumber}`}>
       <div className='shipment-tracking-top-grid'>
         <article className='shipment-tracking-card shipment-notification-card'>
           <header>
@@ -303,7 +264,10 @@ function Tracking({ shipment }: { shipment: ShipmentRecord }) {
                   options={[
                     { value: "Shipment tendered", label: "Shipment tendered" },
                     { value: "Shipment departed", label: "Shipment departed" },
-                    { value: "Shipment delivered", label: "Shipment delivered" },
+                    {
+                      value: "Shipment delivered",
+                      label: "Shipment delivered",
+                    },
                   ]}
                   onChange={(event) =>
                     setNotificationDraft((current) =>
@@ -401,7 +365,7 @@ function Tracking({ shipment }: { shipment: ShipmentRecord }) {
               <div key={reminder.id}>
                 <strong>{reminder.user}</strong>
                 <span>
-                  {reminder.dateRange?.join(" Ã¢â‚¬â€œ ")} Ã‚Â· {reminder.time} {" "}
+                  {reminder.dateRange?.join(" Ã¢â‚¬â€œ ")} Ã‚Â· {reminder.time}{" "}
                   {reminder.timezone}
                 </span>
               </div>
@@ -417,121 +381,85 @@ function Tracking({ shipment }: { shipment: ShipmentRecord }) {
 
       <section
         className='shipment-tracking-events'
-        aria-labelledby='tracking-events-title'>
+        aria-labelledby='tracking-status-title'>
         <div className='shipment-tracking-events-head'>
-          <h2 id='tracking-events-title'>Tracking</h2>
+          {/* <h2 id='tracking-status-title'>Status</h2> */}
         </div>
 
-        <div className='shipment-tracking-table-wrap'>
-          <table className='shipment-tracking-table'>
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Type</th>
-                <th>Source</th>
-                <th>Description</th>
-                <th>Date</th>
-                <th aria-label='Actions' />
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((trackingEvent) => {
-                const isEditing = eventEditor?.event.id === trackingEvent.id;
-                return (
-                  <tr
-                    key={trackingEvent.id}
-                    className={isEditing ? "is-editing" : ""}>
-                    {isEditing && eventEditor ? (
-                      renderEventInputs(eventEditor.event)
-                    ) : (
-                      <>
-                        <td>{trackingEvent.status}</td>
-                        <td>{trackingEvent.type}</td>
-                        <td>{trackingEvent.source}</td>
-                        <td>
-                          <strong>{trackingEvent.description}</strong>
-                          <small>Location: {trackingEvent.location}</small>
-                        </td>
-                        <td>{trackingEvent.date}</td>
-                      </>
-                    )}
-                    <td className='shipment-tracking-row-actions'>
-                      {isEditing ? (
-                        <>
-                          <Button
-                            type='text'
-                            size='small'
-                            icon={<CheckOutlined />}
-                            aria-label='Save tracking event'
-                            title='Save'
-                            onClick={saveEvent}
-                          />
-                          <Button
-                            type='text'
-                            size='small'
-                            icon={<CloseOutlined />}
-                            aria-label='Cancel tracking event editing'
-                            title='Cancel'
-                            onClick={() => setEventEditor(null)}
-                          />
-                        </>
-                      ) : (
-                        <Button
-                          type='text'
-                          size='small'
-                          icon={<EditOutlined />}
-                          disabled={Boolean(eventEditor)}
-                          aria-label={`Edit ${trackingEvent.description}`}
-                          title='Edit tracking event'
-                          onClick={() =>
-                            setEventEditor({
-                              event: { ...trackingEvent },
-                              isNew: false,
-                            })
-                          }
-                        />
-                      )}
-                    </td>
+        {isTrackingLoading ? (
+          <div
+            className='shipment-tracking-feedback'
+            role='status'
+            aria-live='polite'>
+            <Spin size='small' />
+            <span>Loading carrier tracking details...</span>
+          </div>
+        ) : null}
+
+        {trackingError ? (
+          <Alert
+            className='shipment-tracking-alert'
+            type='error'
+            showIcon
+            title='Unable to load carrier tracking details'
+            description={trackingError}
+            action={
+              <Button size='small' onClick={loadCarrierTracking}>
+                Retry
+              </Button>
+            }
+          />
+        ) : null}
+
+        {trackingData && !isTrackingLoading && !trackingError ? (
+          <>
+            <p className='shipment-tracking-current-status'>
+              <span>Current Status:</span>{" "}
+              <strong>
+                {trackingData.statusDescription || "Not available"}
+              </strong>
+            </p>
+
+            <div className='shipment-tracking-table-wrap'>
+              <table className='shipment-tracking-table'>
+                <colgroup>
+                  <col className='shipment-tracking-col-date' />
+                  <col className='shipment-tracking-col-description' />
+                  <col className='shipment-tracking-col-city' />
+                  <col className='shipment-tracking-col-state' />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope='col'>Status Date</th>
+                    <th scope='col'>Description</th>
+                    <th scope='col'>City</th>
+                    <th scope='col'>State</th>
                   </tr>
-                );
-              })}
-
-              {eventEditor?.isNew ? (
-                <tr className='is-editing'>
-                  {renderEventInputs(eventEditor.event)}
-                  <td className='shipment-tracking-row-actions'>
-                    <Button
-                      type='text'
-                      size='small'
-                      icon={<CheckOutlined />}
-                      aria-label='Save new tracking event'
-                      title='Save'
-                      onClick={saveEvent}
-                    />
-                    <Button
-                      type='text'
-                      size='small'
-                      icon={<CloseOutlined />}
-                      aria-label='Cancel new tracking event'
-                      title='Cancel'
-                      onClick={() => setEventEditor(null)}
-                    />
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-
-        <div className='shipment-tracking-add-line'>
-          <Button
-            type='text'
-            icon={<PlusOutlined />}
-            disabled={Boolean(eventEditor)}
-            onClick={beginNewEvent}>
-            Add Line
-          </Button>
-        </div>
+                </thead>
+                <tbody>
+                  {!trackingRecords.length ? (
+                    <tr>
+                      <td className='shipment-tracking-empty' colSpan={4}>
+                        No tracking records were returned.
+                      </td>
+                    </tr>
+                  ) : null}
+                  {trackingRecords.map((trackingRecord, index) => (
+                    <tr
+                      key={`${trackingRecord.statusDate}-${trackingRecord.statusCode ?? "status"}-${index}`}>
+                      <td>{formatTrackingDate(trackingRecord.statusDate)}</td>
+                      <td className='shipment-tracking-description-cell'>
+                        {trackingRecord.statusDescription}
+                      </td>
+                      <td>{trackingRecord.city ?? ""}</td>
+                      <td>{trackingRecord.state ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
       </section>
     </section>
   );

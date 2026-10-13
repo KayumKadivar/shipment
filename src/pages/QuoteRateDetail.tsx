@@ -46,7 +46,7 @@ function QuoteRateDetail() {
 
   const { currentQuote: apiQuote, loading } = useAppSelector((state) => state.quote);
   const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
-  const accessorialsData = useAppSelector((state: any) => state.accessorials?.data) || [];
+  const accessorialsData = useAppSelector((state) => state.accessorials.data);
 
   useEffect(() => {
     if (reference) {
@@ -55,8 +55,8 @@ function QuoteRateDetail() {
     dispatch(fetchAccessorials());
   }, [dispatch, reference]);
 
-  const originCountry = (apiQuote as any)?.originCountry || "USA";
-  const destCountry = (apiQuote as any)?.destinationCountry || "USA";
+  const originCountry = apiQuote?.originCountry || "USA";
+  const destCountry = apiQuote?.destinationCountry || "USA";
 
   const dynamicOrigin = apiQuote
     ? `${apiQuote.originCity || ''}, ${apiQuote.originStateCode || ''} ${apiQuote.originZip || ''}, ${originCountry}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ', ')
@@ -72,14 +72,14 @@ function QuoteRateDetail() {
 
   const rates = useMemo<CarrierRate[]>(() => {
     if (apiQuote && apiQuote.quoteResults && apiQuote.quoteResults.length > 0) {
-      return apiQuote.quoteResults.map((result: any, index: number) => {
+      return apiQuote.quoteResults.map((result, index) => {
         let grossCharge = Number(result.grossCharge) || 0;
         let discount = Number(result.discount) || 0;
         let fuelSurcharge = Number(result.fuelSurcharge) || 0;
         const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number }[] = [];
 
         if (result.quoteCostDetails && Array.isArray(result.quoteCostDetails)) {
-          result.quoteCostDetails.forEach((cd: any) => {
+          result.quoteCostDetails.forEach((cd) => {
             const code = (cd.accCode || "").trim().toUpperCase();
             const name = (cd.accName || "").trim().toLowerCase();
             const amount = Number(cd.amount) || 0;
@@ -112,7 +112,7 @@ function QuoteRateDetail() {
           service: result.serviceLevel || result.serviceType || "Standard",
           logoKind: "image" as const,
           price: calculatedPrice > 0 ? calculatedPrice : 0,
-          transitDays: parseInt(result.transitDays) || 0,
+          transitDays: parseInt(result.transitDays || "0") || 0,
           estimatedDelivery: result.estimatedDeliveryDate || "0001-01-01T00:00:00",
           warning: result.errorMessage?.trim() || result.warning?.trim() || (calculatedPrice <= 0 ? "Rate unavailable or carrier error." : ""),
           quoteExpiry: apiQuote.requestedDate || "N/A",
@@ -204,7 +204,7 @@ function QuoteRateDetail() {
           destCountry: destCountry,
           packages: [{
             id: "package-1",
-            items: (apiQuote.quoteProducts || []).map((p: any, idx: number) => ({
+            items: (apiQuote.quoteProducts || []).map((p, idx) => ({
               id: `item-${idx + 1}`,
               units: String(p.pallets ?? p.units ?? ""),
               handlingUnit: p.packagingGroup || p.packageType || "Pallet",
@@ -224,7 +224,14 @@ function QuoteRateDetail() {
               hazMatUN: p.hazmatUN ?? "",
             })),
           }],
-          selectedAccessorials: (apiQuote.quoteAccessorials || []).map((a: any) => a.accCode || a.description || a),
+          selectedAccessorials: (apiQuote.quoteAccessorials || []).map(
+            (a) =>
+              a.accCode ||
+              a.description ||
+              a.accessorialName ||
+              a.accesorialCode ||
+              "",
+          ),
           selectedClientCode: apiQuote.clientCode || undefined,
         })
       );
@@ -233,10 +240,10 @@ function QuoteRateDetail() {
   };
 
   const handleShipIt = (rate: CarrierRate) => {
-    let quoteToSend = apiQuote ? { ...apiQuote } : undefined;
+    const quoteToSend = apiQuote ? { ...apiQuote } : undefined;
     if (quoteToSend?.quoteProducts) {
-      const formItems = quoteFormData?.packages?.flatMap((p: any) => p.items || []) || [];
-      quoteToSend.quoteProducts = quoteToSend.quoteProducts.map((p: any, idx: number) => {
+      const formItems = quoteFormData?.packages?.flatMap((p) => p.items || []) || [];
+      quoteToSend.quoteProducts = quoteToSend.quoteProducts.map((p, idx) => {
         const matchingForm = formItems[idx];
         return {
           ...p,
@@ -350,7 +357,10 @@ function QuoteRateDetail() {
     );
   }
 
-  const totalWeight = (apiQuote?.quoteProducts || []).reduce((acc: number, item: any) => acc + (Number(item.weight) || 0), 0);
+  const totalWeight = (apiQuote?.quoteProducts || []).reduce(
+    (acc, item) => acc + (Number(item.weight) || 0),
+    0,
+  );
 
   return (
     <section className='rate-page'>
@@ -411,7 +421,7 @@ function QuoteRateDetail() {
 
           <article className='rate-items-card'>
             <h2>ITEMS</h2>
-            {(apiQuote?.quoteProducts || []).map((item: any, index: number) => {
+            {(apiQuote?.quoteProducts || []).map((item, index) => {
               const pieces = item.pieces != null && item.pieces !== 0 && item.pieces !== "" ? item.pieces : (item.pallets ?? item.units ?? "");
               const pkgType = (item.packagingGroup || item.packageType || "PALLET").toUpperCase();
               const fClass = item.productClass || item.class;
@@ -451,9 +461,19 @@ function QuoteRateDetail() {
             <article className='rate-items-card'>
               <h2>ACCESSORIALS</h2>
               <div className='rate-items-card__body rate-accessorials-list'>
-                {apiQuote.quoteAccessorials.map((acc: any, idx: number) => {
-                  const accCode = (acc.accCode || acc.accesorialCode || acc.accessorialName || acc.description || acc || "").toString();
-                  const match = accessorialsData.find((a: any) => a.accesorialCode === accCode || a.accessorialName === accCode);
+                {apiQuote.quoteAccessorials.map((acc, idx) => {
+                  const accCode = (
+                    acc.accCode ||
+                    acc.accesorialCode ||
+                    acc.accessorialName ||
+                    acc.description ||
+                    ""
+                  ).toString();
+                  const match = accessorialsData.find(
+                    (a) =>
+                      a.accesorialCode === accCode ||
+                      a.accessorialName === accCode,
+                  );
                   const displayName = match ? match.accessorialName : (acc.accName || acc.description || accCode);
                   return (
                     <strong key={idx} className='rate-item-pill'>{displayName}</strong>

@@ -16,50 +16,7 @@ interface DocumentRecord {
   date: string;
 }
 
-const documentData: DocumentRecord[] = [
-  {
-    key: '1',
-    type: 'Bill Of Lading',
-    filename: '60113985278-billoflading-639123087389003440.pdf',
-    source: 'Priority 1',
-    date: '4/25/2026',
-  },
-  {
-    key: '2',
-    type: 'Carrier Bill Of Lading',
-    filename: 'bolentry3.pdf?encpronumb=10VW6Hje...',
-    source: 'Carrier',
-    date: '4/25/2026',
-  },
-  {
-    key: '3',
-    type: 'Pallet Label Summary',
-    filename: '60113985278-palletlabel-639123087391819545.pdf',
-    source: 'Priority 1',
-    date: '4/25/2026',
-  },
-  {
-    key: '4',
-    type: 'Pallet Label Summary Extended',
-    filename: '60113985278-palletlabelexpended-639123087405518676.pdf',
-    source: 'Priority 1',
-    date: '4/25/2026',
-  },
-  {
-    key: '5',
-    type: 'Pallet Labels',
-    filename: '60113985278-palletlabels-639123087395669591.pdf',
-    source: 'Priority 1',
-    date: '4/25/2026',
-  },
-  {
-    key: '6',
-    type: 'Rate Confirmation',
-    filename: '60113985278-rateconfirmation-639123087420286633.pdf',
-    source: 'Priority 1',
-    date: '4/25/2026',
-  },
-];
+const documentData: DocumentRecord[] = [];
 
 function Document() {
   const columns: ColumnsType<DocumentRecord> = [

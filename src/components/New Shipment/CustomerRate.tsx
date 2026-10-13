@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Form, Input, Select, Button, Row, Col, Spin, message, Alert } from 'antd';
+import { Card, Form, Input, Select, Button, Row, Col, Spin, message, Alert, Checkbox } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import type { AppDispatch, RootState } from '../../app/store';
@@ -72,7 +72,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const isRating = loadingRate ?? loading;
   const activeError = rateError !== undefined ? rateError : storeError;
 
-  // Markup percentage
+  // Markup state
+  const [markupType, setMarkupType] = useState<'flat' | 'percentage'>('flat');
   const [markup, setMarkup] = useState<string>("0");
 
   // Carrier inputs
@@ -128,7 +129,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           code: activeCarrier.carrierCode || "GROSS",
           description: "Gross Charge",
           buyAmount: gross,
-          customerAmount: gross * markupMultiplier,
+          customerAmount: markupType === 'flat' ? gross + numericMarkup : gross * markupMultiplier,
         });
       }
 
@@ -150,7 +151,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           code: "FUEL",
           description: "Fuel Surcharge",
           buyAmount: fuel,
-          customerAmount: fuel * markupMultiplier,
+          customerAmount: markupType === 'flat' ? fuel : fuel * markupMultiplier,
         });
       }
 
@@ -163,7 +164,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
             code: acc.code || "ACC",
             description: acc.accessorialDescription || "Accessorial",
             buyAmount: amt,
-            customerAmount: amt * markupMultiplier,
+            customerAmount: markupType === 'flat' ? amt : amt * markupMultiplier,
           });
         }
       });
@@ -176,25 +177,29 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           code: activeCarrier.carrierCode || "LTL",
           description: `Freight Charge - ${activeCarrier.carrierName || "Carrier"}`,
           buyAmount: price,
-          customerAmount: price * markupMultiplier,
+          customerAmount: markupType === 'flat' ? price + numericMarkup : price * markupMultiplier,
         });
       }
     }
 
     // 5. Custom charges added by user
-    customCharges.forEach((c) => {
+    const hasCarrierGrossOrFreight = items.some((i) => i.id === "line-gross" || i.id === "line-freight");
+    customCharges.forEach((c, idx) => {
+      const custAmt = markupType === 'flat'
+        ? (!hasCarrierGrossOrFreight && idx === 0 ? c.buyAmount + numericMarkup : c.buyAmount)
+        : c.buyAmount * markupMultiplier;
       items.push({
         id: c.id,
         code: c.code,
         description: c.description,
         buyAmount: c.buyAmount,
-        customerAmount: c.buyAmount * markupMultiplier,
+        customerAmount: custAmt,
         isCustom: true,
       });
     });
 
     return items;
-  }, [activeCarrier, markupMultiplier, customCharges]);
+  }, [activeCarrier, markupType, numericMarkup, markupMultiplier, customCharges]);
 
   // Totals
   const grossItem = lineItems.find((i) => i.id === "line-gross" || i.id === "line-freight");
@@ -203,6 +208,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
   const netFreightCustomer = (grossItem ? grossItem.customerAmount : 0) + (discountItem ? discountItem.customerAmount : 0);
   const totalCustomer = lineItems.reduce((acc, item) => acc + item.customerAmount, 0);
+  const netFreightBuy = (grossItem ? grossItem.buyAmount : 0) + (discountItem ? discountItem.buyAmount : 0);
+  const totalBuy = lineItems.reduce((acc, item) => acc + item.buyAmount, 0);
 
   const fuelPercentage = useMemo(() => {
     if (fuelItem && netFreightCustomer > 0) {
@@ -317,9 +324,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
       <Form layout="vertical" className="compact-form">
 
-        {/* Row 1: Carrier + Mark Up % + Carrier + Rate Button */}
+        {/* Row 1: Carrier + Mark Up (Flat / Percentage) + Carrier + Rate Button */}
         <Row gutter={[12, 12]} className="mb-16">
-          <Col xs={24} md={6}>
+          <Col xs={24} md={5}>
             <Form.Item noStyle>
               <Input
                 placeholder="Carrier"
@@ -328,19 +335,47 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={14}>
-            <div className="flex-align-center gap-8 text-muted-13">
-              <span>Mark Up</span>
-              <Input
-                value={markup}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^0-9.]/g, '');
-                  setMarkup(val);
-                }}
-                className="input-sm-center"
-              />
-              <span>%</span>
-              <div>
+          <Col xs={24} md={15}>
+            <div
+              className="text-muted-13"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'nowrap',
+                width: '100%',
+              }}
+            >
+              <span style={{ fontWeight: 600, color: '#333', whiteSpace: 'nowrap', marginRight: '2px' }}>
+                Mark Up
+              </span>
+              <Checkbox
+                checked={markupType === 'flat'}
+                onChange={(e) => setMarkupType(e.target.checked ? 'flat' : 'percentage')}
+                style={{ marginLeft: 0 }}
+              >
+                Flat
+              </Checkbox>
+              <Checkbox
+                checked={markupType === 'percentage'}
+                onChange={(e) => setMarkupType(e.target.checked ? 'percentage' : 'flat')}
+                style={{ marginLeft: 0 }}
+              >
+                Percentage
+              </Checkbox>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', marginRight: '4px' }}>
+                {markupType === 'flat' && <span style={{ fontWeight: 600, color: '#333' }}>$</span>}
+                <Input
+                  value={markup}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                    setMarkup(val);
+                  }}
+                  className="input-sm-center"
+                />
+                {markupType === 'percentage' && <span style={{ fontWeight: 600, color: '#333' }}>%</span>}
+              </div>
+              <div style={{ flex: 1, minWidth: 100 }}>
                 <Form.Item noStyle>
                   <Input
                     placeholder="Carrier"
@@ -482,17 +517,35 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
       {/* Totals */}
       <div className="mt-16">
-        <div className="flex-between mb-8 text-muted-13">
-          <span>Net Freight</span>
-          <strong className="text-dark-13">{formatCurrency(netFreightCustomer)}</strong>
+        <div className="rate-total-summary-row mb-8 text-muted-13">
+          <div className="col-80"></div>
+          <div className="col-flex-1">Net Freight</div>
+          <div className="col-100 text-right">
+            <strong className="text-dark-13">{formatCurrency(netFreightBuy)}</strong>
+          </div>
+          <div className="col-100 text-right">
+            <strong className="text-dark-13">{formatCurrency(netFreightCustomer)}</strong>
+          </div>
         </div>
-        <div className="flex-between mb-12 text-muted-13">
-          <span>Fuel (%)</span>
-          <strong className="text-dark-13">{fuelPercentage}%</strong>
+        <div className="rate-total-summary-row mb-12 text-muted-13">
+          <div className="col-80"></div>
+          <div className="col-flex-1">Fuel (%)</div>
+          <div className="col-100 text-right">
+            <strong className="text-dark-13">{fuelPercentage}%</strong>
+          </div>
+          <div className="col-100 text-right">
+            <strong className="text-dark-13">{fuelPercentage}%</strong>
+          </div>
         </div>
-        <div className="flex-between mb-16 rate-total-row">
-          <span>Total</span>
-          <span>{formatCurrency(totalCustomer)}</span>
+        <div className="rate-total-summary-row mb-16 rate-total-row">
+          <div className="col-80"></div>
+          <div className="col-flex-1">Total</div>
+          <div className="col-100 text-right">
+            <span>{formatCurrency(totalBuy)}</span>
+          </div>
+          <div className="col-100 text-right">
+            <span>{formatCurrency(totalCustomer)}</span>
+          </div>
         </div>
       </div>
     </Card>

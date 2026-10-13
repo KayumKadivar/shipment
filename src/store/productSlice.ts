@@ -18,6 +18,10 @@ export interface ProductItem {
   weight: number | string;
   hazmatClass?: string;
   hazmatUN?: string;
+  hazmatProperShippingName?: string;
+  hazmatPackingGroup?: string;
+  hazmatPhone?: string;
+  hazmatContact?: string;
 }
 
 // interface for product state
@@ -89,6 +93,28 @@ const productSlice = createSlice({
         Object.assign(item, { [action.payload.field]: action.payload.value });
       }
     },
+    // update product hazmat details
+    updateProductHazmat: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        hazmat: boolean;
+        hazmatClass: string;
+        hazmatUN: string;
+        hazmatProperShippingName: string;
+        hazmatPackingGroup: string;
+        hazmatPhone: string;
+        hazmatContact: string;
+      }>
+    ) => {
+      const item = state.items.find((item) => item.id === action.payload.id);
+      if (item) {
+        Object.assign(item, action.payload);
+        if (action.payload.hazmat) {
+          item.stackable = false;
+        }
+      }
+    },
     // set weight unit
     setWeightUnit: (state, action: PayloadAction<"Lbs" | "Kgs">) => {
       state.weightUnit = action.payload;
@@ -123,5 +149,5 @@ const productSlice = createSlice({
   },
 });
 
-export const { addProductRow, removeProductRow, updateProductRow, setWeightUnit, setProductItems, resetProductItems } = productSlice.actions;
+export const { addProductRow, removeProductRow, updateProductRow, updateProductHazmat, setWeightUnit, setProductItems, resetProductItems } = productSlice.actions;
 export default productSlice.reducer;

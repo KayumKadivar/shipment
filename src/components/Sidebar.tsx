@@ -2,6 +2,7 @@ import {
   AppstoreOutlined,
   CaretUpOutlined,
   FileTextOutlined,
+  GlobalOutlined,
   ProfileOutlined,
   TeamOutlined,
   TruckOutlined,
@@ -9,7 +10,35 @@ import {
 import { Avatar, Layout, Menu, Typography, type MenuProps } from "antd";
 import { useLocation, useNavigate } from "react-router-dom";
 import avatarImage from "../assets/avtar.png";
-import nicoSidebarLogo from "../assets/side-head.png";
+import nicoSidebarLogo from "../assets/sideheadig.svg";
+
+
+const { Sider } = Layout;
+
+const menuItems: NonNullable<MenuProps["items"]> = [
+  { key: "/shipments", icon: <TruckOutlined />, label: "Shipments" },
+  { key: "/quotes", icon: <FileTextOutlined />, label: "Quotes" },
+  {
+    key: "/quote-summary",
+    icon: <ProfileOutlined />,
+    label: "Quote Summary",
+  },
+  {
+    key: "/customer-location",
+    icon: <TeamOutlined />,
+    label: "Customer Location",
+  },
+  {
+    key: "/customer-products",
+    icon: <AppstoreOutlined />,
+    label: "Customer Products",
+  },
+  {
+    key: "nico-tms-portal",
+    icon: <GlobalOutlined />,
+    label: "NICO TMS Portal",
+  },
+];
 
 
 type SidebarProps = {
@@ -17,7 +46,7 @@ type SidebarProps = {
   onCollapsedChange: (collapsed: boolean) => void;
 };
 
-const { Sider } = Layout;
+
 
 function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
   const location = useLocation();
@@ -37,29 +66,14 @@ function Sidebar({ collapsed, onCollapsedChange }: SidebarProps) {
               : location.pathname;
 
   const handleMenuClick: MenuProps["onClick"] = ({ key }) => {
+    if (key === "nico-tms-portal") {
+      return;
+    }
+
     navigate(String(key));
   };
 
-  const menuItems: NonNullable<MenuProps["items"]> = [
-    { key: "/shipments", icon: <TruckOutlined />, label: "Shipments" },
-    { key: "/quotes", icon: <FileTextOutlined />, label: "Quotes" },
-    {
-      key: "/quote-summary",
-      icon: <ProfileOutlined />,
-      label: "Quote Summary",
-    },
-    {
-      key: "/customer-location",
-      icon: <TeamOutlined />,
-      label: "Customer Location",
-    },
-    {
-      key: "/customer-products",
-      icon: <AppstoreOutlined />,
-      label: "Customer Products",
-    },
-  ];
-
+  
   return (
     <Sider
       breakpoint='lg'

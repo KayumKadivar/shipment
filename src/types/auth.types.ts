@@ -10,11 +10,17 @@ export interface LoginResponse {
   data: string;
 }
 
+export interface Country {
+  countryId: number;
+  countryCode: string;
+  countryName: string;
+}
+
 export interface AppState {
   isAuthenticated: boolean;
   token: string | null;
   username: string | null;
-  countries: any[];
+  countries: Country[];
   profileCode: string | null;
   loading: boolean;
   error: string | null;

@@ -59,7 +59,7 @@ function QuoteSummary() {
 
   const dynamicQuoteSummaryData: QuoteSummaryRecord[] = useMemo(() => {
     return apiQuotes.map((q) => {
-      const result = q.quoteResults?.[0] || {};
+      const result = q.quoteResults?.[0];
       const date = q.requestedDate ? new Date(q.requestedDate) : new Date();
       return {
         key: `quote-${q.quoteRequestId}`,
@@ -75,15 +75,15 @@ function QuoteSummary() {
         destination: `${q.destinationCity || ""}, ${q.destinationStateCode || ""}`,
         destinationPostal: q.destinationZip || "",
         loads: (q.quoteProducts || []).map((p) => ({
-          freightClass: p.productClass || "",
+          freightClass: String(p.productClass || ""),
           weight: `${p.weight || 0} lbs`,
         })),
-        carrierCode: result.scac || "",
-        carrierName: result.carrierName || "",
+        carrierCode: result?.scac || "",
+        carrierName: result?.carrierName || "",
         createdBy: q.profileCode || "",
         profile: q.profileCode || "",
-        totalWeight: `${(q.quoteProducts || []).reduce((acc, p) => acc + (p.weight || 0), 0)} lbs`,
-        pallets: (q.quoteProducts || []).reduce((acc, p) => acc + (p.pallets || 0), 0),
+        totalWeight: `${(q.quoteProducts || []).reduce((acc, p) => acc + (Number(p.weight) || 0), 0)} lbs`,
+        pallets: (q.quoteProducts || []).reduce((acc, p) => acc + (Number(p.pallets) || 0), 0),
         pieces: 0,
       };
     });

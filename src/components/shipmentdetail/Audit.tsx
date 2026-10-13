@@ -11,56 +11,7 @@ interface AuditRecord {
   date: string;
 }
 
-const auditData: AuditRecord[] = [
-  {
-    key: '1',
-    name: 'Brian Young',
-    email: 'brianyoung@inland.com',
-    change: 'Details',
-    action: 'Delivery contact phone update',
-    date: '4/25/2026',
-  },
-  {
-    key: '2',
-    name: 'Brian Young',
-    email: 'brianyoung@inland.com',
-    change: 'Load',
-    action: 'Pallet count updated',
-    date: '4/25/2026',
-  },
-  {
-    key: '3',
-    name: 'Brian Young',
-    email: 'brianyoung@inland.com',
-    change: 'Load',
-    action: 'Pallet weight updated',
-    date: '4/25/2026',
-  },
-  {
-    key: '4',
-    name: 'Brian Young',
-    email: 'brianyoung@inland.com',
-    change: 'Charges',
-    action: 'Fuel surcharge updated',
-    date: '4/25/2026',
-  },
-  {
-    key: '5',
-    name: 'Brian Young',
-    email: 'brianyoung@inland.com',
-    change: 'Documents',
-    action: 'Bill of Lading updated',
-    date: '4/25/2026',
-  },
-  {
-    key: '6',
-    name: 'Brian Young',
-    email: 'brianyoung@inland.com',
-    change: 'Tracking',
-    action: 'Tracking reminder added',
-    date: '4/25/2026',
-  },
-];
+const auditData: AuditRecord[] = [];
 
 function Audit() {
   const columns: ColumnsType<AuditRecord> = [

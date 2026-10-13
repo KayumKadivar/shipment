@@ -52,6 +52,7 @@ import type {
   ProductGroupSummary,
   ProductView,
 } from "../types/customerProduct.types";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 interface CustomerProductPageProps {
   products: CustomerProduct[];
@@ -173,16 +174,11 @@ function CustomerProductPage({
     dispatch(getProductPackageTypes());
   }, [dispatch]);
 
-  useEffect(() => {
-    if (clients.length > 0) {
-      const isClientValid = clients.some(c => c.clientCode === selectedClientCode);
-      if (!isClientValid) {
-        const defaultClient = clients[0].clientCode;
-        setSelectedClientCode(defaultClient);
-        sessionStorage.setItem("customerProduct_selectedClientCode", defaultClient);
-      }
-    }
-  }, [clients, selectedClientCode]);
+  const activeClientCode = clients.some(
+    (client) => client.clientCode === selectedClientCode,
+  )
+    ? selectedClientCode
+    : clients[0]?.clientCode || "";
 
   // Update session storage when user changes client manually
   const handleClientChange = (value: string) => {
@@ -203,14 +199,14 @@ function CustomerProductPage({
   }, [query]);
 
   useEffect(() => {
-    if (!selectedClientCode) return; // wait until client is selected
+    if (!activeClientCode) return; // wait until client is selected
     dispatch(getCustomerProducts({
-      clientCode: selectedClientCode,
+      clientCode: activeClientCode,
       searchText: debouncedQuery,
       pageNumber: currentPage,
       pageSize: pageSize
     }));
-  }, [dispatch, selectedClientCode, debouncedQuery, currentPage, pageSize]);
+  }, [dispatch, activeClientCode, debouncedQuery, currentPage, pageSize]);
 
   const filteredProducts = products;
   const visibleProducts = products;
@@ -271,7 +267,7 @@ function CustomerProductPage({
   };
 
   const openAddForm = () => {
-    const selectedClient = clients.find(c => c.clientCode === selectedClientCode);
+    const selectedClient = clients.find(c => c.clientCode === activeClientCode);
     navigate("/customer-products/add", {
       state: {
         clientName: selectedClient?.clientName || ""
@@ -292,7 +288,7 @@ function CustomerProductPage({
       setEditingProduct(response);
       form.setFieldsValue(response);
       setIsFormOpen(true);
-    } catch (error) {
+    } catch {
       setEditingProduct(product);
       form.setFieldsValue(product);
       setIsFormOpen(true);
@@ -345,7 +341,7 @@ function CustomerProductPage({
           }
 
           dispatch(getCustomerProducts({
-            clientCode: selectedClientCode,
+            clientCode: activeClientCode,
             searchText: debouncedQuery,
             pageNumber: currentPage,
             pageSize: pageSize
@@ -353,8 +349,11 @@ function CustomerProductPage({
 
           setSelectedKeys(new Set());
           messageApi.success({ content: "Selected products deleted", key: "deleteProd" });
-        } catch (error: any) {
-          messageApi.error({ content: `Failed to delete products: ${error}`, key: "deleteProd" });
+        } catch (error: unknown) {
+          messageApi.error({
+            content: getApiErrorMessage(error, "Failed to delete products."),
+            key: "deleteProd",
+          });
         }
       },
     });
@@ -367,7 +366,7 @@ function CustomerProductPage({
     setPageSize(10);
     setSelectedKeys(new Set());
     dispatch(getCustomerProducts({
-      clientCode: selectedClientCode,
+      clientCode: activeClientCode,
       searchText: "",
       pageNumber: 1,
       pageSize: 10
@@ -633,11 +632,11 @@ function CustomerProductPage({
           <Select
             showSearch
             placeholder='Search or select client...'
-            value={selectedClientCode}
+            value={activeClientCode}
             onChange={handleClientChange}
             style={{ minWidth: 250 }}
             filterOption={(input, option) =>
-              String((option as any)?.searchValue || "")
+              String(option?.searchValue || "")
                 .toLowerCase()
                 .includes(input.toLowerCase())
             }

@@ -1,18 +1,14 @@
-import { EditOutlined } from "@ant-design/icons";
 import { DatePicker, Input, TimePicker } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import type { ReactNode } from "react";
 import carrierLogo from "../../assets/inland1.png";
-import type { ShipmentRecord } from "../../pages/shipmentData";
-import type { ShipmentDetailEditValues } from "./detailEditValues";
-
-function cleanText(value: string) {
-  return value.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function buildAddress(primary: string, meta: string) {
-  return cleanText(`${primary} ${meta}`);
-}
+import type { ShipmentDetails } from "../../types/shipment.types";
+import DetailEditActions from "./DetailEditActions";
+import {
+  text,
+  type ShipmentDetailEditSection,
+  type ShipmentDetailEditValues,
+} from "./detailEditValues";
 
 function DetailField({
   label,
@@ -26,7 +22,11 @@ function DetailField({
   onChange?: (value: string) => void;
 }) {
   return (
-    <div className='shipment-detail-field'>
+    <div
+      className={`shipment-detail-field${
+        isEditing && onChange ? " shipment-detail-field--editing" : ""
+      }`}
+    >
       <span>{label}</span>
       {isEditing && onChange ? (
         <Input
@@ -37,7 +37,7 @@ function DetailField({
           onChange={(event) => onChange(event.target.value)}
         />
       ) : (
-        <strong>{value || "—"}</strong>
+        <strong>{value}</strong>
       )}
     </div>
   );
@@ -104,7 +104,7 @@ function ScheduleField({
   if (!isEditing) return <DetailField label={label} value={value} />;
 
   return (
-    <div className='shipment-detail-field'>
+    <div className='shipment-detail-field shipment-detail-field--editing'>
       <span>{label}</span>
       {type === "date" ? (
         <DatePicker
@@ -141,17 +141,17 @@ function ScheduleField({
 function DetailCard({
   title,
   children,
-  editable = true,
+  actions,
 }: {
   title: string;
   children: ReactNode;
-  editable?: boolean;
+  actions?: ReactNode;
 }) {
   return (
     <article className='shipment-detail-card'>
       <div className='shipment-detail-card__head'>
         <h3>{title}</h3>
-        {editable ? <EditOutlined /> : null}
+        {actions}
       </div>
       <div className='shipment-detail-card__body'>{children}</div>
     </article>
@@ -159,92 +159,113 @@ function DetailCard({
 }
 
 type DetailsProps = {
-  shipment: ShipmentRecord;
-  isEditing: boolean;
+  shipment: ShipmentDetails;
+  activeEditor: ShipmentDetailEditSection | null;
   values: ShipmentDetailEditValues;
   onFieldChange: (
     field: keyof ShipmentDetailEditValues,
     value: string,
   ) => void;
+  onBeginEditing: (section: ShipmentDetailEditSection) => void;
+  onSaveEditing: () => void;
+  onCancelEditing: () => void;
 };
 
 function Details({
   shipment,
-  isEditing,
+  activeEditor,
   values,
   onFieldChange,
+  onBeginEditing,
+  onSaveEditing,
+  onCancelEditing,
 }: DetailsProps) {
-  const originAddress = buildAddress(shipment.origin, shipment.originMeta);
-  const destinationAddress = buildAddress(
-    shipment.destination,
-    shipment.destinationMeta,
-  );
-
   const editableField = (
     label: string,
     field: keyof ShipmentDetailEditValues,
+    section: ShipmentDetailEditSection,
   ) => (
     <DetailField
       label={label}
       value={values[field]}
-      isEditing={isEditing}
+      isEditing={activeEditor === section}
       onChange={(value) => onFieldChange(field, value)}
     />
   );
 
+  const editActions = (
+    label: string,
+    section: ShipmentDetailEditSection,
+  ) => (
+    <DetailEditActions
+      label={label}
+      isEditing={activeEditor === section}
+      disabled={activeEditor !== null && activeEditor !== section}
+      onEdit={() => onBeginEditing(section)}
+      onSave={onSaveEditing}
+      onCancel={onCancelEditing}
+    />
+  );
+
   return (
-    <section aria-label={`Details for shipment ${shipment.bol}`}>
+    <section aria-label={`Details for shipment ${shipment.loadNumber}`}>
       <div className='shipment-detail-grid'>
-        <DetailCard title='Pickup'>
-          {editableField("Company name", "pickupCompanyName")}
-          {editableField("Address Line 1", "pickupAddressLine1")}
-          {editableField("Address Line 2", "pickupAddressLine2")}
-          {editableField("City/state/zip", "pickupCityStateZip")}
-          {editableField("Contact phone", "pickupContactPhone")}
+        <DetailCard title='Pickup' actions={editActions("Pickup", "pickup")}>
+          {editableField("Company name", "pickupCompanyName", "pickup")}
+          {editableField("Address Line 1", "pickupAddressLine1", "pickup")}
+          {editableField("Address Line 2", "pickupAddressLine2", "pickup")}
+          {editableField("City/state/zip", "pickupCityStateZip", "pickup")}
+          {editableField("Contact phone", "pickupContactPhone", "pickup")}
+          {editableField("Origin Email", "originEmail", "pickup")}
         </DetailCard>
 
-        <DetailCard title='Delivery'>
-          {editableField("Company name", "deliveryCompanyName")}
-          {editableField("Address Line 1", "deliveryAddressLine1")}
-          {editableField("Address Line 2", "deliveryAddressLine2")}
-          {editableField("City/state/zip", "deliveryCityStateZip")}
-          {editableField("Contact phone", "deliveryContactPhone")}
+        <DetailCard
+          title='Delivery'
+          actions={editActions("Delivery", "delivery")}>
+          {editableField("Company name", "deliveryCompanyName", "delivery")}
+          {editableField("Address Line 1", "deliveryAddressLine1", "delivery")}
+          {editableField("Address Line 2", "deliveryAddressLine2", "delivery")}
+          {editableField("City/state/zip", "deliveryCityStateZip", "delivery")}
+          {editableField("Contact phone", "deliveryContactPhone", "delivery")}
+          {editableField("Destination Email", "destinationEmail", "delivery")}
         </DetailCard>
 
-        <DetailCard title='Schedule'>
+        <DetailCard
+          title='Schedule'
+          actions={editActions("Schedule", "schedule")}>
           <ScheduleField
             label='Pickup date'
             value={values.schedulePickupDate}
             type='date'
-            isEditing={isEditing}
+            isEditing={activeEditor === "schedule"}
             onChange={(value) => onFieldChange("schedulePickupDate", value)}
           />
           <ScheduleField
             label='Pickup time'
             value={values.schedulePickupTime}
             type='time-range'
-            isEditing={isEditing}
+            isEditing={activeEditor === "schedule"}
             onChange={(value) => onFieldChange("schedulePickupTime", value)}
           />
           <ScheduleField
             label='Delivery date'
             value={values.scheduleDeliveryDate}
             type='date'
-            isEditing={isEditing}
+            isEditing={activeEditor === "schedule"}
             onChange={(value) => onFieldChange("scheduleDeliveryDate", value)}
           />
           <ScheduleField
             label='Delivery time'
             value={values.scheduleDeliveryTime}
             type='time-range'
-            isEditing={isEditing}
+            isEditing={activeEditor === "schedule"}
             onChange={(value) => onFieldChange("scheduleDeliveryTime", value)}
           />
           <ScheduleField
             label='Actual delivery date'
             value={values.scheduleActualDeliveryDate}
             type='date'
-            isEditing={isEditing}
+            isEditing={activeEditor === "schedule"}
             onChange={(value) =>
               onFieldChange("scheduleActualDeliveryDate", value)
             }
@@ -253,54 +274,51 @@ function Details({
             label='Actual pickup date'
             value={values.scheduleActualPickupDate}
             type='date'
-            isEditing={isEditing}
+            isEditing={activeEditor === "schedule"}
             onChange={(value) =>
               onFieldChange("scheduleActualPickupDate", value)
             }
           />
         </DetailCard>
 
-        <DetailCard title='Booking Info'>
-          <DetailField label='Created By' value='Chuck Hachemeister' />
-          <DetailField label='Tendered By' value='Chuck Hachemeister' />
+        <DetailCard title='Bill To' actions={editActions("Bill To", "billTo")}>
+          {editableField("Company name", "billToName", "billTo")}
+          {editableField("Address Line 1", "billToAddress1", "billTo")}
+          {editableField("Address Line 2", "billToAddress2", "billTo")}
+          {editableField("City", "billToCityName", "billTo")}
+          {editableField("State", "billToStateCode", "billTo")}
+          {editableField("Postal code", "billToPostalCode", "billTo")}
+          {editableField("Country", "billToCountryCode", "billTo")}
+          {editableField("Fax", "billToFaxNo", "billTo")}
         </DetailCard>
       </div>
 
       <h2 className='shipment-detail-section-title'>Carrier Information</h2>
 
       <div className='shipment-detail-grid'>
-        <DetailCard title='Origin Terminal' editable={false}>
-          <DetailField label='Address Line 1' value={originAddress} />
-          <DetailField
-            label='City/state/zip'
-            value={cleanText(shipment.originMeta)}
-          />
-          <DetailField label='Contact phone' value='+1 (800) 716-6787' />
+        <DetailCard title='Origin Terminal'>
+          <DetailField label='Address Line 1' value='' />
+          <DetailField label='City/state/zip' value='' />
+          <DetailField label='Contact phone' value='' />
         </DetailCard>
 
-        <DetailCard title='Destination Terminal' editable={false}>
-          <DetailField label='Address Line 1' value={destinationAddress} />
-          <DetailField
-            label='City/state/zip'
-            value={cleanText(shipment.destinationMeta)}
-          />
-          <DetailField label='Contact phone' value='+1 (614) 921-2121' />
+        <DetailCard title='Destination Terminal'>
+          <DetailField label='Address Line 1' value='' />
+          <DetailField label='City/state/zip' value='' />
+          <DetailField label='Contact phone' value='' />
         </DetailCard>
 
         <article className='shipment-detail-card shipment-detail-carrier-card'>
           <img src={carrierLogo} alt='Carrier logo' />
-          <DetailField label='Mode' value='LTL' />
+          <DetailField
+            label='Mode'
+            value={text(shipment.equipment || shipment.shipmentMode)}
+          />
         </article>
 
-        <DetailCard title='Note'>
-          <DetailField
-            label='Pickup Note'
-            value={shipment.carrierNote || "Kowa Ref 20154"}
-          />
-          <DetailField
-            label='Delivery Note'
-            value={`PO# ${shipment.customerNo}`}
-          />
+        <DetailCard title='Note' actions={editActions("Note", "note")}>
+          {editableField("Pickup Note", "pickupNote", "note")}
+          {editableField("Delivery Note", "deliveryNote", "note")}
         </DetailCard>
       </div>
     </section>

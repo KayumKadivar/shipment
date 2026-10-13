@@ -24,6 +24,7 @@ import SendRatesDialog, {
   type SendRateItem,
 } from "../components/rate/SendRatesDialog";
 import AdvancedMapMarker from "../lib/AdvancedMapMarker";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 import {
   computeDrivingRoute,
   type ComputedRoute,
@@ -159,7 +160,7 @@ export function RateMap({ originAddress, destinationAddress }: { originAddress: 
     return () => {
       cancelled = true;
     };
-  }, [hasApiKey, isLoaded]);
+  }, [destinationAddress, hasApiKey, isLoaded, originAddress]);
 
   useEffect(() => {
     if (!map || !window.google) return;
@@ -255,27 +256,23 @@ export function RateMap({ originAddress, destinationAddress }: { originAddress: 
 
 export function CarrierLogo({ rate }: { rate: CarrierRate }) {
   const dispatch = useAppDispatch();
-  const [loading, setLoading] = useState(!rate.logo);
   const [error, setError] = useState(false);
   const [localLogo, setLocalLogo] = useState<string | null>(rate.logo || null);
 
   useEffect(() => {
-    if (!rate.logo && !localLogo && rate.code) {
-      setLoading(true);
-      dispatch(fetchCarrierLogo(rate.code))
-        .unwrap()
-        .then((res: any) => {
-          if (res?.logo) setLocalLogo(res.logo);
-          setLoading(false);
-        })
-        .catch(() => {
-          setError(true);
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
+    if (rate.logo || localLogo || !rate.code) return;
+
+    void dispatch(fetchCarrierLogo(rate.code))
+      .unwrap()
+      .then((res) => {
+        if (res.logo) setLocalLogo(res.logo);
+      })
+      .catch(() => {
+        setError(true);
+      });
   }, [rate.code, rate.logo, localLogo, dispatch]);
+
+  const loading = !rate.logo && !localLogo && !error && Boolean(rate.code);
 
   if (loading) {
     return <div className="rate-placeholder-logo"><Spin size="small" /></div>;
@@ -414,7 +411,7 @@ function Rate() {
   const ratesFromStore = useAppSelector((state) => state.customerRate.rates) as CarrierRate[];
   const loadingRates = useAppSelector((state) => state.customerRate.loading);
   const quoteRequest = useAppSelector((state) => state.customerRate.quoteRequest);
-  const accessorialsData = useAppSelector((state: any) => state.accessorials?.data) || [];
+  const accessorialsData = useAppSelector((state) => state.accessorials.data);
 
   const dynamicOrigin = quoteRequest 
     ? `${quoteRequest.origCity || ''}, ${quoteRequest.origState || ''} ${quoteRequest.origZip || ''}, ${quoteRequest.origCountry || ''}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ', ')
@@ -497,8 +494,8 @@ function Rate() {
         messageApi.success("Quote saved successfully!");
         navigate("/quote-summary");
       })
-      .catch((err: any) => {
-        messageApi.error(err || "Failed to save quote.");
+      .catch((error: unknown) => {
+        messageApi.error(getApiErrorMessage(error, "Failed to save quote."));
       });
   };
 
@@ -519,7 +516,7 @@ function Rate() {
           clientName: quoteRequest?.clientName,
           clientCode: quoteRequest?.clientCode,
           profileCode: quoteRequest?.profileCode,
-          quoteProducts: (quoteRequest?.shipments || []).map((s: any, idx: number) => ({
+          quoteProducts: (quoteRequest?.shipments || []).map((s, idx) => ({
             quoteProductId: idx + 1,
             pallets: s.pallets || s.units || "",
             pieces: s.pieces || "",
@@ -536,7 +533,7 @@ function Rate() {
             hazmatUN: s.hazMatUN || s.hazmatUN || "",
             isStackable: s.stackable ?? true,
           })),
-          quoteAccessorials: (quoteRequest?.accessorialCodes || []).map((code: string) => ({ accCode: code })),
+          quoteAccessorials: (quoteRequest?.accessorialCodes || []).map((code) => ({ accCode: code })),
         },
         selectedCarrier: rate,
       },
@@ -654,7 +651,7 @@ function Rate() {
 
           <article className='rate-items-card'>
             <h2>ITEMS</h2>
-            {quoteRequest?.shipments?.map((item: any, index: number) => (
+            {quoteRequest?.shipments?.map((item, index) => (
               <div key={index} className='rate-items-card__body'>
                 <strong className='rate-item-pill'>{[item.pieces, item.packageType?.toUpperCase()].filter(Boolean).join(" ")} {item.class ? `· CLASS ${item.class}` : ''}</strong>
                 <dl>
@@ -676,7 +673,7 @@ function Rate() {
             <dl className='rate-items-card__totals'>
               <div>
                 <dt>Total weight</dt>
-                <dd>{quoteRequest?.shipments ? `${quoteRequest.shipments.reduce((acc: number, item: any) => acc + (item.weight || 0), 0)} lbs` : ''}</dd>
+                <dd>{quoteRequest?.shipments ? `${quoteRequest.shipments.reduce((acc, item) => acc + (Number(item.weight) || 0), 0)} lbs` : ''}</dd>
               </div>
               <div>
                 <dt>Total linear feet</dt>
@@ -689,8 +686,8 @@ function Rate() {
             <article className='rate-items-card'>
               <h2>ACCESSORIALS</h2>
               <div className='rate-items-card__body rate-accessorials-list'>
-                {quoteRequest.accessorialCodes.map((acc: string, idx: number) => {
-                  const match = accessorialsData.find((a: any) => a.accesorialCode === acc || a.accessorialName === acc);
+                {quoteRequest.accessorialCodes.map((acc, idx) => {
+                  const match = accessorialsData.find((a) => a.accesorialCode === acc || a.accessorialName === acc);
                   const displayName = match ? match.accessorialName : acc;
                   return (
                     <strong key={idx} className='rate-item-pill'>{displayName}</strong>

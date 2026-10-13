@@ -1,8 +1,14 @@
 import { ConfigProvider, Layout, message, theme, type ThemeConfig } from "antd";
-import { useState, useEffect } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import "./App.css";
-import { useAppSelector } from "./app/hooks.ts";
+import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
 import Navbar from "./components/Navbar.tsx";
 import Sidebar from "./components/Sidebar.tsx";
 import type { CustomerLocation } from "./types/customerLocation.types.ts";
@@ -10,11 +16,15 @@ import type { CustomerProduct } from "./types/customerProduct.types.ts";
 import Login from "./pages/Login.tsx";
 import AppRouter from "./router/index.tsx";
 import { login, logout, fetchCountries } from "./store/appSlice.ts";
-import { useDispatch } from "react-redux";
-import type { AppDispatch } from "./app/store";
 import { fetchAccessorials } from "./store/accessorialsSlice";
-import { saveCustomerProduct } from "./store/customerProductSlice.ts";
-import { saveCustomerLocation } from "./store/customerLocationSlice.ts";
+import {
+  saveCustomerProduct,
+  setProducts as setProductsInStore,
+} from "./store/customerProductSlice.ts";
+import {
+  saveCustomerLocation,
+  setLocations as setLocationsInStore,
+} from "./store/customerLocationSlice.ts";
 
 const { Content } = Layout;
 
@@ -45,28 +55,38 @@ const antTheme: ThemeConfig = {
 function App() {
   const [collapsed, setCollapsed] = useState(false);
   const isAuthenticated = useAppSelector((state) => state.app.isAuthenticated);
-  const [customerLocations, setCustomerLocations] = useState<
-    CustomerLocation[]
-  >([]);
-  const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>([]);
   const [messageApi, messageContext] = message.useMessage();
   const navigate = useNavigate();
-  const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useAppDispatch();
 
-  const reduxCustomerLocations = useAppSelector(
-    (state) => state.customerLocation?.locations ?? []
+  const customerLocations = useAppSelector(
+    (state) => state.customerLocation.locations,
   );
-  const reduxCustomerProducts = useAppSelector(
-    (state) => state.customerProduct?.products ?? []
+  const customerProducts = useAppSelector(
+    (state) => state.customerProduct.products,
   );
 
-  useEffect(() => {
-    setCustomerLocations(reduxCustomerLocations);
-  }, [reduxCustomerLocations]);
+  const setCustomerLocations = useCallback<
+    Dispatch<SetStateAction<CustomerLocation[]>>
+  >(
+    (update) => {
+      const nextLocations =
+        typeof update === "function" ? update(customerLocations) : update;
+      dispatch(setLocationsInStore(nextLocations));
+    },
+    [customerLocations, dispatch],
+  );
 
-  useEffect(() => {
-    setCustomerProducts(reduxCustomerProducts);
-  }, [reduxCustomerProducts]);
+  const setCustomerProducts = useCallback<
+    Dispatch<SetStateAction<CustomerProduct[]>>
+  >(
+    (update) => {
+      const nextProducts =
+        typeof update === "function" ? update(customerProducts) : update;
+      dispatch(setProductsInStore(nextProducts));
+    },
+    [customerProducts, dispatch],
+  );
 
   useEffect(() => {
     if (isAuthenticated) {

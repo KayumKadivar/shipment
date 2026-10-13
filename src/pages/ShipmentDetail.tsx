@@ -1,7 +1,4 @@
-import {
-  ArrowLeftOutlined,
-  ExclamationCircleOutlined,
-} from "@ant-design/icons";
+import { ArrowLeftOutlined } from "@ant-design/icons";
 import { Alert, Button, Empty, Input, Spin, Tabs, Tag, Typography } from "antd";
 import {
   GoogleMap,
@@ -9,25 +6,33 @@ import {
   useLoadScript,
   type Libraries,
 } from "@react-google-maps/api";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "../app/hooks";
 import AdvancedMapMarker from "../lib/AdvancedMapMarker";
 import {
   computeDrivingRoute,
   type ComputedRoute,
   type RouteLocation,
 } from "../lib/googleRoutes";
-import { shipmentDataSource, type ShipmentRecord } from "./shipmentData";
 import AuditTab from "../components/shipmentdetail/Audit";
 import ChargesTab from "../components/shipmentdetail/Charges";
+import DetailEditActions from "../components/shipmentdetail/DetailEditActions";
 import DetailsTab from "../components/shipmentdetail/Details";
 import {
   createShipmentDetailEditValues,
+  formatApiDate,
+  joinNonEmpty,
+  text,
+  type ShipmentDetailEditSection,
   type ShipmentDetailEditValues,
 } from "../components/shipmentdetail/detailEditValues";
 import DocumentTab from "../components/shipmentdetail/Document";
 import LoadTab from "../components/shipmentdetail/LoadTab";
 import TrackingTab from "../components/shipmentdetail/Tracking";
+import { fetchCarrierTracking } from "../store/carrierTrackingSlice";
+import { fetchShipmentByLoadNumber } from "../store/shipmentSlice";
+import type { ShipmentDetails } from "../types/shipment.types";
 
 const apiKeyPlaceholder = "PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE";
 const googleLibraries: Libraries = ["marker", "places", "routes"];
@@ -45,13 +50,15 @@ const shipmentDetailTabs = [
   "Audit",
 ].map((tab) => ({ key: tab, label: tab }));
 
-function cleanText(value: string) {
-  return value.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-}
+type EditableTabKey = "load" | "charges" | "tracking";
 
-function buildAddress(primary: string, meta: string) {
-  return cleanText(`${primary} ${meta}`);
-}
+type TabEditingState = Record<EditableTabKey, boolean>;
+
+const initialTabEditingState: TabEditingState = {
+  load: false,
+  charges: false,
+  tracking: false,
+};
 
 function DetailField({
   label,
@@ -65,7 +72,11 @@ function DetailField({
   onChange?: (value: string) => void;
 }) {
   return (
-    <div className='shipment-detail-field'>
+    <div
+      className={`shipment-detail-field${
+        isEditing && onChange ? " shipment-detail-field--editing" : ""
+      }`}
+    >
       <span>{label}</span>
       {isEditing && onChange ? (
         <Input
@@ -76,7 +87,7 @@ function DetailField({
           onChange={(event) => onChange(event.target.value)}
         />
       ) : (
-        <strong>{value || "—"}</strong>
+        <strong>{value}</strong>
       )}
     </div>
   );
@@ -91,7 +102,7 @@ function MapPlaceholder({ title, text }: { title: string; text: string }) {
   );
 }
 
-function ShipmentRouteMap({ shipment }: { shipment: ShipmentRecord }) {
+function ShipmentRouteMap({ shipment }: { shipment: ShipmentDetails }) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [route, setRoute] = useState<ComputedRoute | null>(null);
   const [markers, setMarkers] = useState<RouteLocation[]>([]);
@@ -123,12 +134,28 @@ function ShipmentRouteMap({ shipment }: { shipment: ShipmentRecord }) {
   );
 
   const originAddress = useMemo(
-    () => buildAddress(shipment.origin, shipment.originMeta),
-    [shipment.origin, shipment.originMeta],
+    () =>
+      joinNonEmpty([
+        shipment.originAddress1,
+        shipment.originAddress2,
+        shipment.orgCityName,
+        shipment.orgStateCode,
+        shipment.orgPostalCode,
+        shipment.orgCountryCode,
+      ]),
+    [shipment],
   );
   const destinationAddress = useMemo(
-    () => buildAddress(shipment.destination, shipment.destinationMeta),
-    [shipment.destination, shipment.destinationMeta],
+    () =>
+      joinNonEmpty([
+        shipment.destAddress1,
+        shipment.destAddress2,
+        shipment.destCityName,
+        shipment.destStateCode,
+        shipment.destPostalCode,
+        shipment.destCountryCode,
+      ]),
+    [shipment],
   );
 
   useEffect(() => {
@@ -324,7 +351,7 @@ function ShipmentRouteMap({ shipment }: { shipment: ShipmentRecord }) {
   );
 }
 
-function ShipmentDetailContent({ shipment }: { shipment: ShipmentRecord }) {
+function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Details");
   const initialDetailValues = createShipmentDetailEditValues(shipment);
@@ -332,15 +359,51 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentRecord }) {
     useState<ShipmentDetailEditValues>(initialDetailValues);
   const [draftDetailValues, setDraftDetailValues] =
     useState<ShipmentDetailEditValues>(initialDetailValues);
-  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [activeDetailEditor, setActiveDetailEditor] =
+    useState<ShipmentDetailEditSection | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [tabEditingState, setTabEditingState] = useState<TabEditingState>(
+    initialTabEditingState,
+  );
 
-  const carrier = cleanText(shipment.carrier);
-  const customer = cleanText(shipment.customer);
+  const carrier = text(shipment.sellSCAC || shipment.scac);
+  const customer = text(shipment.clientName);
   const displayedDetailValues =
-    isEditingDetails ? draftDetailValues : savedDetailValues;
-  const isReferenceEditing = activeTab === "Details" && isEditingDetails;
+    activeDetailEditor === null ? savedDetailValues : draftDetailValues;
+  const isReferenceEditing =
+    activeTab === "Details" && activeDetailEditor === "referenceNumbers";
   const referenceDetailValues =
-    activeTab === "Details" ? displayedDetailValues : savedDetailValues;
+    isReferenceEditing ? draftDetailValues : savedDetailValues;
+  const hasOpenInlineEditor =
+    activeDetailEditor !== null || Object.values(tabEditingState).some(Boolean);
+
+  const markChangesPending = useCallback(() => {
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const updateTabEditingState = useCallback(
+    (tab: EditableTabKey, isEditing: boolean) => {
+      setTabEditingState((current) =>
+        current[tab] === isEditing
+          ? current
+          : { ...current, [tab]: isEditing },
+      );
+    },
+    [],
+  );
+
+  const handleLoadEditingStateChange = useCallback(
+    (isEditing: boolean) => updateTabEditingState("load", isEditing),
+    [updateTabEditingState],
+  );
+  const handleChargesEditingStateChange = useCallback(
+    (isEditing: boolean) => updateTabEditingState("charges", isEditing),
+    [updateTabEditingState],
+  );
+  const handleTrackingEditingStateChange = useCallback(
+    (isEditing: boolean) => updateTabEditingState("tracking", isEditing),
+    [updateTabEditingState],
+  );
 
   const updateDraftDetailField = (
     field: keyof ShipmentDetailEditValues,
@@ -352,20 +415,32 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentRecord }) {
     }));
   };
 
-  const toggleDetailsEditing = () => {
-    if (isEditingDetails) {
-      setSavedDetailValues({ ...displayedDetailValues });
-      setIsEditingDetails(false);
-      return;
-    }
+  const beginDetailsEditing = (section: ShipmentDetailEditSection) => {
+    setDraftDetailValues({ ...savedDetailValues });
+    setActiveDetailEditor(section);
+  };
 
-    setDraftDetailValues({ ...displayedDetailValues });
-    setIsEditingDetails(true);
+  const saveDetailsEditing = () => {
+    const hasChanges = (
+      Object.keys(draftDetailValues) as Array<keyof ShipmentDetailEditValues>
+    ).some((field) => draftDetailValues[field] !== savedDetailValues[field]);
+
+    setSavedDetailValues({ ...draftDetailValues });
+    setActiveDetailEditor(null);
+    if (hasChanges) markChangesPending();
   };
 
   const cancelDetailsEditing = () => {
     setDraftDetailValues({ ...savedDetailValues });
-    setIsEditingDetails(false);
+    setActiveDetailEditor(null);
+  };
+
+  const savePendingChanges = () => {
+    setHasUnsavedChanges(false);
+  };
+
+  const cancelPendingChanges = () => {
+    navigate("/shipments");
   };
 
   return (
@@ -375,14 +450,20 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentRecord }) {
           ← All Shipments
         </button>
         <div className='shipment-detail-actions'>
-          {activeTab === "Details" ? (
+          {hasUnsavedChanges ? (
             <>
-              <Button danger onClick={toggleDetailsEditing}>
-                {isEditingDetails ? "Save" : "Edit"}
+              <span
+                className='shipment-detail-unsaved-message'
+                role='status'>
+                Screen has some unsaved data!!
+              </span>
+              <Button
+                type='primary'
+                disabled={hasOpenInlineEditor}
+                onClick={savePendingChanges}>
+                Save
               </Button>
-              {isEditingDetails ? (
-                <Button onClick={cancelDetailsEditing}>Cancel</Button>
-              ) : null}
+              <Button onClick={cancelPendingChanges}>Cancel</Button>
             </>
           ) : null}
           <Button danger>Cancel Shipment</Button>
@@ -393,19 +474,19 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentRecord }) {
       <header className='shipment-detail-header'>
         <div>
           <div className='shipment-detail-title-row'>
-            <h1>Shipment: {shipment.bol}</h1>
+            <h1>Shipment: {shipment.loadNumber}</h1>
             <Tag className='shipment-detail-pro'>
-              Pro&nbsp;&nbsp;{shipment.pro}
+              Pro&nbsp;&nbsp;{text(shipment.proNumber)}
             </Tag>
             <Tag color='red' className='shipment-detail-status'>
-              • {cleanText(shipment.status)}
+              • {text(shipment.bolStatus)}
             </Tag>
           </div>
           <p>
-            {carrier} · LTL <span /> Created:{" "}
-            <strong>{shipment.pickupDate}</strong> <span /> Tendered By:{" "}
-            <strong>Chuck Hachemeister</strong> <span />
-            Created By: <strong>Chuck Hachemeister</strong>
+            {carrier} · {text(shipment.equipment || shipment.shipmentMode)} <span />
+            Pickup: <strong>{formatApiDate(shipment.pickupdate)}</strong> <span />
+            Tendered By: <strong>{text(shipment.orgWhoEntered)}</strong> <span />
+            Created By: <strong>{text(shipment.userName)}</strong>
           </p>
         </div>
       </header>
@@ -427,9 +508,28 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentRecord }) {
 
           <article className='shipment-detail-side-card'>
             <DetailField label='Customer' value={customer} />
-            <DetailField label='Sales Rep' value='Brian Young' />
-            <DetailField label='Sales Group' value='Brian Young (Team)' />
-            <h3>Reference Numbers</h3>
+            <DetailField
+              label='Client Email'
+              value={displayedDetailValues.clientEmail}
+            />
+            <DetailField label='Sales Rep' value='' />
+            <DetailField label='Sales Group' value='' />
+            <div className='shipment-detail-side-card__head'>
+              <h3>Reference Numbers</h3>
+              {activeTab === "Details" ? (
+                <DetailEditActions
+                  label='Reference Numbers'
+                  isEditing={isReferenceEditing}
+                  disabled={
+                    activeDetailEditor !== null &&
+                    activeDetailEditor !== "referenceNumbers"
+                  }
+                  onEdit={() => beginDetailsEditing("referenceNumbers")}
+                  onSave={saveDetailsEditing}
+                  onCancel={cancelDetailsEditing}
+                />
+              ) : null}
+            </div>
             <div className='shipment-detail-reference-fields'>
               <DetailField
                 label='BOL:'
@@ -472,37 +572,57 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentRecord }) {
                 }
               />
             </div>
+
+            <h3>Booking Info</h3>
+            <div className='shipment-detail-booking-fields'>
+              <DetailField
+                label='Created By'
+                value={text(shipment.userName)}
+              />
+              <DetailField
+                label='Tendered By'
+                value={text(shipment.orgWhoEntered)}
+              />
+            </div>
           </article>
 
-          {activeTab === "Details" ? (
-            <Alert
-              className='shipment-detail-warning'
-              type='error'
-              showIcon
-              icon={<ExclamationCircleOutlined />}
-              title='Carrier pickup API error'
-              description='Delivery OpenTime is required...'
-            />
-          ) : null}
         </aside>
 
         <main className='shipment-detail-main'>
           {activeTab === "Details" && (
             <DetailsTab
               shipment={shipment}
-              isEditing={isEditingDetails}
+              activeEditor={activeDetailEditor}
               values={displayedDetailValues}
               onFieldChange={updateDraftDetailField}
+              onBeginEditing={beginDetailsEditing}
+              onSaveEditing={saveDetailsEditing}
+              onCancelEditing={cancelDetailsEditing}
             />
           )}
           <div hidden={activeTab !== "Load"}>
-            <LoadTab key={shipment.key} shipment={shipment} />
+            <LoadTab
+              key={shipment.loadNumber}
+              shipment={shipment}
+              onChangeCommitted={markChangesPending}
+              onEditorStateChange={handleLoadEditingStateChange}
+            />
           </div>
           <div hidden={activeTab !== "Charges"}>
-            <ChargesTab key={shipment.key} shipment={shipment} />
+            <ChargesTab
+              key={shipment.loadNumber}
+              shipment={shipment}
+              onChangeCommitted={markChangesPending}
+              onEditorStateChange={handleChargesEditingStateChange}
+            />
           </div>
           <div hidden={activeTab !== "Tracking"}>
-            <TrackingTab key={shipment.key} shipment={shipment} />
+            <TrackingTab
+              key={shipment.loadNumber}
+              shipment={shipment}
+              onChangeCommitted={markChangesPending}
+              onEditorStateChange={handleTrackingEditingStateChange}
+            />
           </div>
           {activeTab === "Documents" && <DocumentTab />}
           {activeTab === "Audit" && <AuditTab />}
@@ -515,9 +635,57 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentRecord }) {
 function ShipmentDetail() {
   const { shipmentId } = useParams();
   const navigate = useNavigate();
-  const shipment = shipmentDataSource.find((item) => item.key === shipmentId);
+  const dispatch = useAppDispatch();
+  const { currentShipment, loading, error, requestedLoadNumber } =
+    useAppSelector((state) => state.shipment);
+  const loadNumber = shipmentId ?? "";
 
-  if (!shipment) {
+  useEffect(() => {
+    if (!loadNumber) return;
+
+    const shipmentRequest = dispatch(fetchShipmentByLoadNumber(loadNumber));
+    const trackingRequest = dispatch(
+      fetchCarrierTracking({ loadNumber }),
+    );
+
+    return () => {
+      shipmentRequest.abort();
+      trackingRequest.abort();
+    };
+  }, [dispatch, loadNumber]);
+
+  if (loading || (loadNumber && requestedLoadNumber !== loadNumber)) {
+    return (
+      <section className='shipment-detail-page shipment-detail-page--empty'>
+        <Spin size='large' tip={`Loading shipment ${loadNumber}...`} />
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className='shipment-detail-page shipment-detail-page--empty'>
+        <Alert
+          type='error'
+          showIcon
+          title='Unable to load shipment'
+          description={error}
+        />
+        <Button
+          type='primary'
+          onClick={() => dispatch(fetchShipmentByLoadNumber(loadNumber))}>
+          Retry
+        </Button>
+        <Button
+          icon={<ArrowLeftOutlined />}
+          onClick={() => navigate("/shipments")}>
+          Back to Shipments
+        </Button>
+      </section>
+    );
+  }
+
+  if (!currentShipment) {
     return (
       <section className='shipment-detail-page shipment-detail-page--empty'>
         <Empty description='Shipment not found' />
@@ -530,7 +698,12 @@ function ShipmentDetail() {
     );
   }
 
-  return <ShipmentDetailContent key={shipment.key} shipment={shipment} />;
+  return (
+    <ShipmentDetailContent
+      key={currentShipment.loadNumber}
+      shipment={currentShipment}
+    />
+  );
 }
 
 export default ShipmentDetail;

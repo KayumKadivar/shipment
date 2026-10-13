@@ -8,6 +8,70 @@ import axios from "axios";
 
 import { API_BASE_URL, DEFAULT_CLIENT_CODE, SRV_TOKEN } from "../config/apiConfig";
 import type { CustomerLocation, LocationType } from "../types/customerLocation.types";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
+
+type ApiResponse<T> = {
+  isSuccess: boolean;
+  message?: string | null;
+  data?: T | null;
+  totalCount?: number;
+  totalRecords?: number;
+};
+
+type ClientOption = {
+  clientName: string;
+  clientCode: string;
+};
+
+type ClientApiItem = {
+  clientName?: string;
+  clientCode?: string;
+  profileCode?: string;
+  profiles?: ClientApiItem[];
+  subClients?: ClientApiItem[];
+};
+
+type ClientLookupApiResponse =
+  | ClientApiItem[]
+  | ApiResponse<ClientApiItem[] | ClientApiItem>;
+
+type LocationApiItem = {
+  locationId?: number;
+  locationID?: number;
+  locationName?: string;
+  isActive?: boolean;
+  address1?: string;
+  address2?: string;
+  country?: string;
+  countryCode?: string;
+  state?: string;
+  stateCode?: string;
+  city?: string;
+  postal?: string;
+  zipCode?: string;
+  clientCode?: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  activateDate?: string;
+  deactivateDate?: string;
+  createdBy?: string;
+  createdDate?: string;
+  modifiedBy?: string;
+  modifiedDate?: string;
+  group?: string;
+  locationType?: LocationType;
+};
+
+type PagedLocationApiData = {
+  items: LocationApiItem[];
+  totalCount?: number;
+  totalRecords?: number;
+};
+
+type LocationListApiResponse = ApiResponse<
+  LocationApiItem[] | PagedLocationApiData
+>;
 
 interface CustomerLocationState {
   locations: CustomerLocation[];
@@ -30,19 +94,26 @@ const initialState: CustomerLocationState = {
 // ============================================================
 // Fetch Clients and Subclients (GET API)
 // ============================================================
-export const fetchClientsAndSubclients = createAsyncThunk(
+export const fetchClientsAndSubclients = createAsyncThunk<
+  ClientOption[],
+  void,
+  { rejectValue: string }
+>(
   "customerLocation/fetchClientsAndSubclients",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/GetClientAndSubclientWithProfiles`, {
-        params: {
-          srvToken: SRV_TOKEN,
-          clientCode: DEFAULT_CLIENT_CODE
-        }
-      });
+      const response = await axios.get<ClientLookupApiResponse>(
+        `${API_BASE_URL}/GetClientAndSubclientWithProfiles`,
+        {
+          params: {
+            srvToken: SRV_TOKEN,
+            clientCode: DEFAULT_CLIENT_CODE
+          }
+        },
+      );
       
       if (Array.isArray(response.data)) {
-        return response.data.map((c: any) => ({
+        return response.data.map((c) => ({
           clientName: c.clientName || c.profileCode || "",
           clientCode: c.clientCode || c.profileCode || ""
         }));
@@ -53,29 +124,27 @@ export const fetchClientsAndSubclients = createAsyncThunk(
       }
 
       if (Array.isArray(response.data.data)) {
-        return response.data.data.map((c: any) => ({
+        return response.data.data.map((c) => ({
           clientName: c.clientName || c.profileCode || "",
           clientCode: c.clientCode || c.profileCode || ""
         }));
       }
 
       const mainClient = {
-        clientName: response.data.data.clientName,
-        clientCode: response.data.data.clientCode
+        clientName: response.data.data.clientName || response.data.data.profileCode || "",
+        clientCode: response.data.data.clientCode || response.data.data.profileCode || ""
       };
       
-      const subClients = (response.data.data.subClients || response.data.data.profiles || []).map((s: any) => ({
+      const subClients = (response.data.data.subClients || response.data.data.profiles || []).map((s) => ({
         clientName: s.clientName || s.profileCode || "",
         clientCode: s.clientCode || s.profileCode || ""
       }));
       
       return [mainClient, ...subClients];
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("FetchClients API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to fetch clients."
+        getApiErrorMessage(error, "Failed to fetch clients.")
       );
     }
   }
@@ -115,7 +184,7 @@ export const saveCustomerLocation = createAsyncThunk(
         isActive: payloadData.isActive ?? true
       };
 
-      const response = await axios.post(
+      const response = await axios.post<ApiResponse<unknown>>(
         `${API_BASE_URL}/Location`,
         payload,
         {
@@ -135,12 +204,10 @@ export const saveCustomerLocation = createAsyncThunk(
       }
 
       return response.data?.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("AddLocation API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to save location."
+        getApiErrorMessage(error, "Failed to save location.")
       );
     }
   }
@@ -152,7 +219,9 @@ export const saveCustomerLocation = createAsyncThunk(
 export const updateCustomerLocation = createAsyncThunk(
   "customerLocation/updateCustomerLocation",
   async (
-    payloadData: Partial<CustomerLocation> & { locationId: string | number },
+    payloadData: Omit<Partial<CustomerLocation>, "locationId"> & {
+      locationId: string | number;
+    },
     { rejectWithValue }
   ) => {
     try {
@@ -172,7 +241,7 @@ export const updateCustomerLocation = createAsyncThunk(
         modifiedDate: new Date().toISOString()
       };
 
-      const response = await axios.put(
+      const response = await axios.put<ApiResponse<unknown>>(
         `${API_BASE_URL}/Location`,
         payload,
         {
@@ -185,17 +254,17 @@ export const updateCustomerLocation = createAsyncThunk(
 
       console.log("UpdateLocation Response:", response.data);
 
-      if (!response.data?.isSuccess && response.data?.message) {
-      
+      if (!response.data?.isSuccess) {
+        return rejectWithValue(
+          response.data?.message || "Failed to update location."
+        );
       }
 
       return payloadData;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("UpdateLocation API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to update location."
+        getApiErrorMessage(error, "Failed to update location.")
       );
     }
   }
@@ -212,7 +281,7 @@ export const deleteCustomerLocations = createAsyncThunk<
   "customerLocation/deleteCustomerLocations",
   async (locationIds: number[], { rejectWithValue }) => {
     try {
-      const response = await axios.delete(
+      const response = await axios.delete<ApiResponse<unknown>>(
         `${API_BASE_URL}/Location/DeleteMultiple`,
         {
           data: locationIds, // Axios DELETE requests send body in 'data'
@@ -230,12 +299,10 @@ export const deleteCustomerLocations = createAsyncThunk<
       }
 
       return locationIds;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("DeleteMultiple API Error:", error);
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to delete locations."
+        getApiErrorMessage(error, "Failed to delete locations.")
       );
     }
   }
@@ -285,7 +352,7 @@ export const getAllCustomerLocations = createAsyncThunk<
           pageSize
         };
 
-        response = await axios.post(
+        response = await axios.post<LocationListApiResponse>(
           `${API_BASE_URL}/Location/SearchLocations`,
           payload,
           {
@@ -297,7 +364,7 @@ export const getAllCustomerLocations = createAsyncThunk<
           }
         );
       } else {
-        response = await axios.get(
+        response = await axios.get<LocationListApiResponse>(
           `${API_BASE_URL}/Location/GetLocationsByClientCode/${encodeURIComponent(clientCode)}`,
           {
             params: {
@@ -322,17 +389,19 @@ export const getAllCustomerLocations = createAsyncThunk<
         );
       }
 
-      let rawData = response.data?.data || [];
+      const responseData = response.data?.data || [];
+      let rawData: LocationApiItem[] = [];
       let totalCount = 0;
       
-      if (!Array.isArray(rawData) && rawData.items) {
-        totalCount = rawData.totalCount || rawData.totalRecords || rawData.items.length;
-        rawData = rawData.items;
-      } else if (Array.isArray(rawData)) {
-        totalCount = response.data?.totalCount || response.data?.totalRecords || rawData.length;
+      if (Array.isArray(responseData)) {
+        rawData = responseData;
+        totalCount = response.data?.totalCount || response.data?.totalRecords || responseData.length;
+      } else {
+        rawData = responseData.items;
+        totalCount = responseData.totalCount || responseData.totalRecords || responseData.items.length;
       }
 
-      const locations: CustomerLocation[] = rawData.map((loc: any) => {
+      const locations: CustomerLocation[] = rawData.map((loc) => {
         const id = loc.locationId ?? loc.locationID;
         return {
           key: String(id || `loc-${Math.random()}`),
@@ -367,16 +436,14 @@ export const getAllCustomerLocations = createAsyncThunk<
       });
 
       return { locations, totalCount };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(
         "GetLocationsByClientCode API Error:",
         error
       );
 
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to retrieve locations."
+        getApiErrorMessage(error, "Failed to retrieve locations.")
       );
     }
   }
@@ -403,7 +470,7 @@ export const getCustomerLocationByID = createAsyncThunk<
         }
       );
 
-      const response = await axios.get(
+      const response = await axios.get<ApiResponse<LocationApiItem>>(
         `${API_BASE_URL}/Location/${locationID}`,
         {
           headers: {
@@ -470,13 +537,13 @@ export const getCustomerLocationByID = createAsyncThunk<
       );
 
       return location;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(
         "GetLocationByID API Error:",
         error
       );
 
-      if (error?.response) {
+      if (axios.isAxiosError(error) && error.response) {
         console.error(
           "API Status:",
           error.response.status
@@ -489,9 +556,7 @@ export const getCustomerLocationByID = createAsyncThunk<
       }
 
       return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to retrieve location."
+        getApiErrorMessage(error, "Failed to retrieve location.")
       );
     }
   }
