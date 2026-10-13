@@ -212,7 +212,7 @@ function CustomerLocationPage({
       dispatch(getAllCustomerLocations({
         clientCode: activeClientCode,
         searchText: debouncedQuery,
-        pageNumber: ,
+        pageNumber: currentPage,
         pageSize: pageSize
       }));
     }

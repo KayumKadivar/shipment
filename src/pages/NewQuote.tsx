@@ -535,8 +535,8 @@ function NewQuote() {
       const payload = {
         clientCode: clientCodeToUse,
         searchText: query || "",
-        pageNumber: 0,
-        pageSize: 0,
+        pageNumber: 1,
+        pageSize: 10,
       };
 
       console.log("Calling SearchProducts API:", payload);
