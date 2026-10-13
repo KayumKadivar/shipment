@@ -159,6 +159,7 @@ const NewShipment: React.FC = () => {
   >([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const searchProductTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortControllerRef = useRef<AbortController | null>(null);
 
   // Hazmat modal state
   const [isHazmatModalOpen, setIsHazmatModalOpen] = useState(false);
@@ -403,7 +404,20 @@ const NewShipment: React.FC = () => {
     fetchLocationsData();
   }, [quote]);
 
-  const fetchProducts = async (query = "") => {
+  const fetchProducts = async (query: string) => {
+    const trimmed = (query || "").trim();
+    if (!trimmed) {
+      setProductOptions([]);
+      setLoadingProducts(false);
+      return;
+    }
+
+    if (searchAbortControllerRef.current) {
+      searchAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    searchAbortControllerRef.current = controller;
+
     setLoadingProducts(true);
     try {
       const token = localStorage.getItem("authToken");
@@ -422,7 +436,7 @@ const NewShipment: React.FC = () => {
 
       const payload = {
         clientCode: clientCodeToUse,
-        searchText: query || "",
+        searchText: trimmed,
         pageNumber: 1,
         pageSize: 10,
       };
@@ -430,7 +444,10 @@ const NewShipment: React.FC = () => {
       const response = await axios.post(
         `${API_BASE_URL}/Product/SearchProducts`,
         payload,
-        { headers }
+        {
+          headers,
+          signal: controller.signal,
+        }
       );
 
       let dataList: any[] = [];
@@ -473,16 +490,28 @@ const NewShipment: React.FC = () => {
       } else {
         setProductOptions([]);
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (axios.isCancel(error) || error?.name === "CanceledError") {
+        return;
+      }
       console.error("Error calling SearchProducts API for description:", error);
       setProductOptions([]);
     } finally {
-      setLoadingProducts(false);
+      if (searchAbortControllerRef.current === controller) {
+        setLoadingProducts(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchProducts("");
+    return () => {
+      if (searchProductTimeoutRef.current) {
+        clearTimeout(searchProductTimeoutRef.current);
+      }
+      if (searchAbortControllerRef.current) {
+        searchAbortControllerRef.current.abort();
+      }
+    };
   }, []);
 
   const handleSearchProducts = (searchText: string) => {
@@ -490,9 +519,20 @@ const NewShipment: React.FC = () => {
       clearTimeout(searchProductTimeoutRef.current);
     }
     const trimmed = (searchText || "").trim();
+
+    if (!trimmed) {
+      if (searchAbortControllerRef.current) {
+        searchAbortControllerRef.current.abort();
+      }
+      setProductOptions([]);
+      setLoadingProducts(false);
+      return;
+    }
+
+    setLoadingProducts(true);
     searchProductTimeoutRef.current = setTimeout(() => {
       fetchProducts(trimmed);
-    }, 350);
+    }, 400);
   };
 
   const shipmentInfoData = {
@@ -954,16 +994,16 @@ const NewShipment: React.FC = () => {
               <AutoComplete
                 value={item.description}
                 options={productOptions}
-                placeholder="Description"
-                aria-label="Description"
                 onSearch={handleSearchProducts}
-                onFocus={() => {
-                  if (productOptions.length === 0) {
-                    fetchProducts("");
-                  }
-                }}
                 onChange={(val) => handleUpdateField(item.id, 'description', val)}
                 onSelect={(val, option) => {
+                  if (searchProductTimeoutRef.current) {
+                    clearTimeout(searchProductTimeoutRef.current);
+                  }
+                  if (searchAbortControllerRef.current) {
+                    searchAbortControllerRef.current.abort();
+                  }
+                  setLoadingProducts(false);
                   handleUpdateField(item.id, 'description', val);
                   const prod = (option as any)?.product;
                   if (prod) {
@@ -977,9 +1017,14 @@ const NewShipment: React.FC = () => {
                   }
                 }}
                 notFoundContent={loadingProducts ? <div style={{ padding: '6px 12px', textAlign: 'center' }}><Spin size="small" /></div> : undefined}
-                allowClear
                 className="quote-item-autocomplete"
-              />
+              >
+                <Input
+                  placeholder="Description"
+                  aria-label="Description"
+                  allowClear
+                />
+              </AutoComplete>
 
               {renderWithTooltip(
                 <Input
