@@ -5,14 +5,14 @@ export interface CustomerProduct {
   isActive: boolean;
   nmfc: string;
   productClass: string;
-  commodity: string;
+  commodity?: string;
   isHazmat: boolean;
-  hazmatContact: string;
+  hazmatContact?: string;
   length: number;
   height: number;
   weight: number;
   width: number;
-  productGroup: string;
+  productGroup?: string;
   notes?: string;
   isApproved?: boolean;
   pallets?: string;

@@ -116,6 +116,8 @@ describe("customer rate API behavior", () => {
           accessorialCodes: ["LIFT"],
         },
         quoteFormData: null,
+        carrierSearchResults: [],
+        carrierSearchLoading: false,
       },
     });
 

@@ -85,15 +85,12 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
     isActive: true,
     nmfc: "",
     productClass: "",
-    commodity: "",
     isHazmat: false,
-    hazmatContact: "",
     length: 0,
     height: 0,
     weight: 0,
     width: 0,
     productGroup: "STANDARD",
-    notes: "",
     isApproved: true,
     pallets: "",
     packageGroup: undefined,
@@ -192,10 +189,6 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
                 />
               </Form.Item>
 
-              <Form.Item label='Commodity' name='commodity'>
-                <Input placeholder='Commodity description' />
-              </Form.Item>
-
               <Form.Item label='Hazmat'>
                 <div className='add-product-switch-row'>
                   <Form.Item name='isHazmat' valuePropName='checked' noStyle>
@@ -203,13 +196,6 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
                   </Form.Item>
                   <strong>{isHazmat ? "Yes" : "No"}</strong>
                 </div>
-              </Form.Item>
-
-              <Form.Item label='Notes' name='notes'>
-                <Input.TextArea
-                  rows={3}
-                  placeholder='Additional product notes...'
-                />
               </Form.Item>
             </div>
           </section>

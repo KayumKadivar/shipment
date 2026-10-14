@@ -21,7 +21,6 @@ import {
   Switch,
   Table,
   Tabs,
-  Tag,
   Typography,
   message,
 } from "antd";
@@ -58,6 +57,27 @@ interface CustomerProductPageProps {
   products: CustomerProduct[];
   setProducts: Dispatch<SetStateAction<CustomerProduct[]>>;
 }
+
+const PRODUCT_CLASSES = [
+  "50",
+  "55",
+  "60",
+  "65",
+  "70",
+  "77.5",
+  "85",
+  "92.5",
+  "100",
+  "110",
+  "125",
+  "150",
+  "175",
+  "200",
+  "250",
+  "300",
+  "400",
+  "500",
+];
 
 const CSV_COLUMNS: Array<{
   header: string;
@@ -160,7 +180,6 @@ function CustomerProductPage({
     useState<CustomerProduct | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form] = Form.useForm<ProductFormValues>();
-  const isHazmat = Form.useWatch("isHazmat", form);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [messageApi, messageContext] = message.useMessage();
   const [modalApi, modalContext] = Modal.useModal();
@@ -553,7 +572,6 @@ function CustomerProductPage({
     },
     { title: "NMFC", dataIndex: "nmfc", width: 104 },
     { title: "Product Class", dataIndex: "productClass", width: 170, render: emptyText },
-    { title: "Commodity", dataIndex: "commodity", width: 190, render: emptyText },
     {
       title: "Hazmat",
       dataIndex: "isHazmat",
@@ -561,19 +579,10 @@ function CustomerProductPage({
       align: "center",
       render: (isHazmat: boolean) => (isHazmat ? "Yes" : <span className='product-empty'>—</span>),
     },
-    { title: "Hazmat Contact", dataIndex: "hazmatContact", width: 160, render: emptyText },
     { title: "Length", dataIndex: "length", width: 94, align: "right" },
     { title: "Height", dataIndex: "height", width: 94, align: "right" },
     { title: "Weight", dataIndex: "weight", width: 102, align: "right" },
     { title: "Width", dataIndex: "width", width: 94, align: "right" },
-    {
-      title: "Product Group",
-      dataIndex: "productGroup",
-      width: 146,
-      render: (productGroup: string) => (
-        <Tag className='product-group-tag'>{productGroup}</Tag>
-      ),
-    },
   ];
 
   const groupColumns: ColumnsType<ProductGroupSummary> = [
@@ -730,7 +739,7 @@ function CustomerProductPage({
               columns={columns}
               dataSource={visibleProducts}
               pagination={false}
-              scroll={{ x: 1770 }}
+              scroll={{ x: 1200 }}
               locale={{ emptyText: query ? "No products match your search" : "No customer products" }}
               rowClassName={(product) =>
                 selectedKeys.has(product.key) ? "product-row-selected" : ""
@@ -809,7 +818,14 @@ function CustomerProductPage({
               required
               rules={[{ required: true, message: "Product class is required" }]}
             >
-              <Input />
+              <Select
+                allowClear
+                placeholder='-- Select --'
+                options={PRODUCT_CLASSES.map((value) => ({
+                  value,
+                  label: value,
+                }))}
+              />
             </Form.Item>
             <Form.Item label='Pallets' name='pallets'>
               <Input />
@@ -828,20 +844,9 @@ function CustomerProductPage({
                 }))}
               />
             </Form.Item>
-            <Form.Item label='Commodity' name='commodity'>
-              <Input />
-            </Form.Item>
             <Form.Item label='Hazmat' name='isHazmat' valuePropName='checked'>
               <Switch checkedChildren='Yes' unCheckedChildren='No' />
             </Form.Item>
-            {isHazmat ? (
-              <Form.Item
-                label='Hazmat contact'
-                name='hazmatContact'
-                rules={[{ required: true, message: "Enter a hazmat contact" }]}>
-                <Input />
-              </Form.Item>
-            ) : null}
             <Form.Item label='Length' name='length'>
               <InputNumber min={0} precision={0} />
             </Form.Item>
@@ -866,12 +871,6 @@ function CustomerProductPage({
             </Form.Item>
             <Form.Item label='Width' name='width'>
               <InputNumber min={0} precision={0} />
-            </Form.Item>
-            <Form.Item
-              label='Product group'
-              name='productGroup'
-              rules={[{ required: true, message: "Enter a product group" }]}>
-              <Input />
             </Form.Item>
           </div>
         </Form>
