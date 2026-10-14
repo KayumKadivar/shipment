@@ -84,19 +84,17 @@ const createPackage = (): QuotePackage => ({
   items: [createItem()],
 });
 
-const normalizePackagesFromFormData = (formPackages?: QuoteFormPackage[]): QuotePackage[] => {
-  if (!formPackages || formPackages.length === 0) {
-    return [createPackage()];
-  }
-  return formPackages.map((pkg) => ({
+const normalizePackages = (pkgs?: QuoteFormPackage[]): QuotePackage[] => {
+  if (!pkgs || pkgs.length === 0) return [createPackage()];
+  return pkgs.map((pkg) => ({
     id: pkg.id || createId("package"),
     items: (pkg.items || []).map((item) => ({
       ...createItem(),
       ...item,
-      hazMatProperShippingName: item.hazMatProperShippingName || "",
-      hazMatPackingGroup: item.hazMatPackingGroup || "",
-      hazMatPhone: item.hazMatPhone || "",
-      hazMatContact: item.hazMatContact || "",
+      hazMatProperShippingName: item.hazMatProperShippingName ?? "",
+      hazMatPackingGroup: item.hazMatPackingGroup ?? "",
+      hazMatPhone: item.hazMatPhone ?? "",
+      hazMatContact: item.hazMatContact ?? "",
     })),
   }));
 };
@@ -453,7 +451,9 @@ function NewQuote() {
   const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
 
   const [packages, setPackages] = useState<QuotePackage[]>(() =>
-    normalizePackagesFromFormData(quoteFormData?.packages)
+    quoteFormData?.packages && quoteFormData.packages.length > 0
+      ? normalizePackages(quoteFormData.packages)
+      : [createPackage()]
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -514,22 +514,8 @@ function NewQuote() {
   >([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const searchProductTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchAbortControllerRef = useRef<AbortController | null>(null);
 
-  const fetchProducts = async (query: string) => {
-    const trimmed = (query || "").trim();
-    if (!trimmed) {
-      setProductOptions([]);
-      setLoadingProducts(false);
-      return;
-    }
-
-    if (searchAbortControllerRef.current) {
-      searchAbortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    searchAbortControllerRef.current = controller;
-
+  const fetchProducts = async (query = "") => {
     setLoadingProducts(true);
     try {
       const token = localStorage.getItem("authToken");
@@ -548,9 +534,9 @@ function NewQuote() {
 
       const payload = {
         clientCode: clientCodeToUse,
-        searchText: trimmed,
-        pageNumber: 1,
-        pageSize: 10,
+        searchText: query || "",
+        pageNumber: 0,
+        pageSize: 0,
       };
 
       console.log("Calling SearchProducts API:", payload);
@@ -558,10 +544,7 @@ function NewQuote() {
       const response = await axios.post(
         `${API_BASE_URL}/Product/SearchProducts`,
         payload,
-        {
-          headers,
-          signal: controller.signal,
-        }
+        { headers }
       );
 
       console.log("SearchProducts API response:", response.data);
@@ -606,39 +589,17 @@ function NewQuote() {
       } else {
         setProductOptions([]);
       }
-    } catch (error: any) {
-      if (axios.isCancel(error) || error?.name === "CanceledError") {
-        return;
-      }
+    } catch (error) {
       console.error("Error calling SearchProducts API for description:", error);
       setProductOptions([]);
     } finally {
-      if (searchAbortControllerRef.current === controller) {
-        setLoadingProducts(false);
-      }
+      setLoadingProducts(false);
     }
   };
 
   useEffect(() => {
-    setProductOptions([]);
-    if (searchProductTimeoutRef.current) {
-      clearTimeout(searchProductTimeoutRef.current);
-    }
-    if (searchAbortControllerRef.current) {
-      searchAbortControllerRef.current.abort();
-    }
+    fetchProducts("");
   }, [selectedClientCode]);
-
-  useEffect(() => {
-    return () => {
-      if (searchProductTimeoutRef.current) {
-        clearTimeout(searchProductTimeoutRef.current);
-      }
-      if (searchAbortControllerRef.current) {
-        searchAbortControllerRef.current.abort();
-      }
-    };
-  }, []);
 
   const handleSearchProducts = (searchText: string) => {
     if (searchProductTimeoutRef.current) {
@@ -647,25 +608,15 @@ function NewQuote() {
 
     const trimmed = (searchText || "").trim();
 
-    if (!trimmed) {
-      if (searchAbortControllerRef.current) {
-        searchAbortControllerRef.current.abort();
-      }
-      setProductOptions([]);
-      setLoadingProducts(false);
-      return;
-    }
-
-    setLoadingProducts(true);
     searchProductTimeoutRef.current = setTimeout(() => {
       fetchProducts(trimmed);
-    }, 400);
+    }, 350);
   };
 
   useEffect(() => {
     if (quoteFormData) {
       if (quoteFormData.packages && quoteFormData.packages.length > 0) {
-        setPackages(normalizePackagesFromFormData(quoteFormData.packages));
+        setPackages(normalizePackages(quoteFormData.packages));
       }
       if (quoteFormData.origPostal !== undefined) setOrigPostal(quoteFormData.origPostal);
       if (quoteFormData.origCity !== undefined) setOrigCity(quoteFormData.origCity);
@@ -1299,7 +1250,14 @@ function NewQuote() {
                       <AutoComplete
                         value={item.description}
                         options={productOptions}
+                        placeholder='Description'
+                        aria-label='Description'
                         onSearch={handleSearchProducts}
+                        onFocus={() => {
+                          if (productOptions.length === 0) {
+                            fetchProducts("");
+                          }
+                        }}
                         onChange={(value) => {
                           updateItem(
                             quotePackage.id,
@@ -1310,13 +1268,6 @@ function NewQuote() {
                           form.setFieldValue(["items", item.id, "description"], value);
                         }}
                         onSelect={(value, option) => {
-                          if (searchProductTimeoutRef.current) {
-                            clearTimeout(searchProductTimeoutRef.current);
-                          }
-                          if (searchAbortControllerRef.current) {
-                            searchAbortControllerRef.current.abort();
-                          }
-                          setLoadingProducts(false);
                           updateItem(
                             quotePackage.id,
                             item.id,
@@ -1358,14 +1309,9 @@ function NewQuote() {
                           }
                         }}
                         notFoundContent={loadingProducts ? <div style={{ padding: '6px 12px', textAlign: 'center' }}><Spin size="small" /></div> : undefined}
+                        allowClear
                         className="quote-item-autocomplete"
-                      >
-                        <Input
-                          placeholder='Description'
-                          aria-label='Description'
-                          allowClear
-                        />
-                      </AutoComplete>
+                      />
 
                       <ItemFormItem
                         name={['items', item.id, 'units']}

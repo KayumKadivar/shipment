@@ -52,7 +52,9 @@ const isValidNMFC = (val: string): boolean => {
 function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const clientName = location.state?.clientName || "";
+ const clientName =
+    location.state?.clientName ||
+    sessionStorage.getItem("customerProduct_selectedClientName");
   
   const dispatch = useAppDispatch();
   const { packageTypes, loadingPackageTypes } = useAppSelector(

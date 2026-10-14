@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Form, Input, Select, Button, Row, Col, Spin, message, Alert, Checkbox } from 'antd';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Card, Form, Input, Select, Button, Row, Col, Spin, message, Alert, Checkbox, AutoComplete } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
+import axios from 'axios';
 import type { AppDispatch, RootState } from '../../app/store';
-import { fetchCarrierRates, clearRateError } from '../../store/customerRateSlice';
+import { fetchCarrierRates, clearRateError, type CarrierSearchResult } from '../../store/customerRateSlice';
+import { API_BASE_URL } from '../../config/apiConfig';
+import './newshipment.css';
 
 export interface CustomerRateProps {
   carrierData?: {
@@ -16,10 +19,11 @@ export interface CustomerRateProps {
     fuelSurcharge?: number;
     accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[];
   };
-  onRate?: () => void | Promise<void>;
+  onRate?: (scac?: string) => void | Promise<void>;
   loadingRate?: boolean;
   rateError?: string | null;
   onClearError?: () => void;
+  onSelectCarrier?: (carrier: { carrierId: string; carrierName: string } | null) => void;
 }
 
 interface RateLineItem {
@@ -64,6 +68,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   loadingRate,
   rateError,
   onClearError,
+  onSelectCarrier,
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const customerRate = useSelector((state: RootState) => state.customerRate);
@@ -76,9 +81,18 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const [markupType, setMarkupType] = useState<'flat' | 'percentage'>('flat');
   const [markup, setMarkup] = useState<string>("0");
 
-  // Carrier inputs
+  // Carrier inputs and autocomplete state
   const [carrierName, setCarrierName] = useState<string>("");
-  const [carrierService, setCarrierService] = useState<string>("");
+  const [selectedCarrier, setSelectedCarrier] = useState<CarrierSearchResult | null>(null);
+  const [carrierOptions, setCarrierOptions] = useState<{
+    value: string;
+    key: string;
+    carrier: CarrierSearchResult;
+    label: React.ReactNode;
+  }[]>([]);
+  const [loadingCarriers, setLoadingCarriers] = useState<boolean>(false);
+  const searchCarrierTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [topCount, setTopCount] = useState<string>("10");
 
   // Custom charge additions
@@ -98,16 +112,139 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     return null;
   }, [carrierData]);
 
-  // Sync carrier inputs
+  const prevActiveCarrierRef = useRef<any>(null);
+
+  // Sync carrier inputs only when activeCarrier actually changes from external source
   useEffect(() => {
-    if (activeCarrier) {
-      setCarrierName(activeCarrier.carrierName || "");
-      setCarrierService(activeCarrier.service || activeCarrier.carrierCode || "");
-    } else {
-      setCarrierName("");
-      setCarrierService("");
+    const prev = prevActiveCarrierRef.current;
+    const hasChanged =
+      prev?.carrierName !== activeCarrier?.carrierName ||
+      prev?.carrierCode !== activeCarrier?.carrierCode ||
+      prev?.price !== activeCarrier?.price;
+
+    if (hasChanged) {
+      prevActiveCarrierRef.current = activeCarrier;
+      if (activeCarrier) {
+        setCarrierName(activeCarrier.carrierName || "");
+        if (activeCarrier.carrierCode || activeCarrier.carrierName) {
+          setSelectedCarrier({
+            carrierId: activeCarrier.carrierCode || "",
+            carrierName: activeCarrier.carrierName || "",
+          });
+        }
+      }
     }
   }, [activeCarrier]);
+
+  // Clean up timeouts and abort controllers on unmount
+  useEffect(() => {
+    return () => {
+      if (searchCarrierTimeoutRef.current) {
+        clearTimeout(searchCarrierTimeoutRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  // Fetch carriers from GET /api/Carrier/SearchCarriers
+  const fetchCarriersList = async (query: string) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setLoadingCarriers(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await axios.get(
+        `${API_BASE_URL}/Carrier/SearchCarriers`,
+        {
+          params: { searchText: query || "" },
+          headers,
+          signal: controller.signal,
+        }
+      );
+
+      let list: CarrierSearchResult[] = [];
+      if (response.data && response.data.isSuccess && Array.isArray(response.data.data)) {
+        list = response.data.data;
+      } else if (Array.isArray(response.data?.data)) {
+        list = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        list = response.data;
+      }
+
+      const options = list.map((c, idx) => ({
+        value: c.carrierName || c.carrierId,
+        key: `carrier-${c.carrierId || idx}-${idx}`,
+        carrier: c,
+        label: (
+          <div className="carrier-select-option">
+            <span className="carrier-select-name">
+              {c.carrierName}
+            </span>
+            {c.carrierId && (
+              <span className="carrier-select-badge">
+                {c.carrierId}
+              </span>
+            )}
+          </div>
+        ),
+      }));
+
+      setCarrierOptions(options);
+    } catch (err: any) {
+      if (err.name !== "CanceledError" && !axios.isCancel(err)) {
+        console.error("Error fetching carriers:", err);
+      }
+    } finally {
+      setLoadingCarriers(false);
+    }
+  };
+
+  const handleSearchCarriers = (searchText: string) => {
+    if (searchCarrierTimeoutRef.current) {
+      clearTimeout(searchCarrierTimeoutRef.current);
+    }
+    searchCarrierTimeoutRef.current = setTimeout(() => {
+      fetchCarriersList(searchText);
+    }, 300);
+  };
+
+  const handleSelectCarrier = (val: string, option: any) => {
+    const carrier: CarrierSearchResult = option?.carrier || { carrierId: "", carrierName: val };
+    setCarrierName(carrier.carrierName);
+    setSelectedCarrier(carrier);
+    if (onSelectCarrier) {
+      onSelectCarrier(carrier);
+    }
+  };
+
+  const handleChangeCarrier = (val: string) => {
+    const textVal = typeof val === 'string' ? val : ((val as any)?.target?.value ?? '');
+    setCarrierName(textVal);
+    if (!textVal) {
+      setSelectedCarrier(null);
+      if (onSelectCarrier) {
+        onSelectCarrier(null);
+      }
+      fetchCarriersList("");
+    }
+  };
+
+  const handleCarrierFocus = () => {
+    if (carrierOptions.length === 0) {
+      fetchCarriersList(carrierName || "");
+    }
+  };
 
   const numericMarkup = Math.max(0, Number(markup) || 0);
   const markupMultiplier = 1 + numericMarkup / 100;
@@ -122,6 +259,28 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       const fuel = Number(activeCarrier.fuelSurcharge) || 0;
       const accessorials = activeCarrier.accessorialCharges || [];
 
+      // Proportional markup calculation between Freight (Gross) and Fuel
+      const totalFreightFuel = gross + fuel;
+      let freightMarkup = 0;
+      let fuelMarkup = 0;
+
+      if (markupType === 'flat') {
+        if (totalFreightFuel > 0) {
+          const freightProportionPercent = gross / totalFreightFuel;
+          const fuelProportionPercent = fuel / totalFreightFuel;
+          freightMarkup = numericMarkup * freightProportionPercent;
+          fuelMarkup = numericMarkup * fuelProportionPercent;
+        } else if (gross > 0) {
+          freightMarkup = numericMarkup;
+        } else if (fuel > 0) {
+          fuelMarkup = numericMarkup;
+        }
+      } else {
+        // Percentage markup
+        freightMarkup = gross * (numericMarkup / 100);
+        fuelMarkup = fuel * (numericMarkup / 100);
+      }
+
       // 1. GROSS Charge
       if (gross > 0) {
         items.push({
@@ -129,7 +288,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           code: activeCarrier.carrierCode || "GROSS",
           description: "Gross Charge",
           buyAmount: gross,
-          customerAmount: markupType === 'flat' ? gross + numericMarkup : gross * markupMultiplier,
+          customerAmount: gross + freightMarkup,
         });
       }
 
@@ -151,7 +310,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           code: "FUEL",
           description: "Fuel Surcharge",
           buyAmount: fuel,
-          customerAmount: markupType === 'flat' ? fuel : fuel * markupMultiplier,
+          customerAmount: fuel + fuelMarkup,
         });
       }
 
@@ -211,15 +370,22 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const netFreightBuy = (grossItem ? grossItem.buyAmount : 0) + (discountItem ? discountItem.buyAmount : 0);
   const totalBuy = lineItems.reduce((acc, item) => acc + item.buyAmount, 0);
 
-  const fuelPercentage = useMemo(() => {
-    if (fuelItem && netFreightCustomer > 0) {
-      return ((fuelItem.customerAmount / netFreightCustomer) * 100).toFixed(1);
+  const fuelPercentageBuy = useMemo(() => {
+    if (fuelItem && netFreightBuy > 0) {
+      return ((fuelItem.buyAmount / netFreightBuy) * 100).toFixed(1);
     }
     if (activeCarrier?.fuelSurcharge && activeCarrier?.grossCharge) {
       return ((activeCarrier.fuelSurcharge / activeCarrier.grossCharge) * 100).toFixed(1);
     }
     return "0";
-  }, [fuelItem, netFreightCustomer, activeCarrier]);
+  }, [fuelItem, netFreightBuy, activeCarrier]);
+
+  const fuelPercentageCustomer = useMemo(() => {
+    if (fuelItem && netFreightCustomer > 0) {
+      return ((fuelItem.customerAmount / netFreightCustomer) * 100).toFixed(1);
+    }
+    return fuelPercentageBuy;
+  }, [fuelItem, netFreightCustomer, fuelPercentageBuy]);
 
   // Options for Charge type Select dropdown
   const chargeTypeOptions = useMemo(() => {
@@ -297,9 +463,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
   const handleRateClick = () => {
     if (onRate) {
-      onRate();
+      onRate(selectedCarrier?.carrierId);
     } else {
-      dispatch(fetchCarrierRates({}));
+      dispatch(fetchCarrierRates({ scac: selectedCarrier?.carrierId }));
     }
   };
 
@@ -324,47 +490,57 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
       <Form layout="vertical" className="compact-form">
 
-        {/* Row 1: Carrier + Mark Up (Flat / Percentage) + Carrier + Rate Button */}
+        {/* Row 1: Carrier + Mark Up (Flat / Percentage) + Rate Button */}
         <Row gutter={[12, 12]} className="mb-16">
-          <Col xs={24} md={5}>
+          <Col xs={24} md={6}>
             <Form.Item noStyle>
-              <Input
-                placeholder="Carrier"
+              <AutoComplete
                 value={carrierName}
-                onChange={(e) => setCarrierName(e.target.value)}
+                options={carrierOptions}
+                onSearch={handleSearchCarriers}
+                onSelect={handleSelectCarrier}
+                onChange={handleChangeCarrier}
+                onFocus={handleCarrierFocus}
+                onClear={() => {
+                  setCarrierName("");
+                  setSelectedCarrier(null);
+                  if (onSelectCarrier) onSelectCarrier(null);
+                  fetchCarriersList("");
+                }}
+                placeholder="Carrier"
+                allowClear
+                className="w-100"
+                notFoundContent={
+                  loadingCarriers ? (
+                    <div className="carrier-select-loading">
+                      <Spin size="small" />
+                    </div>
+                  ) : undefined
+                }
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={15}>
-            <div
-              className="text-muted-13"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                flexWrap: 'nowrap',
-                width: '100%',
-              }}
-            >
-              <span style={{ fontWeight: 600, color: '#333', whiteSpace: 'nowrap', marginRight: '2px' }}>
+          <Col xs={24} md={14}>
+            <div className="text-muted-13 markup-row-wrap">
+              <span className="markup-label">
                 Mark Up
               </span>
               <Checkbox
                 checked={markupType === 'flat'}
                 onChange={(e) => setMarkupType(e.target.checked ? 'flat' : 'percentage')}
-                style={{ marginLeft: 0 }}
+                className="markup-checkbox"
               >
                 Flat
               </Checkbox>
               <Checkbox
                 checked={markupType === 'percentage'}
                 onChange={(e) => setMarkupType(e.target.checked ? 'percentage' : 'flat')}
-                style={{ marginLeft: 0 }}
+                className="markup-checkbox"
               >
                 Percentage
               </Checkbox>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', marginRight: '4px' }}>
-                {markupType === 'flat' && <span style={{ fontWeight: 600, color: '#333' }}>$</span>}
+              <div className="markup-input-wrap">
+                {markupType === 'flat' && <span className="markup-unit-symbol">$</span>}
                 <Input
                   value={markup}
                   onChange={(e) => {
@@ -373,16 +549,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                   }}
                   className="input-sm-center"
                 />
-                {markupType === 'percentage' && <span style={{ fontWeight: 600, color: '#333' }}>%</span>}
-              </div>
-              <div style={{ flex: 1, minWidth: 100 }}>
-                <Form.Item noStyle>
-                  <Input
-                    placeholder="Carrier"
-                    value={carrierService}
-                    onChange={(e) => setCarrierService(e.target.value)}
-                  />
-                </Form.Item>
+                {markupType === 'percentage' && <span className="markup-unit-symbol">%</span>}
               </div>
             </div>
           </Col>
@@ -482,11 +649,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                 <div className="col-80">{item.code}</div>
                 <div className="col-flex-1">
                   <span>{item.description}</span>
-                  {item.isCustom && (
-                    <span className="rate-tag-custom">
-                      (Custom)
-                    </span>
-                  )}
                 </div>
                 <div className="col-100 text-right">{formatCurrency(item.buyAmount)}</div>
                 <div className="col-100 text-right rate-item-cell-right">
@@ -531,10 +693,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           <div className="col-80"></div>
           <div className="col-flex-1">Fuel (%)</div>
           <div className="col-100 text-right">
-            <strong className="text-dark-13">{fuelPercentage}%</strong>
+            <strong className="text-dark-13">{fuelPercentageBuy}%</strong>
           </div>
           <div className="col-100 text-right">
-            <strong className="text-dark-13">{fuelPercentage}%</strong>
+            <strong className="text-dark-13">{fuelPercentageCustomer}%</strong>
           </div>
         </div>
         <div className="rate-total-summary-row mb-16 rate-total-row">

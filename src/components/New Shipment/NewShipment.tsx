@@ -179,6 +179,7 @@ const NewShipment: React.FC = () => {
   const rateError = useAppSelector((state) => state.customerRate.error);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [selectedCarrierRate, setSelectedCarrierRate] = useState<CarrierRate | null>(null);
+  const [selectedCarrierInfo, setSelectedCarrierInfo] = useState<{ carrierId: string; carrierName: string } | null>(null);
 
   useEffect(() => {
     dispatch(clearRateError());
@@ -546,6 +547,10 @@ const NewShipment: React.FC = () => {
   const handleSelectRateFromModal = (rate: CarrierRate) => {
     setSelectedCarrierRate(rate);
     setIsRateModalOpen(false);
+    setSelectedCarrierInfo({
+      carrierId: rate.code || "",
+      carrierName: rate.name || "",
+    });
     message.success(`Selected carrier: ${rate.name || rate.code} ($${Number(rate.price).toFixed(2)})`);
   };
 
@@ -605,7 +610,7 @@ const NewShipment: React.FC = () => {
     };
   }, [rawCarrier]);
 
-  const handleFetchRatesForShipment = async () => {
+  const handleFetchRatesForShipment = async (scacParam?: string) => {
     const origZip = (originData?.postal || quote?.originZip || "").split(' - ')[0].trim();
     const destZip = (destinationData?.postal || quote?.destinationZip || "").split(' - ')[0].trim();
 
@@ -648,6 +653,8 @@ const NewShipment: React.FC = () => {
       .filter((a: any) => (selectedAccessorialIds || []).includes(a.accessorialId))
       .map((a: any) => a.accesorialCode || a.accessorialName);
 
+    const scacToUse = scacParam || selectedCarrierInfo?.carrierId || undefined;
+
     const payload = {
       serviceToken: SRV_TOKEN,
       origZip,
@@ -663,7 +670,7 @@ const NewShipment: React.FC = () => {
       profileCode: quote?.profileCode,
       clientCode: quote?.clientCode || DEFAULT_CLIENT_CODE,
       clientName: quote?.clientName || "",
-      scac: undefined,
+      scac: scacToUse,
       shipmentDate: new Date().toISOString(),
       zoneCode: undefined,
       miles: 0,
@@ -1201,7 +1208,14 @@ const NewShipment: React.FC = () => {
 
       {/* ══ Bottom 4-cell grid ══ */}
       <Row gutter={[16, 16]} align="stretch" className="ns-bottom-row">
-        <Col xs={24} xl={16}><CustomerRate carrierData={carrierRateData} onRate={handleFetchRatesForShipment} loadingRate={ratesLoading} /></Col>
+        <Col xs={24} xl={16}>
+          <CustomerRate
+            carrierData={carrierRateData}
+            onRate={handleFetchRatesForShipment}
+            loadingRate={ratesLoading}
+            onSelectCarrier={setSelectedCarrierInfo}
+          />
+        </Col>
         <Col xs={24} xl={8}><BillToLocation clientCode={quote?.clientCode} /></Col>
 
         <Col xs={24} xl={16}><InsuranceInfo /></Col>

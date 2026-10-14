@@ -12,6 +12,7 @@ import {
 } from "@ant-design/icons";
 import CountrySelect from "../components/CountrySelect";
 import { usePostalLookup } from "../hooks/usePostalLookup";
+import { formatPhoneNumber } from "../utils/formatPhoneNumber";
 import {
   Button,
   Checkbox,
@@ -180,6 +181,8 @@ function CustomerLocationPage({
   const { searchPostals, loadingPostal } = usePostalLookup();
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [postalOptions, setPostalOptions] = useState<PostalOption[]>([]);
+  const isPostalFocusedRef = useRef(false);
+  const [postalDropdownOpen, setPostalDropdownOpen] = useState(false);
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
     () => sessionStorage.getItem("customerLocation_selectedClientCode") || ""
@@ -298,8 +301,25 @@ function CustomerLocationPage({
       
       messageApi.success({ content: 'Details loaded', key: 'fetchLoc', duration: 2 });
       
-      setEditingLocation(response);
-      form.setFieldsValue(response);
+      const rawPhone =
+        response.phone || (response as any).contactPhone || location.phone || (location as any).contactPhone || "";
+      const rawEmail =
+        response.email || (response as any).contactEmail || location.email || (location as any).contactEmail || "";
+      const rawContactName =
+        response.contactName || (response as any).contactPerson || location.contactName || "";
+
+      const mergedData = {
+        ...location,
+        ...response,
+        phone: formatPhoneNumber(rawPhone),
+        email: rawEmail,
+        contactName: rawContactName,
+      };
+
+      setEditingLocation(mergedData);
+      form.setFieldsValue(mergedData);
+      setPostalOptions([]);
+      setPostalDropdownOpen(false);
       setIsFormOpen(true);
     } catch {
       messageApi.error({ content: 'Failed to fetch location details from API.', key: 'fetchLoc', duration: 3 });
@@ -310,6 +330,8 @@ function CustomerLocationPage({
     setIsFormOpen(false);
     setEditingLocation(null);
     form.resetFields();
+    setPostalOptions([]);
+    setPostalDropdownOpen(false);
   };
 
   const saveLocation = async () => {
@@ -387,12 +409,16 @@ function CustomerLocationPage({
       clearTimeout(zipTimeoutRef.current);
     }
 
-    if (value.length >= 3) {
+    const trimmed = (value || "").trim();
+    if (trimmed.length >= 3) {
+      if (isPostalFocusedRef.current) {
+        setPostalDropdownOpen(true);
+      }
       zipTimeoutRef.current = setTimeout(async () => {
         const country = form.getFieldValue("country") || "USA";
-        const results = await searchPostals(value, country);
+        const results = await searchPostals(trimmed, country);
         if (results && results.length > 0) {
-          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || value}|${r.city}|${r.state}`)))
+          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || trimmed}|${r.city}|${r.state}`)))
             .map(str => {
               const [p, c, s] = str.split('|');
               return { postalCode: p, city: c, state: s };
@@ -407,12 +433,16 @@ function CustomerLocationPage({
               key: `postal-${idx}`
             }))
           );
+          if (isPostalFocusedRef.current) {
+            setPostalDropdownOpen(true);
+          }
         } else {
           setPostalOptions([]);
         }
-      }, 600);
+      }, 300);
     } else {
       setPostalOptions([]);
+      setPostalDropdownOpen(false);
     }
   };
 
@@ -422,15 +452,19 @@ function CustomerLocationPage({
       city: option.city,
       state: option.state,
     });
+    setPostalDropdownOpen(false);
   };
 
   const handlePostalBlur = async () => {
+    isPostalFocusedRef.current = false;
     const postal = form.getFieldValue("postal");
     if (!postal || postal.length < 3) return;
 
     if (zipTimeoutRef.current) {
       clearTimeout(zipTimeoutRef.current);
     }
+
+    if (form.getFieldValue("city") && form.getFieldValue("state")) return;
 
     const country = form.getFieldValue("country") || "USA";
     const results = await searchPostals(postal, country);
@@ -931,16 +965,33 @@ function CustomerLocationPage({
                 options={postalOptions}
                 onSearch={handleSearchPostal}
                 onSelect={handleSelectPostal}
+                onFocus={() => {
+                  isPostalFocusedRef.current = true;
+                  const currentVal = form.getFieldValue("postal");
+                  if (postalOptions.length > 0) {
+                    setPostalDropdownOpen(true);
+                  } else if (currentVal && currentVal.trim().length >= 3) {
+                    handleSearchPostal(currentVal.trim());
+                  }
+                }}
                 onBlur={handlePostalBlur}
-                disabled={loadingPostal}
-                notFoundContent={loadingPostal ? <Spin size="small" /> : null}
+                open={postalDropdownOpen}
+                onDropdownVisibleChange={(visible) => setPostalDropdownOpen(visible)}
+                placeholder='ZIP / Postal'
+                notFoundContent={
+                  loadingPostal ? (
+                    <div style={{ padding: "8px 12px", textAlign: "center" }}>
+                      <Spin size='small' />
+                    </div>
+                  ) : null
+                }
               />
             </Form.Item>
             <Form.Item label='Contact name' name='contactName'>
               <Input />
             </Form.Item>
-            <Form.Item label='Phone' name='phone'>
-              <Input />
+            <Form.Item label='Phone' name='phone' normalize={formatPhoneNumber}>
+              <Input placeholder='(___) ___-____' maxLength={14} />
             </Form.Item>
             <Form.Item
               label='Email'

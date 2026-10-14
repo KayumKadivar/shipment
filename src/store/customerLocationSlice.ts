@@ -51,8 +51,13 @@ type LocationApiItem = {
   zipCode?: string;
   clientCode?: string;
   contactName?: string;
+  contactPerson?: string;
+  contactPhone?: string;
   phone?: string;
+  phoneNumber?: string;
+  contactEmail?: string;
   email?: string;
+  emailAddress?: string;
   activateDate?: string;
   deactivateDate?: string;
   createdBy?: string;
@@ -231,10 +236,14 @@ export const updateCustomerLocation = createAsyncThunk(
         address1: payloadData.address1 || "",
         address2: payloadData.address2 || "",
         city: payloadData.city || "",
-        stateCode: payloadData.state || "",
-        countryCode: payloadData.country || "",
-        zipCode: payloadData.postal || "",
-        clientCode: DEFAULT_CLIENT_CODE,
+        stateCode: payloadData.stateCode || payloadData.state || "",
+        countryCode: payloadData.countryCode || payloadData.country || "",
+        zipCode: payloadData.zipCode || payloadData.postal || "",
+        clientCode: sessionStorage.getItem("customerLocation_selectedClientCode") || DEFAULT_CLIENT_CODE,
+        contactName: payloadData.contactName || "",
+        contactPhone: payloadData.phone || (payloadData as any).contactPhone || "",
+        contactEmail: payloadData.email || (payloadData as any).contactEmail || "",
+        isActive: payloadData.isActive ?? true,
         createdBy: "",
         createdDate: new Date().toISOString(),
         modifiedBy: "",
@@ -419,9 +428,9 @@ export const getAllCustomerLocations = createAsyncThunk<
           postal: loc.zipCode ?? loc.postal ?? "",
           zipCode: loc.zipCode ?? loc.postal ?? "",
           clientCode: loc.clientCode ?? clientCode,
-          contactName: loc.contactName ?? loc.createdBy ?? "",
-          phone: loc.phone ?? "",
-          email: loc.email ?? "",
+          contactName: loc.contactName ?? loc.contactPerson ?? loc.createdBy ?? "",
+          phone: loc.contactPhone ?? loc.phone ?? loc.phoneNumber ?? "",
+          email: loc.contactEmail ?? loc.email ?? loc.emailAddress ?? "",
           activateDate: loc.createdDate
             ? new Date(loc.createdDate).toLocaleDateString()
             : loc.activateDate ?? "",
@@ -516,11 +525,11 @@ export const getCustomerLocationByID = createAsyncThunk<
 
         postal: loc.zipCode ?? loc.postal ?? "",
 
-        contactName: loc.contactName ?? "",
+        contactName: loc.contactName ?? loc.contactPerson ?? "",
 
-        phone: loc.phone ?? "",
+        phone: loc.contactPhone ?? loc.phone ?? loc.phoneNumber ?? "",
 
-        email: loc.email ?? "",
+        email: loc.contactEmail ?? loc.email ?? loc.emailAddress ?? "",
 
         activateDate: loc.activateDate ?? "",
 

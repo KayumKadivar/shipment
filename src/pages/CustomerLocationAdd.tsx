@@ -14,6 +14,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useRef, useState } from "react";
 import CountrySelect from "../components/CountrySelect";
 import { usePostalLookup } from "../hooks/usePostalLookup";
+import { formatPhoneNumber } from "../utils/formatPhoneNumber";
 // import { useAppSelector } from "../app/hooks";
 import type {
   CustomerLocation,
@@ -81,6 +82,8 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
   const { searchPostals, loadingPostal } = usePostalLookup();
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [postalOptions, setPostalOptions] = useState<PostalOption[]>([]);
+  const isPostalFocusedRef = useRef(false);
+  const [postalDropdownOpen, setPostalDropdownOpen] = useState(false);
 
   // Handle postal code search with debounce
   const handleSearchPostal = (value: string) => {
@@ -88,22 +91,27 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
       clearTimeout(zipTimeoutRef.current);
     }
 
-    if (value.length >= 3) {
+    const trimmed = (value || "").trim();
+    if (trimmed.length >= 3) {
+      if (isPostalFocusedRef.current) {
+        setPostalDropdownOpen(true);
+      }
       zipTimeoutRef.current = setTimeout(async () => {
         const country = form.getFieldValue("countryCode") || "USA";
-        const results = await searchPostals(value, country);
+        const results = await searchPostals(trimmed, country);
         
         if (results && results.length === 1) {
           // Exactly 1 result -> auto-fill immediately
           form.setFieldsValue({
-            postal: results[0].postalCode || value,
+            postal: results[0].postalCode || trimmed,
             city: results[0].city,
             state: results[0].state,
           });
           setPostalOptions([]);
+          setPostalDropdownOpen(false);
         } else if (results && results.length > 1) {
           // Multiple results -> show dropdown
-          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || value}|${r.city}|${r.state}`)))
+          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || trimmed}|${r.city}|${r.state}`)))
             .map(str => {
               const [p, c, s] = str.split('|');
               return { postalCode: p, city: c, state: s };
@@ -118,12 +126,16 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
               key: `postal-${idx}`
             }))
           );
+          if (isPostalFocusedRef.current) {
+            setPostalDropdownOpen(true);
+          }
         } else {
           setPostalOptions([]);
         }
-      }, 600); // 600ms debounce
+      }, 300); // 300ms debounce
     } else {
       setPostalOptions([]);
+      setPostalDropdownOpen(false);
     }
   };
 
@@ -133,9 +145,11 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
       city: option.city,
       state: option.state,
     });
+    setPostalDropdownOpen(false);
   };
 
   const handlePostalBlur = async () => {
+    isPostalFocusedRef.current = false;
     const postal = form.getFieldValue("postal");
     if (!postal || postal.length < 3) return;
 
@@ -283,7 +297,18 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
                   options={postalOptions}
                   onSearch={handleSearchPostal}
                   onSelect={handleSelectPostal}
+                  onFocus={() => {
+                    isPostalFocusedRef.current = true;
+                    const val = form.getFieldValue("postal");
+                    if (postalOptions.length > 0) {
+                      setPostalDropdownOpen(true);
+                    } else if (val && val.trim().length >= 3) {
+                      handleSearchPostal(val.trim());
+                    }
+                  }}
                   onBlur={handlePostalBlur}
+                  open={postalDropdownOpen}
+                  onDropdownVisibleChange={(visible) => setPostalDropdownOpen(visible)}
                   placeholder='ZIP / Postal'
                   notFoundContent={loadingPostal ? <Spin size="small" /> : null}
                 />
@@ -307,8 +332,12 @@ function CustomerLocationAdd({ onCreate }: CustomerLocationAddProps) {
 
               <Form.Item label='Contact Phone'>
                 <div className='add-location-phone-row'>
-                  <Form.Item name='phone' noStyle>
-                    <Input placeholder='(___) ___-____' aria-label='Contact phone' />
+                  <Form.Item name='phone' noStyle normalize={formatPhoneNumber}>
+                    <Input
+                      placeholder='(___) ___-____'
+                      aria-label='Contact phone'
+                      maxLength={14}
+                    />
                   </Form.Item>
                   <Form.Item name='phoneExtension' noStyle>
                     <Input placeholder='Ext' aria-label='Contact phone extension' />

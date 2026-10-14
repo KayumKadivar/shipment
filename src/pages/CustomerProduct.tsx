@@ -184,6 +184,10 @@ function CustomerProductPage({
   const handleClientChange = (value: string) => {
     setSelectedClientCode(value);
     sessionStorage.setItem("customerProduct_selectedClientCode", value);
+    const selectedClient = clients.find(c => c.clientCode === value);
+    if (selectedClient?.clientName) {
+      sessionStorage.setItem("customerProduct_selectedClientName", selectedClient.clientName);
+    }
     setCurrentPage(1); // Reset page on client change
   };
 
@@ -200,13 +204,18 @@ function CustomerProductPage({
 
   useEffect(() => {
     if (!activeClientCode) return; // wait until client is selected
+    sessionStorage.setItem("customerProduct_selectedClientCode", activeClientCode);
+    const selectedClient = clients.find(c => c.clientCode === activeClientCode);
+    if (selectedClient?.clientName) {
+      sessionStorage.setItem("customerProduct_selectedClientName", selectedClient.clientName);
+    }
     dispatch(getCustomerProducts({
       clientCode: activeClientCode,
       searchText: debouncedQuery,
       pageNumber: currentPage,
       pageSize: pageSize
     }));
-  }, [dispatch, activeClientCode, debouncedQuery, currentPage, pageSize]);
+  }, [dispatch, activeClientCode, debouncedQuery, currentPage, pageSize, clients]);
 
   const filteredProducts = products;
   const visibleProducts = products;
@@ -268,9 +277,15 @@ function CustomerProductPage({
 
   const openAddForm = () => {
     const selectedClient = clients.find(c => c.clientCode === activeClientCode);
+    const clientName =
+      selectedClient?.clientName ||
+      sessionStorage.getItem("customerProduct_selectedClientName") ||
+      sessionStorage.getItem("customerLocation_selectedClientName") ||
+      "DEV TESTING";
+
     navigate("/customer-products/add", {
       state: {
-        clientName: selectedClient?.clientName || ""
+        clientName,
       }
     });
   };

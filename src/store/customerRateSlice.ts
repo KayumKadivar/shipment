@@ -147,13 +147,37 @@ export interface QuoteFormData {
   selectedClientCode?: string;
 }
 
+export interface CarrierSearchResult {
+  carrierId: string;
+  carrierName: string;
+}
+
+export interface SearchCarriersApiResponse {
+  isSuccess: boolean;
+  message?: string;
+  data: CarrierSearchResult[];
+}
+
+export interface CarrierSearchResult {
+  carrierId: string;
+  carrierName: string;
+}
+
+export interface SearchCarriersApiResponse {
+  isSuccess: boolean;
+  message?: string;
+  data: CarrierSearchResult[];
+}
+
 // Interface for customer rate state
-interface CustomerRateState {
+export interface CustomerRateState {
   rates: RateItem[];
   loading: boolean;
   error: string | null;
   quoteRequest: CarrierRateRequest | null;
   quoteFormData: QuoteFormData | null;
+  carrierSearchResults: CarrierSearchResult[];
+  carrierSearchLoading: boolean;
 }
 
 // Initial state for customer rate
@@ -163,6 +187,8 @@ const initialState: CustomerRateState = {
   error: null,
   quoteRequest: null,
   quoteFormData: null,
+  carrierSearchResults: [],
+  carrierSearchLoading: false,
 };
 
 type RateApiResponse = {
@@ -294,6 +320,39 @@ export const fetchCarrierLogo = createAsyncThunk<
       return rejectWithValue("Logo not found");
     } catch {
       return rejectWithValue("Failed to fetch logo");
+    }
+  }
+);
+
+
+export const searchCarriers = createAsyncThunk<
+  CarrierSearchResult[],
+  string | undefined,
+  { rejectValue: string }
+>(
+  "customerRate/searchCarriers",
+  async (searchText: string = "", { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await axios.get<SearchCarriersApiResponse>(
+        `${API_BASE_URL}/Carrier/SearchCarriers`,
+        {
+          params: { searchText: searchText || "" },
+          headers,
+        }
+      );
+
+      if (response.data && response.data.isSuccess && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+      return [];
+    } catch (error: any) {
+      return rejectWithValue(getApiErrorMessage(error, "Failed to search carriers"));
     }
   }
 );
@@ -451,6 +510,9 @@ const customerRateSlice = createSlice({
     clearRateError: (state) => {
       state.error = null;
     },
+    clearCarrierSearchResults: (state) => {
+      state.carrierSearchResults = [];
+    },
   },
   // extraReducers is used to handle extra reducers
   extraReducers: (builder) => {
@@ -537,10 +599,21 @@ const customerRateSlice = createSlice({
         state.rates = state.rates.map(rate =>
           rate.code === scac ? { ...rate, logo } : rate
         );
+      })
+      .addCase(searchCarriers.pending, (state) => {
+        state.carrierSearchLoading = true;
+      })
+      .addCase(searchCarriers.fulfilled, (state, action: PayloadAction<CarrierSearchResult[]>) => {
+        state.carrierSearchLoading = false;
+        state.carrierSearchResults = action.payload;
+      })
+      .addCase(searchCarriers.rejected, (state) => {
+        state.carrierSearchLoading = false;
+        state.carrierSearchResults = [];
       });
   },
 });
 
-export const { clearRates, setQuoteFormData, clearQuoteFormData, clearRateError } = customerRateSlice.actions;
+export const { clearRates, setQuoteFormData, clearQuoteFormData, clearRateError, clearCarrierSearchResults } = customerRateSlice.actions;
 // Export slice reducer
 export default customerRateSlice.reducer;
