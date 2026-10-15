@@ -90,6 +90,18 @@ export interface QuoteCarrierResult {
   warning?: string;
 }
 
+export interface SearchQuotePayload {
+  referenceNumber?: string;
+  clientName?: string;
+  originZip?: string;
+  destinationZip?: string;
+  fromDate?: string | null;
+  toDate?: string | null;
+  createdBy?: string;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
 export interface QuoteResult {
   quoteRequestId: number;
   pickupDate: string;
@@ -111,6 +123,8 @@ export interface QuoteResult {
   quoteProducts: QuoteProductResult[];
   quoteAccessorials: QuoteAccessorialResult[];
   quoteResults: QuoteCarrierResult[];
+  createdBy?: string;
+  createdDate?: string;
 }
 
 interface QuoteState {
@@ -144,6 +158,41 @@ export const fetchQuotes = createAsyncThunk<
       return rejectWithValue(response.data?.message || "Failed to fetch quotes");
     } catch (error: unknown) {
       return rejectWithValue(getApiErrorMessage(error, "Failed to fetch quotes"));
+    }
+  }
+);
+
+export const searchQuote = createAsyncThunk<
+  QuoteResult[],
+  SearchQuotePayload,
+  { rejectValue: string }
+>(
+  "quote/searchQuote",
+  async (payload: SearchQuotePayload = {}, { rejectWithValue }) => {
+    try {
+      const response = await axios.post<ApiResponse<QuoteResult[]>>(
+        `${API_BASE_URL}/Quote/SearchQuote`,
+        {
+          referenceNumber: payload.referenceNumber || "",
+          clientName: payload.clientName || "",
+          originZip: payload.originZip || "",
+          destinationZip: payload.destinationZip || "",
+          fromDate: payload.fromDate ?? null,
+          toDate: payload.toDate ?? null,
+          createdBy: payload.createdBy || "",
+          pageNumber: payload.pageNumber ?? 1,
+          pageSize: payload.pageSize ?? 100,
+        }
+      );
+      if (response.data && (response.data.isSuccess || Array.isArray(response.data.data))) {
+        return response.data.data || [];
+      }
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return rejectWithValue(response.data?.message || "Failed to search quotes");
+    } catch (error: unknown) {
+      return rejectWithValue(getApiErrorMessage(error, "Failed to search quotes"));
     }
   }
 );
@@ -189,6 +238,19 @@ const quoteSlice = createSlice({
         state.loading = false;
         state.error =
           action.payload || action.error.message || "Failed to fetch quotes";
+      })
+      .addCase(searchQuote.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(searchQuote.fulfilled, (state, action) => {
+        state.loading = false;
+        state.quotes = action.payload;
+      })
+      .addCase(searchQuote.rejected, (state, action) => {
+        state.loading = false;
+        state.error =
+          action.payload || action.error.message || "Failed to search quotes";
       })
       .addCase(fetchQuoteById.pending, (state) => {
         state.loading = true;

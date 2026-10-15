@@ -541,11 +541,31 @@ const customerRateSlice = createSlice({
               const name = (cd.accName || cd.name || cd.description || "").trim().toLowerCase();
               const amount = Number(cd.amount ?? cd.charge) || 0;
 
-              if (code === COST_CODE_GROSS || name === COST_NAME_GROSS.toLowerCase() || name.includes("gross") || name.includes("freight")) {
+              if (
+                code === COST_CODE_GROSS ||
+                code === "FRT" ||
+                code === "FREIGHT" ||
+                code === "BASE" ||
+                name === COST_NAME_GROSS.toLowerCase() ||
+                name.includes("gross") ||
+                name.includes("freight")
+              ) {
                 grossCharge = amount;
-              } else if (code === COST_CODE_DISC || name === COST_NAME_DISC.toLowerCase() || name.includes("discount")) {
-                discount = amount;
-              } else if (code === COST_CODE_FUEL || name === COST_NAME_FUEL.toLowerCase() || name.includes("fuel")) {
+              } else if (
+                code === COST_CODE_DISC ||
+                code === "DSC" ||
+                code === "DISCOUNT" ||
+                name === COST_NAME_DISC.toLowerCase() ||
+                name.includes("discount")
+              ) {
+                discount = Math.abs(amount);
+              } else if (
+                code === COST_CODE_FUEL ||
+                code === "FSC" ||
+                code === "FUEL SURCHARGE" ||
+                name === COST_NAME_FUEL.toLowerCase() ||
+                name.includes("fuel")
+              ) {
                 fuelSurcharge = amount;
               } else {
                 otherAccessorials.push({
@@ -586,6 +606,8 @@ const customerRateSlice = createSlice({
             discount,
             fuelSurcharge,
             accessorialCharges: otherAccessorials,
+            quoteCostDetails: costDetails,
+            rawQuoteResult: rate,
           };
         });
       })

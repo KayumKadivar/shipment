@@ -3,6 +3,7 @@ import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin } from 
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import { formatDisplayTime, TIME_OPTIONS } from './OriginLocation';
+import { formatPhoneNumber } from '../../utils/formatPhoneNumber';
 import axios from 'axios';
 import { API_BASE_URL, DEFAULT_CLIENT_CODE } from '../../config/apiConfig';
 
@@ -116,7 +117,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         state: initialData.state || "",
         country: initialData.country || "USA",
         contactName: initialData.contactName || "",
-        phone: initialData.phone || "",
+        phone: formatPhoneNumber(initialData.phone) || "",
         ext: initialData.ext || "",
         email: initialData.email || "",
         fax: initialData.fax || "",
@@ -244,7 +245,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
       city: loc.city || "",
       state: loc.stateCode || "",
       contactName: loc.contactName || "",
-      phone: loc.contactPhone || "",
+      phone: formatPhoneNumber(loc.contactPhone) || "",
       email: loc.contactEmail || "",
       openTime: openTimeFormatted,
       closeTime: closeTimeFormatted,
@@ -435,8 +436,8 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         </Form.Item>
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={16}>
-            <Form.Item label="Phone" name="phone">
-              <Input placeholder="(___) ___-____" />
+            <Form.Item label="Phone" name="phone" normalize={formatPhoneNumber}>
+              <Input placeholder="(___) ___-____" maxLength={14} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={8}>

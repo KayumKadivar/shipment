@@ -535,8 +535,8 @@ function NewQuote() {
       const payload = {
         clientCode: clientCodeToUse,
         searchText: query || "",
-        pageNumber: 0,
-        pageSize: 0,
+        pageNumber: 1,
+        pageSize: 100,
       };
 
       console.log("Calling SearchProducts API:", payload);
@@ -1309,9 +1309,14 @@ function NewQuote() {
                           }
                         }}
                         notFoundContent={loadingProducts ? <div style={{ padding: '6px 12px', textAlign: 'center' }}><Spin size="small" /></div> : undefined}
-                        allowClear
                         className="quote-item-autocomplete"
-                      />
+                      >
+                        <Input
+                          placeholder="Description"
+                          aria-label="Description"
+                          allowClear
+                        />
+                      </AutoComplete>
 
                       <ItemFormItem
                         name={['items', item.id, 'units']}

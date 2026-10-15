@@ -426,6 +426,36 @@
   width: 130px;
   min-width: 110px;
 }
+.col-120 {
+  width: 175px;
+  min-width: 150px;
+}
+.rate-calculation-explainer {
+  margin-top: 14px;
+  background-color: #f6faff;
+  border: 1px solid #bae0ff;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 11.5px;
+  color: #1f2937;
+  line-height: 1.5;
+}
+.rate-calculation-explainer strong {
+  color: #0958d9;
+}
+.explainer-header {
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  color: #003eb3;
+}
+.explainer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 2px;
+}
 .text-right {
   text-align: right;
 }

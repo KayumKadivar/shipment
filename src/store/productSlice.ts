@@ -1,4 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { calculatePCF } from "../utils/calculatePCF";
 
 // Interface for product item
 export interface ProductItem {
@@ -91,6 +92,16 @@ const productSlice = createSlice({
       const item = state.items.find((item) => item.id === action.payload.id);
       if (item) {
         Object.assign(item, { [action.payload.field]: action.payload.value });
+        // Recalculate PCF / Density whenever dimensions, weight or pallets change
+        if (["length", "width", "height", "weight", "pallets"].includes(action.payload.field)) {
+          item.pcfDensity = calculatePCF(
+            item.length,
+            item.width,
+            item.height,
+            item.weight,
+            item.pallets
+          );
+        }
       }
     },
     // update product hazmat details
@@ -121,7 +132,18 @@ const productSlice = createSlice({
     },
     // set all product items (e.g. prefill from quote)
     setProductItems: (state, action: PayloadAction<ProductItem[]>) => {
-      state.items = action.payload;
+      state.items = action.payload.map((item) => ({
+        ...item,
+        pcfDensity:
+          item.pcfDensity ||
+          calculatePCF(
+            item.length,
+            item.width,
+            item.height,
+            item.weight,
+            item.pallets
+          ),
+      }));
     },
     // reset product items to initial blank single row
     resetProductItems: (state) => {

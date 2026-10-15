@@ -1,6 +1,6 @@
 import axios, { AxiosHeaders, type AxiosResponse } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchQuoteById, fetchQuotes } from "./quoteSlice";
+import { fetchQuoteById, fetchQuotes, searchQuote } from "./quoteSlice";
 
 const createAxiosResponse = <T>(data: T): AxiosResponse<T> => ({
   data,
@@ -29,6 +29,7 @@ const quote = {
   quoteProducts: [{ quoteProductId: 1, weight: 100, pallets: 1 }],
   quoteAccessorials: [{ quoteAccessorialId: 2, accCode: "LIFT" }],
   quoteResults: [{ quoteResultId: 3, scac: "TEST", carrierName: "Carrier" }],
+  createdBy: "TEST_USER",
 };
 
 describe("quote API behavior", () => {
@@ -49,6 +50,38 @@ describe("quote API behavior", () => {
 
     expect(action.type).toBe("quote/fetchQuotes/fulfilled");
     expect(action.payload).toEqual([quote]);
+  });
+
+  it("searchQuote_whenApiSucceeds_returnsQuotes", async () => {
+    vi.spyOn(axios, "post").mockResolvedValue(
+      createAxiosResponse({ isSuccess: true, data: [quote] }),
+    );
+
+    const action = await searchQuote({
+      referenceNumber: "12",
+      clientName: "Client",
+      createdBy: "TEST_USER",
+    })(vi.fn(), vi.fn(), undefined);
+
+    expect(action.type).toBe("quote/searchQuote/fulfilled");
+    expect(action.payload).toEqual([quote]);
+  });
+
+  it("searchQuote_whenAxiosFails_returnsErrorMessage", async () => {
+    vi.spyOn(axios, "post").mockRejectedValue({
+      isAxiosError: true,
+      message: "Request failed",
+      response: { data: { message: "Search failed" } },
+    });
+
+    const action = await searchQuote({ referenceNumber: "invalid" })(
+      vi.fn(),
+      vi.fn(),
+      undefined,
+    );
+
+    expect(action.type).toBe("quote/searchQuote/rejected");
+    expect(action.payload).toBe("Search failed");
   });
 
   it("fetchQuoteById_whenAxiosFails_returnsTheServerMessage", async () => {

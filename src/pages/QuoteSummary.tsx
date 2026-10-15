@@ -1,18 +1,18 @@
 import {
   FilterOutlined,
   PlusOutlined,
-  SaveOutlined,
   SearchOutlined,
   LeftOutlined,
   RightOutlined,
 } from "@ant-design/icons";
-import { Button, DatePicker, Empty, Input, Select, Table } from "antd";
+import { Button, DatePicker, Empty, Input, Select, Table, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import dayjs, { type Dayjs } from "dayjs";
-import { useMemo, useState, useEffect } from "react";
+import { type Dayjs } from "dayjs";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
-import { fetchQuotes } from "../store/quoteSlice";
+import { fetchQuotes, searchQuote } from "../store/quoteSlice";
+import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import { clearQuoteFormData } from "../store/customerRateSlice";
 import {
   type QuoteLoad,
@@ -20,11 +20,6 @@ import {
 } from "./quoteSummaryData";
 
 type DateRangeValue = [Dayjs | null, Dayjs | null] | null;
-
-// const selectOptions = {
-//   salesGroups: ["Florida Hub", "Midwest Hub", "National Accounts"],
-//   salesReps: ["Brian Young", "Nicole Keener", "Pete Jones"],
-// };
 
 function DetailCell({ primary, secondary }: { primary: string; secondary: string }) {
   return (
@@ -38,22 +33,76 @@ function DetailCell({ primary, secondary }: { primary: string; secondary: string
 function QuoteSummary() {
   const navigate = useNavigate();
   const [draftSearch, setDraftSearch] = useState("");
-  const [appliedSearch, setAppliedSearch] = useState("");
   const [showMoreFilters, setShowMoreFilters] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRangeValue>(() => [
-    dayjs("2026-08-06"),
-    dayjs("2026-08-25"),
-  ]);
+  const [dateRange, setDateRange] = useState<DateRangeValue>(null);
   const [salesRep, setSalesRep] = useState<string>();
   const [customer, setCustomer] = useState<string>();
+  const [clientList, setClientList] = useState<{ clientName: string; clientCode: string }[]>([]);
   const [activePage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
   const dispatch = useAppDispatch();
   const { quotes: apiQuotes, loading } = useAppSelector((state) => state.quote);
 
+  const handleSearch = useCallback((customRef?: string) => {
+    const refNum = (customRef !== undefined ? customRef : draftSearch).trim();
+    setCurrentPage(1);
+
+    const fromDateIso = dateRange?.[0]
+      ? dateRange[0].startOf("day").toISOString()
+      : null;
+    const toDateIso = dateRange?.[1]
+      ? dateRange[1].endOf("day").toISOString()
+      : null;
+
+    dispatch(
+      searchQuote({
+        referenceNumber: refNum,
+        clientName: customer || "",
+        originZip: "",
+        destinationZip: "",
+        fromDate: fromDateIso,
+        toDate: toDateIso,
+        createdBy: salesRep?.trim() || "",
+        pageNumber: 1,
+        pageSize: 100,
+      })
+    )
+      .unwrap()
+      .catch((err) => {
+        message.error(typeof err === "string" ? err : "Failed to search quotes");
+      });
+  }, [dispatch, draftSearch, customer, dateRange, salesRep]);
+
   useEffect(() => {
-    dispatch(fetchQuotes({ clientCode: "DEVTS" }));
+    dispatch(
+      searchQuote({
+        referenceNumber: "",
+        clientName: "",
+        originZip: "",
+        destinationZip: "",
+        fromDate: null,
+        toDate: null,
+        createdBy: "",
+        pageNumber: 1,
+        pageSize: 100,
+      })
+    )
+      .unwrap()
+      .catch(() => {
+        // Fallback to fetchQuotes if search endpoint is unavailable
+        dispatch(fetchQuotes({ clientCode: "DEVTS" }));
+      });
+
+    dispatch(fetchClientsAndSubclients())
+      .unwrap()
+      .then((clients) => {
+        if (Array.isArray(clients)) {
+          setClientList(clients);
+        }
+      })
+      .catch(() => {});
+
     dispatch(clearQuoteFormData());
   }, [dispatch]);
 
@@ -80,7 +129,7 @@ function QuoteSummary() {
         })),
         carrierCode: result?.scac || "",
         carrierName: result?.carrierName || "",
-        createdBy: q.profileCode || "",
+        createdBy: q.createdBy || q.profileCode || "",
         profile: q.profileCode || "",
         totalWeight: `${(q.quoteProducts || []).reduce((acc, p) => acc + (Number(p.weight) || 0), 0)} lbs`,
         pallets: (q.quoteProducts || []).reduce((acc, p) => acc + (Number(p.pallets) || 0), 0),
@@ -89,36 +138,18 @@ function QuoteSummary() {
     });
   }, [apiQuotes]);
 
-  const uniqueCustomers = useMemo(() => {
-    return Array.from(new Set(dynamicQuoteSummaryData.map((quote) => quote.customer)));
-  }, [dynamicQuoteSummaryData]);
+  const customerOptions = useMemo(() => {
+    const names = new Set<string>();
+    clientList.forEach((c) => {
+      if (c.clientName) names.add(c.clientName);
+    });
+    dynamicQuoteSummaryData.forEach((quote) => {
+      if (quote.customer) names.add(quote.customer);
+    });
+    return Array.from(names).map((name) => ({ label: name, value: name }));
+  }, [clientList, dynamicQuoteSummaryData]);
 
-  const visibleQuotes = useMemo(() => {
-    const query = appliedSearch.trim().toLowerCase();
-    if (!query) return dynamicQuoteSummaryData;
-
-    return dynamicQuoteSummaryData.filter((quote) =>
-      [
-        quote.customer,
-        quote.customerCode,
-        quote.reference,
-        quote.pickupDate,
-        quote.origin,
-        quote.originPostal,
-        quote.destination,
-        quote.destinationPostal,
-        quote.carrierCode,
-        quote.carrierName,
-        quote.createdBy,
-        ...quote.loads.flatMap((load) => [load.freightClass, load.weight]),
-      ].some((value) => value.toLowerCase().includes(query)),
-    );
-  }, [appliedSearch, dynamicQuoteSummaryData]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCurrentPage(1);
-  }, [appliedSearch, dateRange, salesRep, customer]);
+  const visibleQuotes = dynamicQuoteSummaryData;
 
   const totalCount = visibleQuotes.length;
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -132,10 +163,24 @@ function QuoteSummary() {
 
   const clearFilters = () => {
     setDraftSearch("");
-    setAppliedSearch("");
     setDateRange(null);
     setSalesRep(undefined);
     setCustomer(undefined);
+    setCurrentPage(1);
+
+    dispatch(
+      searchQuote({
+        referenceNumber: "",
+        clientName: "",
+        originZip: "",
+        destinationZip: "",
+        fromDate: null,
+        toDate: null,
+        createdBy: "",
+        pageNumber: 1,
+        pageSize: 100,
+      })
+    );
   };
 
   const columns: ColumnsType<QuoteSummaryRecord> = [
@@ -230,15 +275,17 @@ function QuoteSummary() {
         <div className='quote-summary-filter-topline'>
           <Input
             value={draftSearch}
-            placeholder='Filter quotes...'
+            placeholder='Filter quotes by reference #...'
             allowClear
             aria-label='Filter quotes'
             onChange={(event) => {
               const val = event.target.value;
               setDraftSearch(val);
-              setAppliedSearch(val);
+              if (!val && draftSearch) {
+                handleSearch("");
+              }
             }}
-            onPressEnter={() => setAppliedSearch(draftSearch)}
+            onPressEnter={() => handleSearch()}
           />
           <Button
             icon={<FilterOutlined />}
@@ -280,6 +327,7 @@ function QuoteSummary() {
               placeholder='Sales Rep'
               aria-label='Sales representative'
               onChange={(e) => setSalesRep(e.target.value)}
+              onPressEnter={() => handleSearch()}
             />
             <Select
               className='quote-summary-filter-control'
@@ -289,21 +337,19 @@ function QuoteSummary() {
               placeholder='Customer'
               aria-label='Customer'
               showSearch
-              optionFilterProp='value'
-              options={uniqueCustomers.map((value) => ({ value }))}
+              optionFilterProp='label'
+              options={customerOptions}
               onChange={setCustomer}
             />
             <div className='quote-summary-filter-actions'>
-              <Button type='text' onClick={clearFilters}>
+              <Button type='text' disabled={loading} onClick={clearFilters}>
                 Clear All
               </Button>
               <Button
                 icon={<SearchOutlined />}
-                onClick={() => setAppliedSearch(draftSearch)}>
+                loading={loading}
+                onClick={() => handleSearch()}>
                 Search
-              </Button>
-              <Button icon={<SaveOutlined />} disabled>
-                Save Filter
               </Button>
             </div>
           </div>

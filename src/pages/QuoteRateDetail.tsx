@@ -76,7 +76,7 @@ function QuoteRateDetail() {
         let grossCharge = Number(result.grossCharge) || 0;
         let discount = Number(result.discount) || 0;
         let fuelSurcharge = Number(result.fuelSurcharge) || 0;
-        const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number }[] = [];
+        const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[] = [];
 
         if (result.quoteCostDetails && Array.isArray(result.quoteCostDetails)) {
           result.quoteCostDetails.forEach((cd) => {
@@ -84,14 +84,37 @@ function QuoteRateDetail() {
             const name = (cd.accName || "").trim().toLowerCase();
             const amount = Number(cd.amount) || 0;
 
-            if (code === COST_CODE_GROSS || name === COST_NAME_GROSS.toLowerCase() || name === "grosscharge") {
+            if (
+              code === COST_CODE_GROSS ||
+              code === "FRT" ||
+              code === "FREIGHT" ||
+              code === "BASE" ||
+              name === COST_NAME_GROSS.toLowerCase() ||
+              name === "grosscharge" ||
+              name.includes("freight") ||
+              name.includes("gross")
+            ) {
               grossCharge = amount;
-            } else if (code === COST_CODE_DISC || name === COST_NAME_DISC.toLowerCase()) {
-              discount = amount;
-            } else if (code === COST_CODE_FUEL || name === COST_NAME_FUEL.toLowerCase() || name === "fuelsurcharge") {
+            } else if (
+              code === COST_CODE_DISC ||
+              code === "DSC" ||
+              code === "DISCOUNT" ||
+              name === COST_NAME_DISC.toLowerCase() ||
+              name.includes("discount")
+            ) {
+              discount = Math.abs(amount);
+            } else if (
+              code === COST_CODE_FUEL ||
+              code === "FSC" ||
+              code === "FUEL SURCHARGE" ||
+              name === COST_NAME_FUEL.toLowerCase() ||
+              name === "fuelsurcharge" ||
+              name.includes("fuel")
+            ) {
               fuelSurcharge = amount;
             } else {
               otherAccessorials.push({
+                code: cd.accCode || "ACC",
                 accessorialDescription: cd.accName || cd.accCode || "Accessorial",
                 accessorialCharge: amount,
               });
@@ -122,6 +145,8 @@ function QuoteRateDetail() {
           discount,
           fuelSurcharge,
           accessorialCharges: otherAccessorials,
+          quoteCostDetails: result.quoteCostDetails,
+          rawQuoteResult: result,
         };
       });
     }

@@ -20,6 +20,8 @@ import type { CarrierRate } from '../../pages/Rate';
 import BillToLocation from './BillToLocation';
 import InternalNotes from './InternalNotes';
 import InsuranceInfo from './InsuranceInfo';
+import { formatPhoneNumber } from '../../utils/formatPhoneNumber';
+import { calculatePCF } from '../../utils/calculatePCF';
 import axios from 'axios';
 import { API_BASE_URL, DEFAULT_CLIENT_CODE, SRV_TOKEN } from '../../config/apiConfig';
 
@@ -211,11 +213,12 @@ const NewShipment: React.FC = () => {
         const widthVal = (p.width != null && p.width !== 0 && p.width !== "0") ? p.width : "";
         const heightVal = (p.height != null && p.height !== 0 && p.height !== "0") ? p.height : "";
         const weightVal = (p.weight != null && p.weight !== 0 && p.weight !== "0") ? p.weight : "";
-        const pcfDensityVal = p.density ?? p.pcfDensity ?? "";
+        const palletsVal = (p.pallets != null && p.pallets !== 0 && p.pallets !== "0") ? p.pallets : (p.units != null && p.units !== 0 ? p.units : (p.pieces != null && p.pieces !== 0 ? p.pieces : ""));
+        const pcfDensityVal = p.density ?? p.pcfDensity ?? calculatePCF(lengthVal, widthVal, heightVal, weightVal, palletsVal);
 
         return {
           id: String(p.quoteProductId ?? (idx + 1)),
-          pallets: (p.pallets != null && p.pallets !== 0 && p.pallets !== "0") ? p.pallets : (p.units != null && p.units !== 0 ? p.units : (p.pieces != null && p.pieces !== 0 ? p.pieces : "")),
+          pallets: palletsVal,
           pieces: (p.pieces != null && p.pieces !== 0 && p.pieces !== "0") ? p.pieces : (p.units != null && p.units !== 0 ? p.units : (p.pallets != null && p.pallets !== 0 ? p.pallets : "")),
           packageType: packageType,
           description: p.description || "",
@@ -439,7 +442,7 @@ const NewShipment: React.FC = () => {
         clientCode: clientCodeToUse,
         searchText: trimmed,
         pageNumber: 1,
-        pageSize: 10,
+        pageSize: 100,
       };
 
       const response = await axios.post(
@@ -474,7 +477,7 @@ const NewShipment: React.FC = () => {
             key: `prod-opt-${prod.productId || idx}-${idx}`,
             product: prod,
             label: (
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "2px 0" }}>
+              <div>
                 <span style={{ fontWeight: 600, color: "#1f2937", fontSize: 12 }}>
                   {prodDesc || "Unnamed Product"}
                 </span>
@@ -557,23 +560,48 @@ const NewShipment: React.FC = () => {
   const carrierRateData = useMemo(() => {
     if (!rawCarrier) return undefined;
 
-    let grossCharge = Number(rawCarrier.grossCharge) || 0;
-    let discount = Number(rawCarrier.discount) || 0;
-    let fuelSurcharge = Number(rawCarrier.fuelSurcharge) || 0;
+    const matchingQuoteResult = quote?.quoteResults?.find(
+      (r: any) =>
+        (rawCarrier.id && String(r.quoteResultId) === String(rawCarrier.id)) ||
+        (rawCarrier.code && r.scac?.toUpperCase() === rawCarrier.code?.toUpperCase()) ||
+        (rawCarrier.name && r.carrierName?.toLowerCase() === rawCarrier.name?.toLowerCase())
+    );
+
+    let grossCharge = Number(rawCarrier.grossCharge ?? matchingQuoteResult?.grossCharge) || 0;
+    let discount = Number(rawCarrier.discount ?? matchingQuoteResult?.discount) || 0;
+    let fuelSurcharge = Number(rawCarrier.fuelSurcharge ?? matchingQuoteResult?.fuelSurcharge) || 0;
     const accessorialCharges: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[] = [];
 
-    const costDetails = rawCarrier.quoteCostDetails || rawCarrier.costDetails;
+    const costDetails = rawCarrier.quoteCostDetails || rawCarrier.costDetails || matchingQuoteResult?.quoteCostDetails;
     if (Array.isArray(costDetails) && costDetails.length > 0) {
       costDetails.forEach((cd: any) => {
         const code = (cd.accCode || cd.code || "").trim().toUpperCase();
         const name = (cd.accName || cd.name || cd.description || "").trim().toLowerCase();
         const amount = Number(cd.amount ?? cd.charge) || 0;
 
-        if (code === "GROSS" || name.includes("gross") || name.includes("freight")) {
+        if (
+          code === "GROSS" ||
+          code === "FRT" ||
+          code === "FREIGHT" ||
+          code === "BASE" ||
+          name.includes("gross") ||
+          name.includes("freight") ||
+          name === "freight"
+        ) {
           grossCharge = amount;
-        } else if (code === "DISC" || name.includes("discount")) {
-          discount = amount;
-        } else if (code === "FUEL" || name.includes("fuel")) {
+        } else if (
+          code === "DISC" ||
+          code === "DSC" ||
+          code === "DISCOUNT" ||
+          name.includes("discount")
+        ) {
+          discount = Math.abs(amount);
+        } else if (
+          code === "FUEL" ||
+          code === "FSC" ||
+          code === "FUEL SURCHARGE" ||
+          name.includes("fuel")
+        ) {
           fuelSurcharge = amount;
         } else {
           accessorialCharges.push({
@@ -593,22 +621,29 @@ const NewShipment: React.FC = () => {
       });
     }
 
-    const price = Number(rawCarrier.price) || Number(rawCarrier.totalShipmentCost) || Number(rawCarrier.netCharge) || 0;
+    const price =
+      Number(rawCarrier.price) ||
+      Number(rawCarrier.totalShipmentCost ?? matchingQuoteResult?.totalShipmentCost) ||
+      Number(rawCarrier.netCharge ?? matchingQuoteResult?.netCharge) ||
+      0;
     if (!grossCharge && price > 0) {
       grossCharge = price;
     }
 
     return {
-      carrierName: rawCarrier.name || rawCarrier.carrierName || "",
-      carrierCode: rawCarrier.code || rawCarrier.scac || "",
-      service: rawCarrier.service || rawCarrier.serviceLevel || "",
+      carrierName: rawCarrier.name || rawCarrier.carrierName || matchingQuoteResult?.carrierName || "",
+      carrierCode: rawCarrier.code || rawCarrier.scac || matchingQuoteResult?.scac || "",
+      service: rawCarrier.service || rawCarrier.serviceLevel || matchingQuoteResult?.serviceLevel || "",
       price: price > 0 ? price : (grossCharge - discount + fuelSurcharge),
       grossCharge,
       discount,
       fuelSurcharge,
       accessorialCharges,
+      grossCode: "FRT",
+      discountCode: "DSC",
+      fuelCode: "FSC",
     };
-  }, [rawCarrier]);
+  }, [rawCarrier, quote]);
 
   const handleFetchRatesForShipment = async (scacParam?: string) => {
     const origZip = (originData?.postal || quote?.originZip || "").split(' - ')[0].trim();
@@ -826,6 +861,18 @@ const NewShipment: React.FC = () => {
         message.error("Class is required.");
         return false;
       }
+      if (!item.length || Number(item.length) <= 0) {
+        message.error("Length (L) is required and must be greater than 0.");
+        return false;
+      }
+      if (!item.width || Number(item.width) <= 0) {
+        message.error("Width (W) is required and must be greater than 0.");
+        return false;
+      }
+      if (!item.height || Number(item.height) <= 0) {
+        message.error("Height (H) is required and must be greater than 0.");
+        return false;
+      }
       if (!item.nmfc || !isValidNMFC(item.nmfc)) {
         setTouchedNMFC((prev) => ({ ...prev, [item.id]: true }));
         message.error(
@@ -906,7 +953,7 @@ const NewShipment: React.FC = () => {
                       country: loc.countryCode || prev?.country || "USA",
                       postal: String(loc.zipCode || prev?.postal || "").split(' - ')[0].trim(),
                       contactName: loc.contactName || prev?.contactName || "",
-                      phone: loc.contactPhone || prev?.phone || "",
+                      phone: formatPhoneNumber(loc.contactPhone || prev?.phone || ""),
                       email: loc.contactEmail || prev?.email || "",
                       openTime: loc.openTime || prev?.openTime || undefined,
                       closeTime: loc.closeTime || prev?.closeTime || undefined,
@@ -932,7 +979,7 @@ const NewShipment: React.FC = () => {
                       country: loc.countryCode || prev?.country || "USA",
                       postal: String(loc.zipCode || prev?.postal || "").split(' - ')[0].trim(),
                       contactName: loc.contactName || prev?.contactName || "",
-                      phone: loc.contactPhone || prev?.phone || "",
+                      phone: formatPhoneNumber(loc.contactPhone || prev?.phone || ""),
                       email: loc.contactEmail || prev?.email || "",
                       openTime: loc.openTime || prev?.openTime || undefined,
                       closeTime: loc.closeTime || prev?.closeTime || undefined,
@@ -988,7 +1035,7 @@ const NewShipment: React.FC = () => {
             <span>Pieces <em>*</em></span>
             <span>Weight [{weightUnit.toLowerCase()}] <em>*</em></span>
             <span>Class <em>*</em></span>
-            <span>Dimensions [in]</span>
+            <span>Dimensions [in] <em>*</em></span>
             <span>PCF/Density</span>
             <span>NMFC <em>*</em></span>
             <span className="col-center">Stackable</span>
@@ -1088,27 +1135,44 @@ const NewShipment: React.FC = () => {
               )}
 
               <div className="quote-item-combined quote-item-combined--dimensions">
-                <Input
-                  placeholder="L"
-                  value={item.length ?? ''}
-                  onChange={(e) => handleUpdateField(item.id, 'length', e.target.value)}
-                />
-                <Input
-                  placeholder="W"
-                  value={item.width ?? ''}
-                  onChange={(e) => handleUpdateField(item.id, 'width', e.target.value)}
-                />
-                <Input
-                  placeholder="H"
-                  value={item.height ?? ''}
-                  onChange={(e) => handleUpdateField(item.id, 'height', e.target.value)}
-                />
+                {renderWithTooltip(
+                  <Input
+                    placeholder="L"
+                    value={item.length ?? ''}
+                    status={formSubmitted && (!item.length || Number(item.length) <= 0) ? 'error' : undefined}
+                    onChange={(e) => handleUpdateField(item.id, 'length', e.target.value)}
+                  />,
+                  "Length [in] is required and must be greater than 0",
+                  Boolean(formSubmitted && (!item.length || Number(item.length) <= 0))
+                )}
+                {renderWithTooltip(
+                  <Input
+                    placeholder="W"
+                    value={item.width ?? ''}
+                    status={formSubmitted && (!item.width || Number(item.width) <= 0) ? 'error' : undefined}
+                    onChange={(e) => handleUpdateField(item.id, 'width', e.target.value)}
+                  />,
+                  "Width [in] is required and must be greater than 0",
+                  Boolean(formSubmitted && (!item.width || Number(item.width) <= 0))
+                )}
+                {renderWithTooltip(
+                  <Input
+                    placeholder="H"
+                    value={item.height ?? ''}
+                    status={formSubmitted && (!item.height || Number(item.height) <= 0) ? 'error' : undefined}
+                    onChange={(e) => handleUpdateField(item.id, 'height', e.target.value)}
+                  />,
+                  "Height [in] is required and must be greater than 0",
+                  Boolean(formSubmitted && (!item.height || Number(item.height) <= 0))
+                )}
               </div>
 
               <Input
                 placeholder="PCF/Density"
                 value={item.pcfDensity ?? ''}
-                onChange={(e) => handleUpdateField(item.id, 'pcfDensity', e.target.value)}
+                readOnly
+                tabIndex={-1}
+                style={{ backgroundColor: '#f5f5f5', cursor: 'default' }}
               />
 
               {(() => {
@@ -1283,8 +1347,9 @@ const NewShipment: React.FC = () => {
             <Form.Item label="Hazmat Phone" style={{ marginBottom: 12 }}>
               <Input
                 value={hazmatForm.hazmatPhone}
-                onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatPhone: e.target.value }))}
-                placeholder="Hazmat Phone"
+                onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatPhone: formatPhoneNumber(e.target.value, prev.hazmatPhone) }))}
+                placeholder="(___) ___-____"
+                maxLength={14}
               />
             </Form.Item>
             <Form.Item label="Hazmat Contact" style={{ marginBottom: 4 }}>

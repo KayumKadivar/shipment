@@ -39,7 +39,9 @@ export type CarrierRate = SendRateItem & {
   grossCharge?: number;
   discount?: number;
   fuelSurcharge?: number;
-  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number }[];
+  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[];
+  quoteCostDetails?: any[] | null;
+  rawQuoteResult?: any;
 };
 
 export type SortOption = "rate-asc" | "rate-desc" | "transit";
