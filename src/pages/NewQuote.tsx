@@ -700,12 +700,18 @@ function NewQuote() {
   const visibleAccessorials = useMemo(() => {
     const query = accessorialSearch.trim().toLowerCase();
     const options = accessorialOptions.map((a) => a.accessorialName);
-    return query
+    const filtered = query
       ? options.filter((option) =>
           option.toLowerCase().includes(query),
         )
       : options;
-  }, [accessorialSearch, accessorialOptions]);
+
+    const selectedSet = new Set(selectedAccessorials);
+    const selected = filtered.filter((opt) => selectedSet.has(opt));
+    const unselected = filtered.filter((opt) => !selectedSet.has(opt));
+
+    return [...selected, ...unselected];
+  }, [accessorialSearch, accessorialOptions, selectedAccessorials]);
 
   const [isHazmatModalOpen, setIsHazmatModalOpen] = useState(false);
   const [activeHazmatPackageId, setActiveHazmatPackageId] = useState<string | null>(null);
@@ -908,6 +914,42 @@ function NewQuote() {
       return;
     }
 
+    const allItems = packages.flatMap((p) => p.items);
+    const firstHazmat = allItems.find((i) => i.hazMat) || allItems[0];
+
+    const shipments = packages.flatMap((p) =>
+      p.items.map((i) => ({
+        class: i.freightClass,
+        weight: Number(i.weight) || 0,
+        weightUnit: i.weightUnit,
+        units: Number(i.units) || 0,
+        cubicFeet: 0,
+        hazMat: i.hazMat,
+        hazMatClass: i.hazMatClass || undefined,
+        hazMatUN: i.hazMatUN || undefined,
+        hazMatProperShippingName: i.hazMatProperShippingName || undefined,
+        hazMatPackingGroup: i.hazMatPackingGroup || undefined,
+        hazMatPhone: i.hazMatPhone || undefined,
+        hazMatContact: i.hazMatContact || undefined,
+        hazmatProperShippingName: i.hazMatProperShippingName || "",
+        hazmatClass: i.hazMatClass || "",
+        hazmatUN: i.hazMatUN || "",
+        hazmatPhone: i.hazMatPhone || "",
+        hazmatContactName: i.hazMatContact || "",
+        hazmatGroup: i.hazMatPackingGroup || "",
+        nmfc: i.nmfc || undefined,
+        description: i.description || "Freight",
+        pallets: i.handlingUnit === "Pallet" ? Number(i.units) || 0 : 0,
+        pieces: Number(i.pieces) || 0,
+        length: Number(i.length) || 0,
+        width: Number(i.width) || 0,
+        height: Number(i.height) || 0,
+        packageType: i.handlingUnit,
+        linearFeet: 0,
+        stackable: i.stackable,
+      }))
+    );
+
     const payload = {
       serviceToken: SRV_TOKEN,
       origZip: origPostal.split(' - ')[0],
@@ -918,32 +960,13 @@ function NewQuote() {
       destCity: destCity,
       destState: destState,
       destCountry: destCountry,
-      shipments: packages.flatMap((p) =>
-        p.items.map((i) => ({
-          class: i.freightClass,
-          weight: Number(i.weight) || 0,
-          weightUnit: i.weightUnit,
-          units: Number(i.units) || 0,
-          cubicFeet: 0,
-          hazMat: i.hazMat,
-          hazMatClass: i.hazMatClass || undefined,
-          hazMatUN: i.hazMatUN || undefined,
-          hazMatProperShippingName: i.hazMatProperShippingName || undefined,
-          hazMatPackingGroup: i.hazMatPackingGroup || undefined,
-          hazMatPhone: i.hazMatPhone || undefined,
-          hazMatContact: i.hazMatContact || undefined,
-          nmfc: i.nmfc || undefined,
-          description: i.description || "Freight",
-          pallets: i.handlingUnit === "Pallet" ? Number(i.units) || 0 : 0,
-          pieces: Number(i.pieces) || 0,
-          length: Number(i.length) || 0,
-          width: Number(i.width) || 0,
-          height: Number(i.height) || 0,
-          packageType: i.handlingUnit,
-          linearFeet: 0,
-          stackable: i.stackable,
-        }))
-      ),
+      hazmatProperShippingName: firstHazmat?.hazMatProperShippingName || "",
+      hazmatClass: firstHazmat?.hazMatClass || "",
+      hazmatUN: firstHazmat?.hazMatUN || "",
+      hazmatPhone: firstHazmat?.hazMatPhone || "",
+      hazmatContactName: firstHazmat?.hazMatContact || "",
+      hazmatGroup: firstHazmat?.hazMatPackingGroup || "",
+      shipments,
       accessorialCodes: accessorialOptions
         .filter((a) => selectedAccessorials.includes(a.accessorialName))
         .map((a) => a.accesorialCode || a.accessorialName),

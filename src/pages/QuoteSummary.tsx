@@ -14,6 +14,7 @@ import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { fetchQuotes, searchQuote } from "../store/quoteSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import { clearQuoteFormData } from "../store/customerRateSlice";
+import { DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import {
   type QuoteLoad,
   type QuoteSummaryRecord,
@@ -40,60 +41,70 @@ function QuoteSummary() {
   const [clientList, setClientList] = useState<{ clientName: string; clientCode: string }[]>([]);
   const [activePage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [appliedFilters, setAppliedFilters] = useState<{
+    referenceNumber: string;
+    clientName: string;
+    salesRep: string;
+    fromDate: string | null;
+    toDate: string | null;
+  }>({
+    referenceNumber: "",
+    clientName: "",
+    salesRep: "",
+    fromDate: null,
+    toDate: null,
+  });
 
   const dispatch = useAppDispatch();
-  const { quotes: apiQuotes, loading } = useAppSelector((state) => state.quote);
-
-  const handleSearch = useCallback((customRef?: string) => {
-    const refNum = (customRef !== undefined ? customRef : draftSearch).trim();
-    setCurrentPage(1);
-
-    const fromDateIso = dateRange?.[0]
-      ? dateRange[0].startOf("day").toISOString()
-      : null;
-    const toDateIso = dateRange?.[1]
-      ? dateRange[1].endOf("day").toISOString()
-      : null;
-
-    dispatch(
-      searchQuote({
-        referenceNumber: refNum,
-        clientName: customer || "",
-        originZip: "",
-        destinationZip: "",
-        fromDate: fromDateIso,
-        toDate: toDateIso,
-        createdBy: salesRep?.trim() || "",
-        pageNumber: 1,
-        pageSize: 100,
-      })
-    )
-      .unwrap()
-      .catch((err) => {
-        message.error(typeof err === "string" ? err : "Failed to search quotes");
-      });
-  }, [dispatch, draftSearch, customer, dateRange, salesRep]);
+  const { quotes: apiQuotes, totalCount: apiTotalCount, loading } = useAppSelector((state) => state.quote);
 
   useEffect(() => {
-    dispatch(
-      searchQuote({
-        referenceNumber: "",
-        clientName: "",
-        originZip: "",
-        destinationZip: "",
-        fromDate: null,
-        toDate: null,
-        createdBy: "",
-        pageNumber: 1,
-        pageSize: 100,
-      })
-    )
-      .unwrap()
-      .catch(() => {
-        // Fallback to fetchQuotes if search endpoint is unavailable
-        dispatch(fetchQuotes({ clientCode: "DEVTS" }));
-      });
+    const hasFilters = Boolean(
+      appliedFilters.referenceNumber ||
+      appliedFilters.clientName ||
+      appliedFilters.salesRep ||
+      appliedFilters.fromDate ||
+      appliedFilters.toDate
+    );
 
+    if (hasFilters) {
+      dispatch(
+        searchQuote({
+          referenceNumber: appliedFilters.referenceNumber,
+          clientName: appliedFilters.clientName,
+          originZip: "",
+          destinationZip: "",
+          fromDate: appliedFilters.fromDate,
+          toDate: appliedFilters.toDate,
+          createdBy: appliedFilters.salesRep,
+          pageNumber: activePage,
+          pageSize: pageSize,
+        })
+      )
+        .unwrap()
+        .catch((err) => {
+          message.error(typeof err === "string" ? err : "Failed to search quotes");
+          // Fallback to fetchQuotes if search endpoint is unavailable
+          dispatch(
+            fetchQuotes({
+              clientCode: DEFAULT_CLIENT_CODE,
+              pageNumber: activePage,
+              pageSize: pageSize,
+            })
+          );
+        });
+    } else {
+      dispatch(
+        fetchQuotes({
+          clientCode: DEFAULT_CLIENT_CODE,
+          pageNumber: activePage,
+          pageSize: pageSize,
+        })
+      );
+    }
+  }, [dispatch, activePage, pageSize, appliedFilters]);
+
+  useEffect(() => {
     dispatch(fetchClientsAndSubclients())
       .unwrap()
       .then((clients) => {
@@ -105,6 +116,40 @@ function QuoteSummary() {
 
     dispatch(clearQuoteFormData());
   }, [dispatch]);
+
+  const handleSearch = useCallback((customRef?: string) => {
+    const refNum = (customRef !== undefined ? customRef : draftSearch).trim();
+    const fromDateIso = dateRange?.[0]
+      ? dateRange[0].startOf("day").toISOString()
+      : null;
+    const toDateIso = dateRange?.[1]
+      ? dateRange[1].endOf("day").toISOString()
+      : null;
+
+    setAppliedFilters({
+      referenceNumber: refNum,
+      clientName: customer || "",
+      salesRep: salesRep?.trim() || "",
+      fromDate: fromDateIso,
+      toDate: toDateIso,
+    });
+    setCurrentPage(1);
+  }, [draftSearch, customer, salesRep, dateRange]);
+
+  const clearFilters = () => {
+    setDraftSearch("");
+    setDateRange(null);
+    setSalesRep(undefined);
+    setCustomer(undefined);
+    setAppliedFilters({
+      referenceNumber: "",
+      clientName: "",
+      salesRep: "",
+      fromDate: null,
+      toDate: null,
+    });
+    setCurrentPage(1);
+  };
 
   const dynamicQuoteSummaryData: QuoteSummaryRecord[] = useMemo(() => {
     return apiQuotes.map((q) => {
@@ -149,39 +194,37 @@ function QuoteSummary() {
     return Array.from(names).map((name) => ({ label: name, value: name }));
   }, [clientList, dynamicQuoteSummaryData]);
 
-  const visibleQuotes = dynamicQuoteSummaryData;
+  const isServerTotalAvailable =
+    typeof apiTotalCount === "number" && apiTotalCount > 0 && apiTotalCount >= apiQuotes.length;
 
-  const totalCount = visibleQuotes.length;
-  const totalPages = Math.ceil(totalCount / pageSize);
-  const paginatedQuotes = useMemo(() => {
-    const startIndex = (activePage - 1) * pageSize;
-    return visibleQuotes.slice(startIndex, startIndex + pageSize);
-  }, [visibleQuotes, activePage, pageSize]);
+  const totalCount = useMemo(() => {
+    if (isServerTotalAvailable) {
+      return apiTotalCount;
+    }
+    if (apiQuotes.length < pageSize) {
+      return (activePage - 1) * pageSize + apiQuotes.length;
+    }
+    return activePage * pageSize + 1;
+  }, [isServerTotalAvailable, apiTotalCount, apiQuotes.length, activePage, pageSize]);
 
-  const shownStart = totalCount === 0 ? 0 : (activePage - 1) * pageSize + 1;
-  const shownEnd = Math.min(activePage * pageSize, totalCount);
+  const totalPages = useMemo(() => {
+    if (isServerTotalAvailable) {
+      return Math.max(1, Math.ceil(apiTotalCount / pageSize));
+    }
+    if (apiQuotes.length < pageSize) {
+      return Math.max(1, activePage);
+    }
+    return activePage + 1;
+  }, [isServerTotalAvailable, apiTotalCount, apiQuotes.length, activePage, pageSize]);
 
-  const clearFilters = () => {
-    setDraftSearch("");
-    setDateRange(null);
-    setSalesRep(undefined);
-    setCustomer(undefined);
-    setCurrentPage(1);
+  const hasNextPage = isServerTotalAvailable
+    ? activePage < totalPages
+    : apiQuotes.length === pageSize;
 
-    dispatch(
-      searchQuote({
-        referenceNumber: "",
-        clientName: "",
-        originZip: "",
-        destinationZip: "",
-        fromDate: null,
-        toDate: null,
-        createdBy: "",
-        pageNumber: 1,
-        pageSize: 100,
-      })
-    );
-  };
+  const hasPrevPage = activePage > 1;
+
+  const shownStart = apiQuotes.length === 0 ? 0 : (activePage - 1) * pageSize + 1;
+  const shownEnd = (activePage - 1) * pageSize + apiQuotes.length;
 
   const columns: ColumnsType<QuoteSummaryRecord> = [
     {
@@ -363,7 +406,7 @@ function QuoteSummary() {
             <Select
               value={pageSize}
               aria-label='Quotes page size'
-              options={[10, 20, 50].map((value) => ({ value, label: value }))}
+              options={[10, 20, 50, 100].map((value) => ({ value, label: value }))}
               onChange={(value) => {
                 setPageSize(value);
                 setCurrentPage(1);
@@ -372,21 +415,21 @@ function QuoteSummary() {
             <Button
               aria-label='Previous page'
               icon={<LeftOutlined />}
-              disabled={activePage === 1}
-              onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
+              disabled={!hasPrevPage}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
             />
             <span>{totalPages > 0 ? `${activePage} of ${totalPages}` : "0 of 0"}</span>
             <Button
               aria-label='Next page'
               icon={<RightOutlined />}
-              disabled={activePage === totalPages || totalPages === 0}
-              onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))}
+              disabled={!hasNextPage}
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
             />
           </div>
         </div>
         <Table<QuoteSummaryRecord>
           columns={columns}
-          dataSource={paginatedQuotes}
+          dataSource={dynamicQuoteSummaryData}
           loading={loading}
           pagination={false}
           showSorterTooltip={false}
@@ -397,14 +440,14 @@ function QuoteSummary() {
         />
         <div className='customer-location-footer'>
           <span>
-            Showing {shownStart}-{shownEnd} of <strong>{totalCount}</strong>{" "}
+            Showing {shownStart}-{shownEnd} of <strong>{isServerTotalAvailable ? totalCount : (hasNextPage ? `${shownEnd}+` : totalCount)}</strong>{" "}
             Quotes
           </span>
           <div className='customer-location-pagination'>
             <button
               type='button'
-              disabled={activePage === 1}
-              onClick={() => setCurrentPage(Math.max(1, activePage - 1))}>
+              disabled={!hasPrevPage}
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}>
               Prev
             </button>
             {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
@@ -419,8 +462,8 @@ function QuoteSummary() {
             ))}
             <button
               type='button'
-              disabled={activePage === totalPages || totalPages === 0}
-              onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))}>
+              disabled={!hasNextPage}
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}>
               Next
             </button>
           </div>

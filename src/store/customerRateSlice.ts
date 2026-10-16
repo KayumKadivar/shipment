@@ -111,6 +111,16 @@ export interface RatingShipment {
   hazmatClass?: string;
   hazMatUN?: string;
   hazmatUN?: string;
+  hazMatProperShippingName?: string;
+  hazmatProperShippingName?: string;
+  hazMatPackingGroup?: string;
+  hazmatPackingGroup?: string;
+  hazmatGroup?: string;
+  hazMatPhone?: string;
+  hazmatPhone?: string;
+  hazMatContact?: string;
+  hazmatContact?: string;
+  hazmatContactName?: string;
   stackable?: boolean;
 }
 
@@ -130,6 +140,12 @@ export interface CarrierRateRequest extends Record<string, unknown> {
   shipments?: RatingShipment[];
   accessorialCodes?: string[];
   totalLinearFeet?: number;
+  hazmatProperShippingName?: string;
+  hazmatClass?: string;
+  hazmatUN?: string;
+  hazmatPhone?: string;
+  hazmatContactName?: string;
+  hazmatGroup?: string;
 }
 
 export interface QuoteFormData {
@@ -404,8 +420,12 @@ export const saveCustomerQuote = createAsyncThunk<
           height: Number(s.height) || 0,
           packagingGroup: s.packageType || s.packagingGroup || "",
           isHazmat: s.hazMat || s.isHazmat || false,
-          hazmatClass: s.hazMatClass || s.hazmatClass || "",
-          hazmatUN: s.hazMatUN || s.hazmatUN || "",
+          hazmatClass: s.hazmatClass || s.hazMatClass || "",
+          hazmatUN: s.hazmatUN || s.hazMatUN || "",
+          hazmatProperShippingName: s.hazmatProperShippingName || s.hazMatProperShippingName || "",
+          hazmatPhone: s.hazmatPhone || s.hazMatPhone || "",
+          hazmatContactName: s.hazmatContactName || s.hazmatContact || s.hazMatContact || "",
+          hazmatGroup: s.hazmatGroup || s.hazmatPackingGroup || s.hazMatPackingGroup || "",
           isStackable: s.stackable ?? true,
         })),
         quoteAccessorials: (quoteRequest.accessorialCodes || []).map((acc: string) => ({

@@ -63,6 +63,16 @@ interface ShipmentPrefillProduct {
   hazMatClass?: string;
   hazmatUN?: string;
   hazMatUN?: string;
+  hazmatProperShippingName?: string;
+  hazMatProperShippingName?: string;
+  hazmatPackingGroup?: string;
+  hazMatPackingGroup?: string;
+  hazmatGroup?: string;
+  hazmatPhone?: string;
+  hazMatPhone?: string;
+  hazmatContact?: string;
+  hazMatContact?: string;
+  hazmatContactName?: string;
 }
 
 interface ShipmentPrefillQuote {
@@ -72,6 +82,14 @@ interface ShipmentPrefillQuote {
   quoteAccessorials?: Array<{ accCode?: string }>;
   clientName?: string;
   clientCode?: string;
+  clientAddress1?: string;
+  clientAddress2?: string;
+  clientCountryCode?: string;
+  clientCityName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientStateCode?: string;
+  clientZipCode?: string;
   profileCode?: string;
   originZip?: string;
   originCity?: string;
@@ -146,6 +164,9 @@ const NewShipment: React.FC = () => {
   const quote = prefillData?.quote;
   const selectedCarrier = prefillData?.selectedCarrier;
   const reference = prefillData?.reference;
+
+  const [originForm] = Form.useForm();
+  const [destinationForm] = Form.useForm();
 
   const { data: accessorialsList = [], selectedAccessorialIds = [] } = useAppSelector((state) => state.accessorials);
 
@@ -233,6 +254,12 @@ const NewShipment: React.FC = () => {
           weight: weightVal,
           hazmatClass: p.hazmatClass || p.hazMatClass || "",
           hazmatUN: p.hazmatUN || p.hazMatUN || "",
+          hazmatProperShippingName: p.hazmatProperShippingName || p.hazMatProperShippingName || "",
+          hazmatPackingGroup: p.hazmatGroup || p.hazmatPackingGroup || p.hazMatPackingGroup || "",
+          hazmatGroup: p.hazmatGroup || p.hazmatPackingGroup || p.hazMatPackingGroup || "",
+          hazmatPhone: p.hazmatPhone || p.hazMatPhone || "",
+          hazmatContact: p.hazmatContactName || p.hazmatContact || p.hazMatContact || "",
+          hazmatContactName: p.hazmatContactName || p.hazmatContact || p.hazMatContact || "",
         };
       });
       dispatch(setProductItems(mapped));
@@ -337,12 +364,22 @@ const NewShipment: React.FC = () => {
               ) || dataList[0];
 
               if (matched) {
-                setOriginData((prev: any) => ({
-                  ...prev,
-                  city: prev?.city || matched.city || "",
-                  state: prev?.state || matched.stateCode || "",
-                  country: prev?.country || matched.countryCode || "USA",
-                }));
+                setOriginData((prev: any) => {
+                  const updated = {
+                    ...prev,
+                    companyName: prev?.companyName || matched.locationName || "",
+                    address1: prev?.address1 || matched.address1 || "",
+                    address2: prev?.address2 || matched.address2 || "",
+                    city: prev?.city || matched.city || "",
+                    state: prev?.state || matched.stateCode || "",
+                    country: prev?.country || matched.countryCode || "USA",
+                    contactName: prev?.contactName || matched.contactName || "",
+                    phone: prev?.phone || formatPhoneNumber(matched.contactPhone || ""),
+                    email: prev?.email || matched.contactEmail || "",
+                  };
+                  originForm.setFieldsValue(updated);
+                  return updated;
+                });
               }
             }
           }
@@ -386,12 +423,22 @@ const NewShipment: React.FC = () => {
               ) || dataList[0];
 
               if (matched) {
-                setDestinationData((prev: any) => ({
-                  ...prev,
-                  city: prev?.city || matched.city || "",
-                  state: prev?.state || matched.stateCode || "",
-                  country: prev?.country || matched.countryCode || "USA",
-                }));
+                setDestinationData((prev: any) => {
+                  const updated = {
+                    ...prev,
+                    companyName: prev?.companyName || matched.locationName || "",
+                    address1: prev?.address1 || matched.address1 || "",
+                    address2: prev?.address2 || matched.address2 || "",
+                    city: prev?.city || matched.city || "",
+                    state: prev?.state || matched.stateCode || "",
+                    country: prev?.country || matched.countryCode || "USA",
+                    contactName: prev?.contactName || matched.contactName || "",
+                    phone: prev?.phone || formatPhoneNumber(matched.contactPhone || ""),
+                    email: prev?.email || matched.contactEmail || "",
+                  };
+                  destinationForm.setFieldsValue(updated);
+                  return updated;
+                });
               }
             }
           }
@@ -672,6 +719,12 @@ const NewShipment: React.FC = () => {
       hazMatPackingGroup: i.hazmatPackingGroup || undefined,
       hazMatPhone: i.hazmatPhone || undefined,
       hazMatContact: i.hazmatContact || undefined,
+      hazmatProperShippingName: i.hazmatProperShippingName || "",
+      hazmatClass: i.hazmatClass || "",
+      hazmatUN: i.hazmatUN || "",
+      hazmatPhone: i.hazmatPhone || "",
+      hazmatContactName: i.hazmatContactName || i.hazmatContact || "",
+      hazmatGroup: i.hazmatGroup || i.hazmatPackingGroup || "",
       nmfc: i.nmfc || undefined,
       description: i.description || "Freight",
       pallets: i.packageType === "Pallet" ? Number(i.pallets) || 1 : 0,
@@ -689,6 +742,7 @@ const NewShipment: React.FC = () => {
       .map((a: any) => a.accesorialCode || a.accessorialName);
 
     const scacToUse = scacParam || selectedCarrierInfo?.carrierId || undefined;
+    const firstHazmat = items.find((i) => i.hazmat) || items[0];
 
     const payload = {
       serviceToken: SRV_TOKEN,
@@ -700,6 +754,12 @@ const NewShipment: React.FC = () => {
       destCity: destinationData?.city || quote?.destinationCity || "",
       destState: destinationData?.state || quote?.destinationStateCode || "",
       destCountry: destinationData?.country || quote?.destinationCountry || "USA",
+      hazmatProperShippingName: firstHazmat?.hazmatProperShippingName || "",
+      hazmatClass: firstHazmat?.hazmatClass || "",
+      hazmatUN: firstHazmat?.hazmatUN || "",
+      hazmatPhone: firstHazmat?.hazmatPhone || "",
+      hazmatContactName: firstHazmat?.hazmatContactName || firstHazmat?.hazmatContact || "",
+      hazmatGroup: firstHazmat?.hazmatGroup || firstHazmat?.hazmatPackingGroup || "",
       shipments,
       accessorialCodes,
       profileCode: quote?.profileCode,
@@ -782,8 +842,10 @@ const NewShipment: React.FC = () => {
           hazmatProperShippingName: hazmatForm.hazmatProperShippingName,
           hazmatClass: hazmatForm.hazmatClass,
           hazmatPackingGroup: hazmatForm.hazmatPackingGroup,
+          hazmatGroup: hazmatForm.hazmatPackingGroup,
           hazmatPhone: hazmatForm.hazmatPhone,
           hazmatContact: hazmatForm.hazmatContact,
+          hazmatContactName: hazmatForm.hazmatContact,
         })
       );
     }
@@ -861,18 +923,6 @@ const NewShipment: React.FC = () => {
         message.error("Class is required.");
         return false;
       }
-      if (!item.length || Number(item.length) <= 0) {
-        message.error("Length (L) is required and must be greater than 0.");
-        return false;
-      }
-      if (!item.width || Number(item.width) <= 0) {
-        message.error("Width (W) is required and must be greater than 0.");
-        return false;
-      }
-      if (!item.height || Number(item.height) <= 0) {
-        message.error("Height (H) is required and must be greater than 0.");
-        return false;
-      }
       if (!item.nmfc || !isValidNMFC(item.nmfc)) {
         setTouchedNMFC((prev) => ({ ...prev, [item.id]: true }));
         message.error(
@@ -900,7 +950,367 @@ const NewShipment: React.FC = () => {
   const totalPieces = items.reduce((sum, item) => sum + (Number(item.pieces) || 0), 0);
   const totalWeight = items.reduce((sum, item) => sum + (Number(item.weight) || 0), 0);
 
-  const isPageLoading = Boolean(loadingOrigin || loadingDestination || ratesLoading);
+  // Refs to capture input values across all forms WITHOUT triggering re-render cascades
+  const originFormValuesRef = useRef<any>({});
+  const destinationFormValuesRef = useRef<any>({});
+  const shipmentNotesRef = useRef<string>("");
+  const shipmentInfoValuesRef = useRef<any>({
+    mode: "LTL",
+    equipment: "LTL",
+    serviceLevel: "Standard",
+    priority: "Standard",
+    paymentTerms: "3rd Party Prep",
+    sendCarrierPickupReq: false,
+  });
+  const billToValuesRef = useRef<any>({ country: "USA" });
+  const insuranceValuesRef = useRef<any>({
+    shipmentValue: "",
+    codAmount: "",
+    insuranceType: "None",
+    specialInstructions: "",
+  });
+  const internalNotesListRef = useRef<any[]>([]);
+  const rateDetailsRef = useRef<{
+    buyRate: { freight: number; fuel: number; discount: number; accesorialCostDetails: any[] };
+    sellRate: { freight: number; fuel: number; discount: number; accesorialCostDetails: any[] };
+  }>({
+    buyRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
+    sellRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
+  });
+  const [isSavingShipment, setIsSavingShipment] = useState<boolean>(false);
+
+  const toIsoOrCurrent = (dateStr?: string): string => {
+    if (!dateStr || !dateStr.trim()) return new Date().toISOString();
+    const parsed = new Date(dateStr.trim());
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+    return new Date().toISOString();
+  };
+
+  const handleSaveShipment = async () => {
+    if (!validateProductItems()) return;
+
+    const originVals = {
+      ...(originData || {}),
+      ...(originFormValuesRef.current || {}),
+      ...(originForm?.getFieldsValue?.(true) || {}),
+    };
+    const destinationVals = {
+      ...(destinationData || {}),
+      ...(destinationFormValuesRef.current || {}),
+      ...(destinationForm?.getFieldsValue?.(true) || {}),
+    };
+
+    const origName = (originVals.companyName || "").trim();
+    const origAddress = (originVals.address1 || "").trim();
+    const origZip = (originVals.postal || quote?.originZip || "").split(' - ')[0].trim();
+    const origCity = (originVals.city || quote?.originCity || "").trim();
+    const origState = (originVals.state || quote?.originStateCode || "").trim();
+
+    const destName = (destinationVals.companyName || "").trim();
+    const destAddress = (destinationVals.address1 || "").trim();
+    const destZip = (destinationVals.postal || quote?.destinationZip || "").split(' - ')[0].trim();
+    const destCity = (destinationVals.city || quote?.destinationCity || "").trim();
+    const destState = (destinationVals.state || quote?.destinationStateCode || "").trim();
+
+    if (!origName) {
+      message.error("Origin Company Name is required.");
+      originForm.validateFields(['companyName']).catch(() => {});
+      return;
+    }
+    if (!origAddress) {
+      message.error("Origin Address Line 1 is required.");
+      originForm.validateFields(['address1']).catch(() => {});
+      return;
+    }
+    if (!origZip) {
+      message.error("Origin postal/ZIP code is required.");
+      originForm.validateFields(['postal']).catch(() => {});
+      return;
+    }
+    if (!destName) {
+      message.error("Destination Company Name is required.");
+      destinationForm.validateFields(['companyName']).catch(() => {});
+      return;
+    }
+    if (!destAddress) {
+      message.error("Destination Address Line 1 is required.");
+      destinationForm.validateFields(['address1']).catch(() => {});
+      return;
+    }
+    if (!destZip) {
+      message.error("Destination postal/ZIP code is required.");
+      destinationForm.validateFields(['postal']).catch(() => {});
+      return;
+    }
+
+    const shipmentNotes = shipmentNotesRef.current || "";
+    const shipmentInfoValues = shipmentInfoValuesRef.current || {};
+    const billToValues = billToValuesRef.current || {};
+    const insuranceValues = insuranceValuesRef.current || {};
+    const internalNotesList = internalNotesListRef.current || [];
+    const rateDetails = rateDetailsRef.current || {
+      buyRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
+      sellRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
+    };
+
+    setIsSavingShipment(true);
+    try {
+      const clientCodeToUse =
+        quote?.clientCode ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "DEVTS";
+
+      const loggedInUser =
+        localStorage.getItem("userName") ||
+        sessionStorage.getItem("userName") ||
+        localStorage.getItem("user") ||
+        "Portal User";
+
+      const rawPhone = originVals.phone || originData.phone || "";
+      const phoneDigits = rawPhone.replace(/\D/g, "");
+      const orgPhoneAreaCode = phoneDigits.length >= 10 ? phoneDigits.slice(0, 3) : "";
+      const orgPhoneNumber = rawPhone;
+
+      const contactPerson = originVals.contactName || originData.contactName || "";
+      const nameParts = contactPerson.trim().split(/\s+/);
+      const orgContactFirstName = nameParts[0] || "";
+      const orgContactLastName = nameParts.slice(1).join(" ") || "";
+
+      const scacCode =
+        selectedCarrierInfo?.carrierId ||
+        carrierRateData?.carrierCode ||
+        rawCarrier?.code ||
+        rawCarrier?.scac ||
+        "";
+
+      const carrierName =
+        selectedCarrierInfo?.carrierName ||
+        carrierRateData?.carrierName ||
+        rawCarrier?.name ||
+        rawCarrier?.carrierName ||
+        "";
+
+      const selectedAccessorialCodes: string[] = (accessorialsList || [])
+        .filter((a: any) => (selectedAccessorialIds || []).includes(a.accessorialID ?? a.accessorialId))
+        .map((a: any) => String(a.accesorialCode || a.accessorialName || "").trim())
+        .filter(Boolean);
+
+      const bolDispatchNotes = (internalNotesList || []).map((n: any) => n.text).filter(Boolean);
+
+      const mappedProducts = items.map((i) => ({
+        productDescription: i.description || "Freight",
+        productClass: String(i.class || "50"),
+        productWeight: Math.round(Number(i.weight) || 0),
+        pallets: Math.round(Number(i.pallets) || 0),
+        pieces: Math.round(Number(i.pieces) || 0),
+        nmfc: i.nmfc || "",
+        hazMat: Boolean(i.hazmat),
+        length: Math.round(Number(i.length) || 0),
+        width: Math.round(Number(i.width) || 0),
+        height: Math.round(Number(i.height) || 0),
+        pcf: Math.round(Number(i.pcfDensity) || 0),
+        packageType: i.packageType || "Pallet",
+        skuNumber: "",
+        accountNumber: "",
+        linearFeet: 0,
+        hazmatProperShippingName: i.hazmatProperShippingName || "",
+        hazmatClass: i.hazmatClass || "",
+        hazmatUnNaNumber: i.hazmatUN || "",
+        hazmatPhone: i.hazmatPhone || "",
+        hazmatGroup: i.hazmatPackingGroup || i.hazmatGroup || "",
+        hazmatContact: i.hazmatContact || i.hazmatContactName || "",
+        stackable: Boolean(i.stackable),
+      }));
+
+      const buyRate =
+        rateDetails.buyRate.freight > 0 ||
+        rateDetails.buyRate.accesorialCostDetails.length > 0 ||
+        rateDetails.buyRate.fuel > 0
+          ? rateDetails.buyRate
+          : {
+              freight: Number(carrierRateData?.grossCharge) || (Number(carrierRateData?.price) > 0 ? Number(carrierRateData?.price) : 0),
+              fuel: Number(carrierRateData?.fuelSurcharge) || 0,
+              discount: Number(carrierRateData?.discount) || 0,
+              accesorialCostDetails: (carrierRateData?.accessorialCharges || []).map((ac: any) => ({
+                accCode: ac.code || "ACC",
+                ratedCost: Number(ac.accessorialCharge) || 0,
+                description: ac.accessorialDescription || "",
+                billedCost: Number(ac.accessorialCharge) || 0,
+              })),
+            };
+
+      const sellRate =
+        rateDetails.sellRate.freight > 0 ||
+        rateDetails.sellRate.accesorialCostDetails.length > 0 ||
+        rateDetails.sellRate.fuel > 0
+          ? rateDetails.sellRate
+          : {
+              freight: Number(carrierRateData?.grossCharge) || (Number(carrierRateData?.price) > 0 ? Number(carrierRateData?.price) : 0),
+              fuel: Number(carrierRateData?.fuelSurcharge) || 0,
+              discount: Number(carrierRateData?.discount) || 0,
+              accesorialCostDetails: (carrierRateData?.accessorialCharges || []).map((ac: any) => ({
+                accCode: ac.code || "ACC",
+                ratedCost: Number(ac.accessorialCharge) || 0,
+                description: ac.accessorialDescription || "",
+                billedCost: Number(ac.accessorialCharge) || 0,
+              })),
+            };
+
+      const totalLength = Math.round(items.reduce((sum, i) => sum + (Number(i.length) || 0), 0));
+      const totalWidth = Math.round(items.reduce((sum, i) => sum + (Number(i.width) || 0), 0));
+      const totalHeight = Math.round(items.reduce((sum, i) => sum + (Number(i.height) || 0), 0));
+      const totalWeightCalc = Math.round(items.reduce((sum, i) => sum + (Number(i.weight) || 0), 0));
+      const declaredVal = Number(insuranceValues.shipmentValue) || 0;
+      const valPerPound = totalWeightCalc > 0 ? Number((declaredVal / totalWeightCalc).toFixed(2)) : 0;
+
+      const payload = {
+        createLoadInTms: true,
+        sendCarrierPickupReq: Boolean(shipmentInfoValues.sendCarrierPickupReq),
+        originName: origName,
+        originAddress1: origAddress,
+        originAddress2: originVals.address2 || "",
+        orgCountryCode: originVals.country || "USA",
+        orgStateCode: origState,
+        orgPostalCode: origZip,
+        orgCityName: origCity,
+        destName: destName,
+        destAddress1: destAddress,
+        destAddress2: destinationVals.address2 || "",
+        destCountryCode: destinationVals.country || "USA",
+        destStateCode: destState,
+        destPostalCode: destZip,
+        destCityName: destCity,
+        pickupdate: toIsoOrCurrent(originVals.pickupDate || originVals.expPickupDate),
+        proNumber: shipmentInfoValues.proNumber || "",
+        scac: scacCode,
+        sellSCAC: scacCode,
+        clientCode: clientCodeToUse,
+        srvToken: SRV_TOKEN,
+        products: mappedProducts,
+        orgCompanyName: origName,
+        orgContactFirstName,
+        orgContactLastName,
+        orgPhoneAreaCode,
+        orgPhoneNumber,
+        orgWhoEntered: loggedInUser,
+        orgWhoPhoneNumber: orgPhoneNumber,
+        pickUpReadyTime: originVals.openTime || originVals.pickupOpenTime || "",
+        pickUpCloseTime: originVals.closeTime || originVals.pickupCloseTime || "",
+        isTestMode: false,
+        brokerCode: quote?.profileCode || "",
+        clientAddress1: quote?.clientAddress1 || "",
+        clientAddress2: quote?.clientAddress2 || "",
+        clientCountryCode: quote?.clientCountryCode || "USA",
+        clientCityName: quote?.clientCityName || "",
+        clientEmail: quote?.clientEmail || "",
+        clientName: quote?.clientName || "",
+        clientPhone: quote?.clientPhone || "",
+        clientStateCode: quote?.clientStateCode || "",
+        clientZipCode: quote?.clientZipCode || "",
+        pickupTime: originVals.pickupOpenTime || originVals.openTime || "",
+        originFax: originVals.fax || "",
+        originEmail: originVals.email || "",
+        originNote: shipmentNotes || "",
+        destContact: destinationVals.contactName || "",
+        destPhoneNo: destinationVals.phone || "",
+        destEmail: destinationVals.email || "",
+        destFaxNo: destinationVals.fax || "",
+        destNote: "",
+        ref1Value: shipmentInfoValues.customerRef || (reference ? String(reference) : ""),
+        ref2Value: "",
+        ref3Value: "",
+        pickupNo: shipmentInfoValues.pickupNo || "",
+        poNumber: shipmentInfoValues.poNumber || "",
+        brokerRefNo: shipmentInfoValues.inlandLd || shipmentInfoValues.customerRef || (reference ? String(reference) : ""),
+        expectedShipDate: toIsoOrCurrent(originVals.expPickupDate || originVals.pickupDate),
+        requestedDeliveryDate: toIsoOrCurrent(destinationVals.requestedDeliveryDate || destinationVals.expDeliveryDate || destinationVals.deliveryDate),
+        requestedDeliveryTime: destinationVals.delOpenTime || destinationVals.openTime || "",
+        shipmentValue: declaredVal,
+        valuePerPound: valPerPound,
+        specialNotes: insuranceValues.specialInstructions || shipmentNotes || "",
+        carrierNote: shipmentNotes || "",
+        billToName: billToValues.companyName || "",
+        billToAddress1: billToValues.address1 || "",
+        billToAddress2: billToValues.address2 || "",
+        billToCountryCode: billToValues.country || "USA",
+        billToPostalCode: (billToValues.postal || "").split(' - ')[0].trim(),
+        billToStateCode: billToValues.state || "",
+        billToCityName: billToValues.city || "",
+        billToFaxNo: billToValues.fax || "",
+        bolDispatchNotes,
+        accessorials: selectedAccessorialCodes,
+        paymentTerms: shipmentInfoValues.paymentTerms || "3rd Party Prep",
+        orgContactPerson: contactPerson,
+        deliveryDate: toIsoOrCurrent(destinationVals.deliveryDate || destinationVals.expDeliveryDate),
+        deliveryTime: destinationVals.delOpenTime || destinationVals.openTime || "",
+        carrierBolNo: shipmentInfoValues.carrierBolNo || "",
+        buyRate,
+        sellRate,
+        shipmentMode: shipmentInfoValues.mode || quote?.mode || "LTL",
+        equipment: shipmentInfoValues.equipment || "LTL",
+        totalLength,
+        totalWidth,
+        totalHeight,
+        wiseTechTransactionNo: "",
+        userName: loggedInUser,
+        originPortCode: "",
+        destinationPortCode: "",
+        requestedDeliveryTimeTo: destinationVals.delCloseTime || destinationVals.closeTime || "",
+        codAmount: Number(insuranceValues.codAmount) || 0,
+        totalLinearFeet: 0,
+        sellCarrierName: carrierName,
+      };
+
+      console.log("Saving Shipment - BookShipment Payload:", payload);
+
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await axios.post(
+        `${API_BASE_URL}/BookShipment/BookShipment`,
+        payload,
+        { headers }
+      );
+
+      console.log("BookShipment Response:", response.data);
+
+      if (response.data?.isSuccess || response.status === 200 || response.status === 201) {
+        message.success(response.data?.message || "Shipment booked and saved successfully!");
+        navigate('/shipments');
+      } else {
+        message.error(response.data?.message || "Failed to book shipment.");
+      }
+    } catch (err: any) {
+      console.error("BookShipment API Error:", err);
+      let apiErrMsg = err.response?.data?.message;
+      if (!apiErrMsg && err.response?.data?.errors) {
+        const errorEntries = Object.entries(err.response.data.errors)
+          .map(([field, msgs]: [string, any]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`);
+        if (errorEntries.length > 0) {
+          apiErrMsg = errorEntries.join(' | ');
+        }
+      }
+      if (!apiErrMsg) {
+        apiErrMsg =
+          err.response?.data?.title ||
+          err.message ||
+          "An error occurred while saving the shipment.";
+      }
+      message.error(apiErrMsg);
+    } finally {
+      setIsSavingShipment(false);
+    }
+  };
+
+  const isPageLoading = Boolean(loadingOrigin || loadingDestination || ratesLoading || isSavingShipment);
 
   return (
     <div className="new-shipment-container">
@@ -926,7 +1336,7 @@ const NewShipment: React.FC = () => {
         <Flex gap={12}>
           <Button danger onClick={() => navigate('/shipments')}>Cancel</Button>
           <Button onClick={() => { if (!validateProductItems()) return; }}>Save Quote</Button>
-          <Button type="primary" danger onClick={() => { if (!validateProductItems()) return; }}>Save Shipment</Button>
+          <Button type="primary" danger loading={isSavingShipment} onClick={handleSaveShipment}>Save Shipment</Button>
         </Flex>
       </Flex>
 
@@ -937,53 +1347,61 @@ const NewShipment: React.FC = () => {
             <Row gutter={[16, 16]}>
               <Col xs={24} md={12}>
                 <OriginLocation
+                  form={originForm}
                   initialData={originData}
                   locationsList={originLocationsList}
                   loading={loadingOrigin}
                   clientCode={quote?.clientCode}
+                  onChange={(vals) => { originFormValuesRef.current = vals; }}
                   onLocationSelect={(loc) => {
-                    setOriginData((prev: any) => ({
-                      ...prev,
-                      locationId: loc.locationId,
-                      companyName: loc.locationName || prev?.companyName || "",
-                      address1: loc.address1 || prev?.address1 || "",
-                      address2: loc.address2 || prev?.address2 || "",
-                      city: loc.city || prev?.city || "",
-                      state: loc.stateCode || prev?.state || "",
-                      country: loc.countryCode || prev?.country || "USA",
-                      postal: String(loc.zipCode || prev?.postal || "").split(' - ')[0].trim(),
-                      contactName: loc.contactName || prev?.contactName || "",
-                      phone: formatPhoneNumber(loc.contactPhone || prev?.phone || ""),
-                      email: loc.contactEmail || prev?.email || "",
-                      openTime: loc.openTime || prev?.openTime || undefined,
-                      closeTime: loc.closeTime || prev?.closeTime || undefined,
-                    }));
+                    const newOrigin = {
+                      locationId: loc.locationId || loc.LocationId,
+                      companyName: loc.locationName || loc.LocationName || "",
+                      address1: loc.address1 || loc.Address1 || loc.address || loc.Address || "",
+                      address2: loc.address2 || loc.Address2 || "",
+                      city: loc.city || loc.City || "",
+                      state: loc.stateCode || loc.StateCode || loc.state || loc.State || "",
+                      country: loc.countryCode || loc.CountryCode || loc.country || loc.Country || "USA",
+                      postal: String(loc.zipCode || loc.ZipCode || loc.postal || loc.Postal || "").split(' - ')[0].trim(),
+                      contactName: loc.contactName || loc.ContactName || loc.contactPerson || "",
+                      phone: formatPhoneNumber(loc.contactPhone || loc.ContactPhone || loc.phone || ""),
+                      email: loc.contactEmail || loc.ContactEmail || loc.email || "",
+                      openTime: loc.openTime || loc.OpenTime || undefined,
+                      closeTime: loc.closeTime || loc.CloseTime || undefined,
+                    };
+                    setOriginData((prev: any) => ({ ...prev, ...newOrigin }));
+                    originForm.setFieldsValue(newOrigin);
+                    originFormValuesRef.current = { ...originFormValuesRef.current, ...newOrigin };
                   }}
                 />
               </Col>
               <Col xs={24} md={12}>
                 <DestinationLocation
+                  form={destinationForm}
                   initialData={destinationData}
                   locationsList={destinationLocationsList}
                   loading={loadingDestination}
                   clientCode={quote?.clientCode}
+                  onChange={(vals) => { destinationFormValuesRef.current = vals; }}
                   onLocationSelect={(loc) => {
-                    setDestinationData((prev: any) => ({
-                      ...prev,
-                      locationId: loc.locationId,
-                      companyName: loc.locationName || prev?.companyName || "",
-                      address1: loc.address1 || prev?.address1 || "",
-                      address2: loc.address2 || prev?.address2 || "",
-                      city: loc.city || prev?.city || "",
-                      state: loc.stateCode || prev?.state || "",
-                      country: loc.countryCode || prev?.country || "USA",
-                      postal: String(loc.zipCode || prev?.postal || "").split(' - ')[0].trim(),
-                      contactName: loc.contactName || prev?.contactName || "",
-                      phone: formatPhoneNumber(loc.contactPhone || prev?.phone || ""),
-                      email: loc.contactEmail || prev?.email || "",
-                      openTime: loc.openTime || prev?.openTime || undefined,
-                      closeTime: loc.closeTime || prev?.closeTime || undefined,
-                    }));
+                    const newDest = {
+                      locationId: loc.locationId || loc.LocationId,
+                      companyName: loc.locationName || loc.LocationName || "",
+                      address1: loc.address1 || loc.Address1 || loc.address || loc.Address || "",
+                      address2: loc.address2 || loc.Address2 || "",
+                      city: loc.city || loc.City || "",
+                      state: loc.stateCode || loc.StateCode || loc.state || loc.State || "",
+                      country: loc.countryCode || loc.CountryCode || loc.country || loc.Country || "USA",
+                      postal: String(loc.zipCode || loc.ZipCode || loc.postal || loc.Postal || "").split(' - ')[0].trim(),
+                      contactName: loc.contactName || loc.ContactName || loc.contactPerson || "",
+                      phone: formatPhoneNumber(loc.contactPhone || loc.ContactPhone || loc.phone || ""),
+                      email: loc.contactEmail || loc.ContactEmail || loc.email || "",
+                      openTime: loc.openTime || loc.OpenTime || undefined,
+                      closeTime: loc.closeTime || loc.CloseTime || undefined,
+                    };
+                    setDestinationData((prev: any) => ({ ...prev, ...newDest }));
+                    destinationForm.setFieldsValue(newDest);
+                    destinationFormValuesRef.current = { ...destinationFormValuesRef.current, ...newDest };
                   }}
                 />
               </Col>
@@ -999,6 +1417,8 @@ const NewShipment: React.FC = () => {
               <Input.TextArea
                 placeholder="Add shipment notes, special instructions, or internal comments..."
                 className="notes-textarea"
+                defaultValue=""
+                onChange={(e) => { shipmentNotesRef.current = e.target.value; }}
               />
             </Card>
           </Flex>
@@ -1006,7 +1426,10 @@ const NewShipment: React.FC = () => {
 
         <Col xs={24} xl={8}>
           <Flex vertical gap={16}>
-            <ShipmentInformation initialData={shipmentInfoData} />
+            <ShipmentInformation
+              initialData={shipmentInfoData}
+              onChange={(vals) => { shipmentInfoValuesRef.current = vals; }}
+            />
             <Accessorials />
           </Flex>
         </Col>
@@ -1035,7 +1458,7 @@ const NewShipment: React.FC = () => {
             <span>Pieces <em>*</em></span>
             <span>Weight [{weightUnit.toLowerCase()}] <em>*</em></span>
             <span>Class <em>*</em></span>
-            <span>Dimensions [in] <em>*</em></span>
+            <span>Dimensions [in]</span>
             <span>PCF/Density</span>
             <span>NMFC <em>*</em></span>
             <span className="col-center">Stackable</span>
@@ -1135,36 +1558,21 @@ const NewShipment: React.FC = () => {
               )}
 
               <div className="quote-item-combined quote-item-combined--dimensions">
-                {renderWithTooltip(
-                  <Input
-                    placeholder="L"
-                    value={item.length ?? ''}
-                    status={formSubmitted && (!item.length || Number(item.length) <= 0) ? 'error' : undefined}
-                    onChange={(e) => handleUpdateField(item.id, 'length', e.target.value)}
-                  />,
-                  "Length [in] is required and must be greater than 0",
-                  Boolean(formSubmitted && (!item.length || Number(item.length) <= 0))
-                )}
-                {renderWithTooltip(
-                  <Input
-                    placeholder="W"
-                    value={item.width ?? ''}
-                    status={formSubmitted && (!item.width || Number(item.width) <= 0) ? 'error' : undefined}
-                    onChange={(e) => handleUpdateField(item.id, 'width', e.target.value)}
-                  />,
-                  "Width [in] is required and must be greater than 0",
-                  Boolean(formSubmitted && (!item.width || Number(item.width) <= 0))
-                )}
-                {renderWithTooltip(
-                  <Input
-                    placeholder="H"
-                    value={item.height ?? ''}
-                    status={formSubmitted && (!item.height || Number(item.height) <= 0) ? 'error' : undefined}
-                    onChange={(e) => handleUpdateField(item.id, 'height', e.target.value)}
-                  />,
-                  "Height [in] is required and must be greater than 0",
-                  Boolean(formSubmitted && (!item.height || Number(item.height) <= 0))
-                )}
+                <Input
+                  placeholder="L"
+                  value={item.length ?? ''}
+                  onChange={(e) => handleUpdateField(item.id, 'length', e.target.value)}
+                />
+                <Input
+                  placeholder="W"
+                  value={item.width ?? ''}
+                  onChange={(e) => handleUpdateField(item.id, 'width', e.target.value)}
+                />
+                <Input
+                  placeholder="H"
+                  value={item.height ?? ''}
+                  onChange={(e) => handleUpdateField(item.id, 'height', e.target.value)}
+                />
               </div>
 
               <Input
@@ -1278,14 +1686,26 @@ const NewShipment: React.FC = () => {
             onRate={handleFetchRatesForShipment}
             loadingRate={ratesLoading}
             onSelectCarrier={setSelectedCarrierInfo}
+            onRateDetailsChange={(rates) => { rateDetailsRef.current = rates; }}
           />
         </Col>
-        <Col xs={24} xl={8}><BillToLocation clientCode={quote?.clientCode} /></Col>
+        <Col xs={24} xl={8}>
+          <BillToLocation
+            clientCode={quote?.clientCode}
+            onChange={(vals) => { billToValuesRef.current = vals; }}
+          />
+        </Col>
 
-        <Col xs={24} xl={16}><InsuranceInfo /></Col>
+        <Col xs={24} xl={16}>
+          <InsuranceInfo
+            onChange={(vals) => { insuranceValuesRef.current = vals; }}
+          />
+        </Col>
 
         <Col xs={24} xl={8} className="ns-internal-col">
-          <InternalNotes />
+          <InternalNotes
+            onNotesChange={(notes) => { internalNotesListRef.current = notes; }}
+          />
         </Col>
       </Row>
 
@@ -1367,7 +1787,7 @@ const NewShipment: React.FC = () => {
       <Flex justify="flex-end" gap={12} wrap="wrap">
         <Button onClick={() => navigate('/shipments')} className="btn-outline">✕ Close</Button>
         <Button className="btn-outline" onClick={() => { if (!validateProductItems()) return; }}>Save Quote</Button>
-        <Button type="primary" danger onClick={() => { if (!validateProductItems()) return; }}>Save Shipment</Button>
+        <Button type="primary" danger loading={isSavingShipment} onClick={handleSaveShipment}>Save Shipment</Button>
       </Flex>
 
     </div>

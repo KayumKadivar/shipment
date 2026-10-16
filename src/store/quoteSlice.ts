@@ -129,6 +129,7 @@ export interface QuoteResult {
 
 interface QuoteState {
   quotes: QuoteResult[];
+  totalCount: number;
   currentQuote: QuoteResult | null;
   loading: boolean;
   error: string | null;
@@ -136,24 +137,31 @@ interface QuoteState {
 
 const initialState: QuoteState = {
   quotes: [],
+  totalCount: 0,
   currentQuote: null,
   loading: false,
   error: null,
 };
 
 export const fetchQuotes = createAsyncThunk<
-  QuoteResult[],
+  { quotes: QuoteResult[]; totalCount: number },
   FetchQuotesArgs,
   { rejectValue: string }
 >(
   "quote/fetchQuotes",
-  async ({ clientCode, pageNumber = 1, pageSize = 100 }: { clientCode: string; pageNumber?: number; pageSize?: number }, { rejectWithValue }) => {
+  async ({ clientCode, pageNumber = 1, pageSize = 10 }: { clientCode: string; pageNumber?: number; pageSize?: number }, { rejectWithValue }) => {
     try {
       const response = await axios.get<ApiResponse<QuoteResult[]>>(
         `${API_BASE_URL}/Quote/GetQuotesByClientCode/${clientCode}?pageNumber=${pageNumber}&pageSize=${pageSize}`
       );
       if (response.data && response.data.isSuccess) {
-        return response.data.data || [];
+        const quotes = response.data.data || [];
+        const totalCount =
+          (response.data as any)?.totalCount ??
+          (response.data as any)?.totalRecords ??
+          (response.data as any)?.TotalCount ??
+          quotes.length;
+        return { quotes, totalCount };
       }
       return rejectWithValue(response.data?.message || "Failed to fetch quotes");
     } catch (error: unknown) {
@@ -163,7 +171,7 @@ export const fetchQuotes = createAsyncThunk<
 );
 
 export const searchQuote = createAsyncThunk<
-  QuoteResult[],
+  { quotes: QuoteResult[]; totalCount: number },
   SearchQuotePayload,
   { rejectValue: string }
 >(
@@ -181,14 +189,20 @@ export const searchQuote = createAsyncThunk<
           toDate: payload.toDate ?? null,
           createdBy: payload.createdBy || "",
           pageNumber: payload.pageNumber ?? 1,
-          pageSize: payload.pageSize ?? 100,
+          pageSize: payload.pageSize ?? 10,
         }
       );
       if (response.data && (response.data.isSuccess || Array.isArray(response.data.data))) {
-        return response.data.data || [];
+        const quotes = response.data.data || [];
+        const totalCount =
+          (response.data as any)?.totalCount ??
+          (response.data as any)?.totalRecords ??
+          (response.data as any)?.TotalCount ??
+          quotes.length;
+        return { quotes, totalCount };
       }
       if (Array.isArray(response.data)) {
-        return response.data;
+        return { quotes: response.data, totalCount: response.data.length };
       }
       return rejectWithValue(response.data?.message || "Failed to search quotes");
     } catch (error: unknown) {
@@ -232,7 +246,8 @@ const quoteSlice = createSlice({
       })
       .addCase(fetchQuotes.fulfilled, (state, action) => {
         state.loading = false;
-        state.quotes = action.payload;
+        state.quotes = action.payload.quotes;
+        state.totalCount = action.payload.totalCount;
       })
       .addCase(fetchQuotes.rejected, (state, action) => {
         state.loading = false;
@@ -245,7 +260,8 @@ const quoteSlice = createSlice({
       })
       .addCase(searchQuote.fulfilled, (state, action) => {
         state.loading = false;
-        state.quotes = action.payload;
+        state.quotes = action.payload.quotes;
+        state.totalCount = action.payload.totalCount;
       })
       .addCase(searchQuote.rejected, (state, action) => {
         state.loading = false;

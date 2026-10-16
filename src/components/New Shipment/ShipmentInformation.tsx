@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Card, Form, Input, Select, Row, Col } from 'antd';
+import { Card, Form, Input, Select, Row, Col, Checkbox } from 'antd';
 
 export interface ShipmentInformationProps {
   initialData?: {
@@ -7,9 +7,10 @@ export interface ShipmentInformationProps {
     customerRef?: string;
     mode?: string;
   };
+  onChange?: (values: any) => void;
 }
 
-const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }) => {
+const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, onChange }) => {
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -27,7 +28,21 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }
       title="Shipment Information" 
       className="shipment-panel"
     >
-      <Form layout="vertical" form={form} initialValues={{ mode: "LTL", equipment: "LTL", serviceLevel: "Standard", priority: "Standard", paymentTerm: "3rd Party Prep" }}>
+      <Form
+        layout="vertical"
+        form={form}
+        initialValues={{
+          mode: "LTL",
+          equipment: "LTL",
+          serviceLevel: "Standard",
+          priority: "Standard",
+          paymentTerms: "3rd Party Prep",
+          sendCarrierPickupReq: false,
+        }}
+        onValuesChange={(_, all) => {
+          if (onChange) onChange(all);
+        }}
+      >
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={12}>
             <Form.Item label="Mode" name="mode">
@@ -37,7 +52,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item label="Equipment">
+            <Form.Item label="Equipment" name="equipment">
               <Select defaultValue="LTL">
                 <Select.Option value="LTL">LTL</Select.Option>
               </Select>
@@ -54,7 +69,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item label="Priority">
+            <Form.Item label="Priority" name="priority">
               <Select defaultValue="Standard">
                 <Select.Option value="Standard">Standard</Select.Option>
               </Select>
@@ -62,7 +77,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }
           </Col>
         </Row>
 
-        <Form.Item label="Payment Term">
+        <Form.Item label="Payment Term" name="paymentTerms">
           <Select defaultValue="3rd Party Prep">
             <Select.Option value="3rd Party Prep">3rd Party Prep</Select.Option>
           </Select>
@@ -72,26 +87,26 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }
           <Input placeholder="Customer ref #" />
         </Form.Item>
 
-        <Form.Item label="Shipment Number">
+        <Form.Item label="Shipment Number" name="shipmentNumber">
           <Input placeholder="Auto-generated" />
         </Form.Item>
 
-        <Form.Item label="Inland LD #">
+        <Form.Item label="Inland LD #" name="inlandLd">
           <Input placeholder="Inland LD #" />
         </Form.Item>
 
-        <Form.Item label="PO #">
+        <Form.Item label="PO #" name="poNumber">
           <Input placeholder="Purchase order #" />
         </Form.Item>
 
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={12}>
-            <Form.Item label="Carrier Quote #">
+            <Form.Item label="Carrier Quote #" name="carrierQuoteNo">
               <Input placeholder="Quote #" />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item label="Carrier BOL #">
+            <Form.Item label="Carrier BOL #" name="carrierBolNo">
               <Input placeholder="BOL #" />
             </Form.Item>
           </Col>
@@ -99,16 +114,20 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData }
 
         <Row gutter={[12, 12]}>
           <Col xs={24} sm={12}>
-            <Form.Item label="PRO #" className="mb-0">
+            <Form.Item label="PRO #" name="proNumber" className="mb-0">
               <Input placeholder="PRO #" />
             </Form.Item>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item label="Pickup #" className="mb-0">
+            <Form.Item label="Pickup #" name="pickupNo" className="mb-0">
               <Input placeholder="Pickup #" />
             </Form.Item>
           </Col>
         </Row>
+
+        <Form.Item name="sendCarrierPickupReq" valuePropName="checked" style={{ marginTop: 12, marginBottom: 0 }}>
+          <Checkbox>Send Carrier Pickup Request</Checkbox>
+        </Form.Item>
       </Form>
     </Card>
   );

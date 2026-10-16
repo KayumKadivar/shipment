@@ -23,6 +23,8 @@ export interface ProductItem {
   hazmatPackingGroup?: string;
   hazmatPhone?: string;
   hazmatContact?: string;
+  hazmatContactName?: string;
+  hazmatGroup?: string;
 }
 
 // interface for product state
@@ -116,11 +118,15 @@ const productSlice = createSlice({
         hazmatPackingGroup: string;
         hazmatPhone: string;
         hazmatContact: string;
+        hazmatContactName?: string;
+        hazmatGroup?: string;
       }>
     ) => {
       const item = state.items.find((item) => item.id === action.payload.id);
       if (item) {
         Object.assign(item, action.payload);
+        item.hazmatContactName = action.payload.hazmatContactName || action.payload.hazmatContact;
+        item.hazmatGroup = action.payload.hazmatGroup || action.payload.hazmatPackingGroup;
         if (action.payload.hazmat) {
           item.stackable = false;
         }

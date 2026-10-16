@@ -49,7 +49,7 @@ describe("quote API behavior", () => {
     );
 
     expect(action.type).toBe("quote/fetchQuotes/fulfilled");
-    expect(action.payload).toEqual([quote]);
+    expect(action.payload).toEqual({ quotes: [quote], totalCount: 1 });
   });
 
   it("searchQuote_whenApiSucceeds_returnsQuotes", async () => {
@@ -64,7 +64,7 @@ describe("quote API behavior", () => {
     })(vi.fn(), vi.fn(), undefined);
 
     expect(action.type).toBe("quote/searchQuote/fulfilled");
-    expect(action.payload).toEqual([quote]);
+    expect(action.payload).toEqual({ quotes: [quote], totalCount: 1 });
   });
 
   it("searchQuote_whenAxiosFails_returnsErrorMessage", async () => {

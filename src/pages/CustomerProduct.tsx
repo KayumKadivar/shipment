@@ -707,7 +707,7 @@ function CustomerProductPage({
               <Select
                 value={pageSize}
                 aria-label='Customer products page size'
-                options={[10, 20, 50].map((value) => ({ value, label: value }))}
+                options={[10, 20, 50, 100].map((value) => ({ value, label: value }))}
                 onChange={(value) => {
                   setPageSize(value);
                   setCurrentPage(1);

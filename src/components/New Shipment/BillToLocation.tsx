@@ -7,9 +7,10 @@ import { API_BASE_URL, DEFAULT_CLIENT_CODE } from '../../config/apiConfig';
 
 interface BillToLocationProps {
   clientCode?: string;
+  onChange?: (values: any) => void;
 }
 
-const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
+const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange }) => {
   const [form] = Form.useForm();
   const { searchPostals, lookupPostal, loadingPostal } = usePostalLookup();
   const [loading, setLoading] = useState(false);
@@ -162,6 +163,10 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
       state: loc.stateCode || "",
       fax: loc.fax || "",
     });
+
+    if (onChange) {
+      onChange(form.getFieldsValue());
+    }
   };
 
   const fetchLocationsByZip = async (zip: string) => {
@@ -356,7 +361,14 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode }) => {
       title="Bill To Location" 
       extra={<Button type="link" className="add-master-btn">+ Add to Master</Button>}
     >
-      <Form layout="vertical" form={form} initialValues={{ country: "USA" }}>
+      <Form
+        layout="vertical"
+        form={form}
+        initialValues={{ country: "USA" }}
+        onValuesChange={(_, all) => {
+          if (onChange) onChange(all);
+        }}
+      >
         <Form.Item label="Company Name" name="companyName">
           <AutoComplete
             options={companyOptions}

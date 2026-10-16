@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, Form, Input, Select, Button, Row, Col, Spin, message, Alert, Checkbox, AutoComplete, Tooltip } from 'antd';
-import { DeleteOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Card, Form, Input, Select, Button, Row, Col, Spin, message, Alert, Checkbox, AutoComplete } from 'antd';
+import { DeleteOutlined, EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import axios from 'axios';
 import type { AppDispatch, RootState } from '../../app/store';
@@ -28,6 +28,10 @@ export interface CustomerRateProps {
   rateError?: string | null;
   onClearError?: () => void;
   onSelectCarrier?: (carrier: { carrierId: string; carrierName: string } | null) => void;
+  onRateDetailsChange?: (rates: {
+    buyRate: { freight: number; fuel: number; discount: number; accesorialCostDetails: any[] };
+    sellRate: { freight: number; fuel: number; discount: number; accesorialCostDetails: any[] };
+  }) => void;
 }
 
 interface RateLineItem {
@@ -63,6 +67,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   rateError,
   onClearError,
   onSelectCarrier,
+  onRateDetailsChange,
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const customerRate = useSelector((state: RootState) => state.customerRate);
@@ -99,7 +104,18 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const [selectedChargeType, setSelectedChargeType] = useState<string | undefined>(undefined);
   const [chargeAmount, setChargeAmount] = useState<string>("");
   const [customCharges, setCustomCharges] = useState<{ id: string; code: string; description: string; buyAmount: number }[]>([]);
+  const [removedLineIds, setRemovedLineIds] = useState<string[]>([]);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+
+  // Edit charge state
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editBuyAmount, setEditBuyAmount] = useState<string>("");
+  const [editCustomerAmount, setEditCustomerAmount] = useState<string>("");
+  const [editDescription, setEditDescription] = useState<string>("");
+  const [hasManuallyEditedCustomer, setHasManuallyEditedCustomer] = useState<boolean>(false);
+  const [editedAmounts, setEditedAmounts] = useState<
+    Record<string, { buyAmount?: number; customerAmount?: number; description?: string }>
+  >({});
 
   // Active carrier priority:
   // 1. prop `carrierData`
@@ -124,6 +140,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
     if (hasChanged) {
       prevActiveCarrierRef.current = activeCarrier;
+      setRemovedLineIds([]);
+      setEditedAmounts({});
+      setEditingRowId(null);
       if (activeCarrier) {
         setCarrierName(activeCarrier.carrierName || "");
         if (activeCarrier.carrierCode || activeCarrier.carrierName) {
@@ -223,6 +242,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     const carrier: CarrierSearchResult = option?.carrier || { carrierId: "", carrierName: val };
     setCarrierName(carrier.carrierName);
     setSelectedCarrier(carrier);
+    setRemovedLineIds([]);
+    setEditedAmounts({});
+    setEditingRowId(null);
     if (onSelectCarrier) {
       onSelectCarrier(carrier);
     }
@@ -233,6 +255,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setCarrierName(textVal);
     if (!textVal) {
       setSelectedCarrier(null);
+      setRemovedLineIds([]);
+      setEditedAmounts({});
+      setEditingRowId(null);
       if (onSelectCarrier) {
         onSelectCarrier(null);
       }
@@ -248,8 +273,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
   const numericMarkup = Math.max(0, Number(markup) || 0);
 
-  const isFreightCharge = (code?: string, _description?: string) => {
-    return (code || '').trim().toUpperCase() === 'FRT';
+  const isFreightCharge = (code?: string, description?: string) => {
+    const c = (code || '').trim().toUpperCase();
+    const d = (description || '').trim().toLowerCase();
+    return c === 'FRT' || d === 'freight';
   };
 
   const isFuelCharge = (code?: string, _description?: string) => {
@@ -283,40 +310,49 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       const accessorials = activeCarrier.accessorialCharges || [];
 
       // 1. FREIGHT Charge
-      rawItems.push({
-        id: "line-gross",
-        code: "FRT",
-        description: "Freight",
-        buyAmount: gross,
-      });
+      if (!removedLineIds.includes("line-gross")) {
+        const customBuy = editedAmounts["line-gross"]?.buyAmount;
+        rawItems.push({
+          id: "line-gross",
+          code: "FRT",
+          description: editedAmounts["line-gross"]?.description || "Freight",
+          buyAmount: customBuy !== undefined ? customBuy : gross,
+        });
+      }
 
       // 2. DISCOUNT
-      if (discount > 0 || activeCarrier.discountCode) {
+      if ((discount > 0 || activeCarrier.discountCode) && !removedLineIds.includes("line-discount")) {
+        const customBuy = editedAmounts["line-discount"]?.buyAmount;
         rawItems.push({
           id: "line-discount",
           code: "DSC",
-          description: "Discount",
-          buyAmount: -Math.abs(discount),
+          description: editedAmounts["line-discount"]?.description || "Discount",
+          buyAmount: customBuy !== undefined ? customBuy : -Math.abs(discount),
         });
       }
 
       // 3. FUEL Surcharge
-      rawItems.push({
-        id: "line-fuel",
-        code: "FSC",
-        description: "Fuel surcharge",
-        buyAmount: fuel,
-      });
+      if (!removedLineIds.includes("line-fuel")) {
+        const customBuy = editedAmounts["line-fuel"]?.buyAmount;
+        rawItems.push({
+          id: "line-fuel",
+          code: "FSC",
+          description: editedAmounts["line-fuel"]?.description || "Fuel surcharge",
+          buyAmount: customBuy !== undefined ? customBuy : fuel,
+        });
+      }
 
       // 4. Accessorial charges
       accessorials.forEach((acc, idx) => {
         const amt = Number(acc.accessorialCharge) || 0;
-        if (amt > 0) {
+        const accId = `line-acc-${idx}`;
+        if (amt > 0 && !removedLineIds.includes(accId)) {
+          const customBuy = editedAmounts[accId]?.buyAmount;
           rawItems.push({
-            id: `line-acc-${idx}`,
+            id: accId,
             code: acc.code || (acc as any).accesorialCode || "",
-            description: acc.accessorialDescription || "",
-            buyAmount: amt,
+            description: editedAmounts[accId]?.description || acc.accessorialDescription || "",
+            buyAmount: customBuy !== undefined ? customBuy : amt,
           });
         }
       });
@@ -324,13 +360,16 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
     // 5. Custom charges added by user
     customCharges.forEach((c) => {
-      rawItems.push({
-        id: c.id,
-        code: c.code,
-        description: c.description,
-        buyAmount: c.buyAmount,
-        isCustom: true,
-      });
+      if (!removedLineIds.includes(c.id)) {
+        const customBuy = editedAmounts[c.id]?.buyAmount;
+        rawItems.push({
+          id: c.id,
+          code: c.code,
+          description: editedAmounts[c.id]?.description || c.description,
+          buyAmount: customBuy !== undefined ? customBuy : c.buyAmount,
+          isCustom: true,
+        });
+      }
     });
 
     // Determine totals for Freight and Fuel across all items (carrier + custom)
@@ -382,8 +421,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
             markupAmt = totalFreightMarkup * itemShareOfFreight;
 
             const ratioStr = (totalFreight / totalFreightFuel).toFixed(4);
-            const pct = (freightProportionPercent * 100).toFixed(1);
-            markupCalcText = `Step 1 (Total): Fuel (${formatCurrency(totalFuel)}) + Freight (${formatCurrency(totalFreight)}) = ${formatCurrency(totalFreightFuel)}\nStep 2 (Proportion): ${formatCurrency(item.buyAmount)} / ${formatCurrency(totalFreightFuel)} = ${ratioStr} (${pct}%)\nStep 3 (Markup): ${ratioStr} × $${numericMarkup} = ${formatCurrency(markupAmt)}\nStep 4 (Customer): ${formatCurrency(item.buyAmount)} + ${formatCurrency(markupAmt)} = ${formatCurrency(item.buyAmount + markupAmt)}`;
+            markupCalcText = `Step 1 (Total): Fuel (${formatCurrency(totalFuel)}) + Freight (${formatCurrency(totalFreight)}) = ${formatCurrency(totalFreightFuel)}\nStep 2 (Proportion): ${formatCurrency(item.buyAmount)} / ${formatCurrency(totalFreightFuel)} = ${ratioStr}\nStep 3 (Markup): ${ratioStr} × $${numericMarkup} = ${formatCurrency(markupAmt)}\nStep 4 (Customer): ${formatCurrency(item.buyAmount)} + ${formatCurrency(markupAmt)} = ${formatCurrency(item.buyAmount + markupAmt)}`;
             markupSubtext = numericMarkup > 0 ? `(${formatShortNum(item.buyAmount)}/${formatShortNum(totalFreightFuel)}) = ${ratioStr} × ${formatShortNum(numericMarkup)} = ${formatShortNum(markupAmt)}` : "";
             customerCalcSubtext = numericMarkup > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
           } else if (totalFreight > 0) {
@@ -413,7 +451,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         }
       }
 
-      const custAmt = item.buyAmount + markupAmt;
+      const overrideCust = editedAmounts[item.id]?.customerAmount;
+      const custAmt = overrideCust !== undefined ? overrideCust : item.buyAmount + markupAmt;
+      const finalMarkup = overrideCust !== undefined ? custAmt - item.buyAmount : markupAmt;
 
       return {
         id: item.id,
@@ -421,7 +461,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         description: item.description,
         buyAmount: item.buyAmount,
         customerAmount: custAmt,
-        markupAmount: markupAmt,
+        markupAmount: finalMarkup,
         markupCalculation: markupCalcText,
         markupSubtext,
         customerCalcSubtext,
@@ -429,7 +469,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         isEligibleForMarkup: isFreight || isFuel,
       };
     });
-  }, [activeCarrier, markupType, numericMarkup, customCharges]);
+  }, [activeCarrier, markupType, numericMarkup, customCharges, removedLineIds, editedAmounts]);
 
   // Totals
   const freightLines = lineItems.filter((i) => !isDiscountCharge(i.code) && isFreightCharge(i.code));
@@ -443,6 +483,60 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const totalBuy = lineItems.reduce((acc, item) => acc + item.buyAmount, 0);
   const totalCustomer = lineItems.reduce((acc, item) => acc + item.customerAmount, 0);
   const totalMarkup = lineItems.reduce((acc, item) => acc + item.markupAmount, 0);
+
+  const prevRatesRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!onRateDetailsChange) return;
+
+    const buyFreight = freightLines.reduce((acc, item) => acc + item.buyAmount, 0);
+    const buyDiscount = Math.abs(discountLines.reduce((acc, item) => acc + item.buyAmount, 0));
+    const fuelLines = lineItems.filter((i) => isFuelCharge(i.code));
+    const buyFuel = fuelLines.reduce((acc, item) => acc + item.buyAmount, 0);
+
+    const sellFreight = freightLines.reduce((acc, item) => acc + item.customerAmount, 0);
+    const sellDiscount = Math.abs(discountLines.reduce((acc, item) => acc + item.customerAmount, 0));
+    const sellFuel = fuelLines.reduce((acc, item) => acc + item.customerAmount, 0);
+
+    const otherLines = lineItems.filter(
+      (i) => !isFreightCharge(i.code) && !isDiscountCharge(i.code) && !isFuelCharge(i.code)
+    );
+
+    const buyAccesorials = otherLines.map((i) => ({
+      accCode: i.code || "ACC",
+      ratedCost: Number(i.buyAmount) || 0,
+      description: i.description || "",
+      billedCost: Number(i.buyAmount) || 0,
+    }));
+
+    const sellAccesorials = otherLines.map((i) => ({
+      accCode: i.code || "ACC",
+      ratedCost: Number(i.customerAmount) || 0,
+      description: i.description || "",
+      billedCost: Number(i.customerAmount) || 0,
+    }));
+
+    const ratesObj = {
+      buyRate: {
+        freight: buyFreight,
+        fuel: buyFuel,
+        discount: buyDiscount,
+        accesorialCostDetails: buyAccesorials,
+      },
+      sellRate: {
+        freight: sellFreight,
+        fuel: sellFuel,
+        discount: sellDiscount,
+        accesorialCostDetails: sellAccesorials,
+      },
+    };
+
+    const serialized = JSON.stringify(ratesObj);
+    if (prevRatesRef.current !== serialized) {
+      prevRatesRef.current = serialized;
+      onRateDetailsChange(ratesObj);
+    }
+  }, [lineItems, onRateDetailsChange]);
 
   // Summary calculation for Flat Markup proportional breakdown
   // const flatSplitSummary = useMemo(() => {
@@ -550,24 +644,104 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const handleRemoveCharge = (idToRemove?: string) => {
     const targetId = idToRemove || selectedRowId;
     if (!targetId) {
-      if (customCharges.length > 0) {
-        const last = customCharges[customCharges.length - 1];
-        setCustomCharges((prev) => prev.filter((c) => c.id !== last.id));
-        message.info(`Removed ${last.description}`);
+      const removableItems = lineItems.filter((i) => !isFreightCharge(i.code, i.description));
+      if (removableItems.length > 0) {
+        const last = removableItems[removableItems.length - 1];
+        handleRemoveCharge(last.id);
       } else {
-        message.info("Select a custom charge row to remove.");
+        message.info("Select a charge row to remove.");
       }
+      return;
+    }
+
+    const targetItem = lineItems.find((item) => item.id === targetId);
+    if (targetItem && isFreightCharge(targetItem.code, targetItem.description)) {
+      message.warning("Freight charge cannot be removed.");
       return;
     }
 
     const isCustom = customCharges.some((c) => c.id === targetId);
     if (isCustom) {
       setCustomCharges((prev) => prev.filter((c) => c.id !== targetId));
-      if (selectedRowId === targetId) setSelectedRowId(null);
-      message.success("Charge removed.");
     } else {
-      message.info("Standard carrier rates cannot be removed.");
+      setRemovedLineIds((prev) => (prev.includes(targetId) ? prev : [...prev, targetId]));
     }
+
+    if (selectedRowId === targetId) setSelectedRowId(null);
+    if (editingRowId === targetId) setEditingRowId(null);
+    message.success("Charge removed.");
+  };
+
+  // Edit charge handlers
+  const handleStartEdit = (item: RateLineItem) => {
+    setEditingRowId(item.id);
+    const buyVal = item.buyAmount < 0 ? String(Math.abs(item.buyAmount)) : String(item.buyAmount);
+    const custVal = item.customerAmount < 0 ? String(Math.abs(item.customerAmount)) : String(item.customerAmount);
+    setEditBuyAmount(buyVal);
+    setEditCustomerAmount(custVal);
+    setEditDescription(item.description);
+    setHasManuallyEditedCustomer(false);
+  };
+
+  const handleBuyAmountChange = (val: string) => {
+    const cleaned = val.replace(/[^0-9.]/g, '');
+    setEditBuyAmount(cleaned);
+    if (!hasManuallyEditedCustomer) {
+      setEditCustomerAmount(cleaned);
+    }
+  };
+
+  const handleCustomerAmountChange = (val: string) => {
+    const cleaned = val.replace(/[^0-9.]/g, '');
+    setEditCustomerAmount(cleaned);
+    setHasManuallyEditedCustomer(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingRowId) return;
+
+    const targetItem = lineItems.find((i) => i.id === editingRowId);
+    if (!targetItem) {
+      setEditingRowId(null);
+      return;
+    }
+
+    const isDiscount = isDiscountCharge(targetItem.code, targetItem.description);
+    const rawBuy = parseFloat(editBuyAmount) || 0;
+    const rawCustomer = parseFloat(editCustomerAmount) || 0;
+
+    const newBuy = isDiscount ? -Math.abs(rawBuy) : Math.max(0, rawBuy);
+    const newCustomer = isDiscount ? -Math.abs(rawCustomer) : Math.max(0, rawCustomer);
+
+    setEditedAmounts((prev) => ({
+      ...prev,
+      [editingRowId]: {
+        buyAmount: newBuy,
+        customerAmount: newCustomer,
+        description: editDescription.trim() || targetItem.description,
+      },
+    }));
+
+    if (targetItem.isCustom) {
+      setCustomCharges((prev) =>
+        prev.map((c) =>
+          c.id === editingRowId
+            ? {
+                ...c,
+                buyAmount: newBuy,
+                description: editDescription.trim() || c.description,
+              }
+            : c
+        )
+      );
+    }
+
+    setEditingRowId(null);
+    message.success(`Updated ${targetItem.description}`);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRowId(null);
   };
 
   const handleRateClick = () => {
@@ -601,7 +775,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
         {/* Row 1: Carrier + Mark Up (Flat / Percentage) + Rate Button */}
         <Row gutter={[12, 12]} className="mb-16">
-          <Col xs={24} md={6}>
+          <Col xs={24} md={8} lg={9}>
             <Form.Item noStyle>
               <AutoComplete
                 value={carrierName}
@@ -629,7 +803,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={14}>
+          <Col xs={24} md={12} lg={11}>
             <div className="text-muted-13 markup-row-wrap">
               <span className="markup-label">
                 Mark Up
@@ -690,9 +864,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           </Col>
         </Row>
 
-        {/* Row 3: Charge type + Amount + Add + Remove */}
+        {/* Row 3: Charge type + Amount + Add + Edit + Remove */}
         <Row gutter={[12, 12]} className="mb-16">
-          <Col xs={24} md={12}>
+          <Col xs={24} md={10}>
             <Form.Item noStyle>
               <Select
                 placeholder="Charge type"
@@ -708,7 +882,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={5}>
             <Form.Item noStyle>
               <Input
                 placeholder="Amount"
@@ -721,12 +895,24 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col xs={12} md={3}>
+          <Col xs={8} md={3}>
             <Button type="primary" className="btn-warning w-100" onClick={handleAddCharge}>
               Add
             </Button>
           </Col>
-          <Col xs={12} md={3}>
+          <Col xs={8} md={3}>
+            <Button
+              className="w-100"
+              onClick={() => {
+                const target = lineItems.find((i) => i.id === selectedRowId) || lineItems[0];
+                if (target) handleStartEdit(target);
+                else message.info("Select a charge row to edit.");
+              }}
+            >
+              Edit
+            </Button>
+          </Col>
+          <Col xs={8} md={3}>
             <Button danger className="w-100" onClick={() => handleRemoveCharge()}>
               Remove
             </Button>
@@ -744,11 +930,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
             <div className="col-100 text-right">BUY AMOUNT</div>
             <div className="col-120 text-right">CUSTOMER AMOUNT</div>
             <div className="col-120 text-right">
-              <Tooltip title={markupType === 'flat' ? "Flat markup is split proportionally between Freight & Fuel Surcharge" : `${numericMarkup}% markup applied`}>
-                <span style={{ cursor: 'pointer' }}>
-                  MARKUP <InfoCircleOutlined style={{ fontSize: 11, marginLeft: 2 }} />
-                </span>
-              </Tooltip>
+              MARKUP
             </div>
           </div>
           {isRating ? (
@@ -756,70 +938,150 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               <Spin />
             </div>
           ) : lineItems.length > 0 ? (
-            lineItems.map((item) => (
-              <div
-                key={item.id}
-                className={`rate-item-row ${selectedRowId === item.id ? 'is-selected' : ''}`}
-                onClick={() => setSelectedRowId(selectedRowId === item.id ? null : item.id)}
-              >
-                <div className="col-80">{item.code}</div>
-                <div className="col-flex-1">
-                  <span>{item.description}</span>
-                </div>
-                <div className="col-100 text-right">{formatCurrency(item.buyAmount)}</div>
-                <div className="col-120 text-right">
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      color: item.buyAmount > item.customerAmount ? '#ff4d4f' : 'inherit',
-                    }}
-                  >
-                    {formatCurrency(item.customerAmount)}
-                  </div>
-                </div>
-                <div className="col-120 text-right rate-item-cell-right">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                    {item.isEligibleForMarkup ? (
-                      <Tooltip
-                        title={
-                          <div style={{ whiteSpace: 'pre-line', fontSize: 11, padding: '2px 4px' }}>
-                            {item.markupCalculation || `${formatCurrency(item.markupAmount)} markup`}
-                          </div>
-                        }
-                        overlayStyle={{ maxWidth: 380 }}
-                      >
-                        <span
-                          style={{
-                            cursor: 'help',
-                            fontWeight: 600,
-                            borderBottom: item.markupCalculation && item.markupAmount > 0 ? '1px dotted #1677ff' : 'none',
-                            color: item.markupAmount > 0 ? '#1677ff' : 'inherit',
-                          }}
-                        >
-                          {formatCurrency(item.markupAmount)}
-                        </span>
-                      </Tooltip>
+            lineItems.map((item) => {
+              const isEditing = editingRowId === item.id;
+              return (
+                <div
+                  key={item.id}
+                  className={`rate-item-row ${selectedRowId === item.id ? 'is-selected' : ''} ${isEditing ? 'is-editing' : ''}`}
+                  onClick={() => setSelectedRowId(selectedRowId === item.id ? null : item.id)}
+                  onDoubleClick={() => handleStartEdit(item)}
+                >
+                  <div className="col-80">{item.code}</div>
+                  <div className="col-flex-1">
+                    {isEditing && item.isCustom ? (
+                      <Input
+                        size="small"
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        onPressEnter={handleSaveEdit}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ width: '100%', maxWidth: 180 }}
+                      />
                     ) : (
-                      <span style={{ color: '#8c8c8c', fontWeight: 500 }}>-</span>
+                      <span>{item.description}</span>
                     )}
-
-                    {item.isCustom && (
-                      <button
-                        type="button"
-                        className="rate-remove-btn"
-                        title="Remove charge"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveCharge(item.id);
+                  </div>
+                  <div className="col-100 text-right">
+                    {isEditing ? (
+                      <Input
+                        size="small"
+                        prefix="$"
+                        value={editBuyAmount}
+                        onChange={(e) => handleBuyAmountChange(e.target.value)}
+                        onPressEnter={handleSaveEdit}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') handleCancelEdit();
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rate-inline-edit-input"
+                        autoFocus
+                      />
+                    ) : (
+                      formatCurrency(item.buyAmount)
+                    )}
+                  </div>
+                  <div className="col-120 text-right">
+                    {isEditing ? (
+                      <Input
+                        size="small"
+                        prefix="$"
+                        value={editCustomerAmount}
+                        onChange={(e) => handleCustomerAmountChange(e.target.value)}
+                        onPressEnter={handleSaveEdit}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') handleCancelEdit();
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rate-inline-edit-input"
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          color: item.buyAmount > item.customerAmount ? '#ff4d4f' : 'inherit',
                         }}
                       >
-                        <DeleteOutlined />
-                      </button>
+                        {formatCurrency(item.customerAmount)}
+                      </div>
                     )}
                   </div>
+                  <div className="col-120 text-right rate-item-cell-right">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                      {isEditing ? (
+                        <>
+                          <button
+                            type="button"
+                            className="rate-action-btn rate-save-btn"
+                            title="Save"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSaveEdit();
+                            }}
+                          >
+                            <CheckOutlined />
+                          </button>
+                          <button
+                            type="button"
+                            className="rate-action-btn rate-cancel-btn"
+                            title="Cancel"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancelEdit();
+                            }}
+                          >
+                            <CloseOutlined />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {item.isEligibleForMarkup ? (
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                color: item.markupAmount > 0 ? '#1677ff' : 'inherit',
+                              }}
+                            >
+                              {formatCurrency(item.markupAmount)}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#8c8c8c', fontWeight: 500 }}>-</span>
+                          )}
+
+                          <button
+                            type="button"
+                            className="rate-action-btn rate-edit-btn"
+                            title="Edit charge"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEdit(item);
+                            }}
+                          >
+                            <EditOutlined />
+                          </button>
+
+                          {!isFreightCharge(item.code, item.description) ? (
+                            <button
+                              type="button"
+                              className="rate-action-btn rate-remove-btn"
+                              title="Remove charge"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveCharge(item.id);
+                              }}
+                            >
+                              <DeleteOutlined />
+                            </button>
+                          ) : (
+                            <span style={{ display: 'inline-block', width: 23 }} />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="rate-empty-state">
               No rates added yet. Click Rate to fetch carrier pricing.

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, Input, Checkbox, Row, Col, Form, Spin, Empty, Button } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
@@ -12,10 +12,33 @@ const Accessorials: React.FC = () => {
   );
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredList = accessorialsList.filter((item) => {
-    const name = item.accessorialName || item.description || item.accesorialCode || '';
-    return name.toLowerCase().includes(searchTerm.toLowerCase().trim());
-  });
+  const selectedSet = useMemo(
+    () => new Set(selectedAccessorialIds),
+    [selectedAccessorialIds]
+  );
+
+  const { selectedList, unselectedList } = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    const filtered = (accessorialsList || []).filter((item) => {
+      const name = item.accessorialName || item.description || item.accesorialCode || '';
+      return name.toLowerCase().includes(term);
+    });
+
+    const selected: typeof accessorialsList = [];
+    const unselected: typeof accessorialsList = [];
+
+    filtered.forEach((item) => {
+      if (selectedSet.has(item.accessorialID)) {
+        selected.push(item);
+      } else {
+        unselected.push(item);
+      }
+    });
+
+    return { selectedList: selected, unselectedList: unselected };
+  }, [accessorialsList, selectedSet, searchTerm]);
+
+  const totalFilteredCount = selectedList.length + unselectedList.length;
 
   return (
     <Card 
@@ -58,27 +81,46 @@ const Accessorials: React.FC = () => {
         <div className="accessorials-loading-wrap">
           <Spin tip="Loading accessorials..." />
         </div>
-      ) : filteredList.length === 0 ? (
+      ) : totalFilteredCount === 0 ? (
         <Empty description="No accessorials found" image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
         <div className="accessorials-list-container">
-          <Row gutter={[12, 12]}>
-            {filteredList.map((item) => {
-              const isChecked = selectedAccessorialIds.includes(item.accessorialID);
-              return (
+          {selectedList.length > 0 && (
+            <div className="accessorials-selected-group">
+              <Row gutter={[12, 12]}>
+                {selectedList.map((item) => (
+                  <Col span={12} key={item.accessorialID}>
+                    <div className="accessorial-item-selected">
+                      <Checkbox 
+                        checked={true}
+                        onChange={() => dispatch(toggleAccessorial(item.accessorialID))}
+                      >
+                        {item.accessorialName || item.description || item.accesorialCode}
+                      </Checkbox>
+                    </div>
+                  </Col>
+                ))}
+              </Row>
+              {unselectedList.length > 0 && <div className="accessorials-divider" />}
+            </div>
+          )}
+
+          {unselectedList.length > 0 && (
+            <Row gutter={[12, 12]}>
+              {unselectedList.map((item) => (
                 <Col span={12} key={item.accessorialID}>
                   <div>
                     <Checkbox 
-                      checked={isChecked}
+                      checked={false}
                       onChange={() => dispatch(toggleAccessorial(item.accessorialID))}
                     >
                       {item.accessorialName || item.description || item.accesorialCode}
                     </Checkbox>
                   </div>
                 </Col>
-              );
-            })}
-          </Row>
+              ))}
+            </Row>
+          )}
         </div>
       )}
     </Card>

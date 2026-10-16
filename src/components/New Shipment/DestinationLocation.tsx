@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin } from 'antd';
+import type { FormInstance } from 'antd';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import { formatDisplayTime, TIME_OPTIONS } from './OriginLocation';
@@ -8,6 +9,7 @@ import axios from 'axios';
 import { API_BASE_URL, DEFAULT_CLIENT_CODE } from '../../config/apiConfig';
 
 export interface DestinationLocationProps {
+  form?: FormInstance;
   initialData?: {
     locationId?: number | string;
     companyName?: string;
@@ -31,15 +33,19 @@ export interface DestinationLocationProps {
   loading?: boolean;
   clientCode?: string;
   onLocationSelect?: (location: any) => void;
+  onChange?: (values: any) => void;
 }
 
 const DestinationLocation: React.FC<DestinationLocationProps> = ({
+  form: externalForm,
   initialData,
   locationsList,
   clientCode,
   onLocationSelect,
+  onChange,
 }) => {
-  const [form] = Form.useForm();
+  const [internalForm] = Form.useForm();
+  const form = externalForm || internalForm;
   const { searchPostals, loadingPostal } = usePostalLookup();
   const [, setSelectedLocationId] = useState<string | undefined>(undefined);
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,6 +53,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isFocusedRef = useRef(false);
   const postalRef = useRef("");
+  const locationsMapRef = useRef<Map<string, any>>(new Map());
 
   // Company Name Search State
   const [companyOptions, setCompanyOptions] = useState<{ value: string; label: React.ReactNode; location: any; key: string }[]>([]);
@@ -84,6 +91,12 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
   // Populate company options from locationsList if passed
   useEffect(() => {
     if (locationsList && locationsList.length > 0) {
+      locationsList.forEach((loc: any, idx: number) => {
+        const id = loc.locationId ?? loc.locationID ?? idx;
+        locationsMapRef.current.set(String(id), loc);
+        const name = (loc.locationName || "").trim().toLowerCase();
+        if (name) locationsMapRef.current.set(name, loc);
+      });
       setCompanyOptions(
         locationsList.map((loc: any, idx: number) => ({
           value: loc.locationName || `Location-${idx + 1}`,
@@ -93,7 +106,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
             <div className="loc-select-option" key={`prop-dest-lbl-${loc.locationId || idx}`}>
               <span className="loc-select-name">{loc.locationName || "Unnamed Location"}</span>
               <span className="loc-select-subtext">
-                {[loc.address1, loc.city, loc.stateCode, loc.zipCode]
+                {[loc.address1 || loc.address, loc.city, loc.stateCode, loc.zipCode]
                   .filter(Boolean)
                   .join(", ")}
               </span>
@@ -198,6 +211,12 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         }
 
         if (dataList.length > 0) {
+          dataList.forEach((loc: any, idx: number) => {
+            const id = loc.locationId ?? loc.locationID ?? idx;
+            locationsMapRef.current.set(String(id), loc);
+            const name = (loc.locationName || "").trim().toLowerCase();
+            if (name) locationsMapRef.current.set(name, loc);
+          });
           setCompanyOptions(
             dataList.map((loc: any, idx: number) => ({
               value: loc.locationName || trimmed,
@@ -207,7 +226,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
                 <div className="loc-select-option" key={`search-dest-lbl-${loc.locationId || idx}`}>
                   <span className="loc-select-name">{loc.locationName || "Unnamed Location"}</span>
                   <span className="loc-select-subtext">
-                    {[loc.address1, loc.city, loc.stateCode, loc.zipCode]
+                    {[loc.address1 || loc.address, loc.city, loc.stateCode, loc.zipCode]
                       .filter(Boolean)
                       .join(", ")}
                   </span>
@@ -228,30 +247,62 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
   };
 
   const handleSelectCompany = (value: string, option: any) => {
-    const loc = option?.location;
-    if (!loc) return;
+    const valKey = String(value || "").trim().toLowerCase();
+    const optKey = String(option?.key || "").replace(/^(prop-dest-loc-|search-dest-)/, "").split("-")[0];
 
-    setSelectedLocationId(String(loc.locationId));
-    const openTimeFormatted = formatDisplayTime(loc.openTime) || "08:00 AM";
-    const closeTimeFormatted = formatDisplayTime(loc.closeTime) || "05:00 PM";
-    const onlyZip = String(loc.zipCode || form.getFieldValue("postal") || "").split(' - ')[0].trim();
+    const loc =
+      option?.location ||
+      option?.data?.location ||
+      locationsMapRef.current.get(valKey) ||
+      locationsMapRef.current.get(optKey) ||
+      companyOptions.find((o) => o.value === value || o.key === option?.key)?.location ||
+      (locationsList || []).find((l: any) =>
+        (l.locationName && l.locationName.trim().toLowerCase() === valKey) ||
+        String(l.locationId ?? l.locationID) === optKey
+      );
+
+    if (!loc) {
+      form.setFieldsValue({ companyName: value });
+      return;
+    }
+
+    const locId = loc.locationId ?? loc.locationID;
+    if (locId) setSelectedLocationId(String(locId));
+
+    const openTimeFormatted = formatDisplayTime(loc.openTime || loc.OpenTime) || "08:00 AM";
+    const closeTimeFormatted = formatDisplayTime(loc.closeTime || loc.CloseTime) || "05:00 PM";
+    const onlyZip = String(loc.zipCode || loc.ZipCode || loc.postal || loc.Postal || form.getFieldValue("postal") || "").split(' - ')[0].trim();
+
+    const locName = loc.locationName || loc.LocationName || value;
+    const addr1 = loc.address1 || loc.Address1 || loc.address || loc.Address || "";
+    const addr2 = loc.address2 || loc.Address2 || "";
+    const ctry = loc.countryCode || loc.CountryCode || loc.country || loc.Country || "USA";
+    const cty = loc.city || loc.City || "";
+    const st = loc.stateCode || loc.StateCode || loc.state || loc.State || "";
+    const contact = loc.contactName || loc.ContactName || loc.contactPerson || loc.ContactPerson || "";
+    const ph = formatPhoneNumber(loc.contactPhone || loc.ContactPhone || loc.phone || loc.Phone || "") || "";
+    const em = loc.contactEmail || loc.ContactEmail || loc.email || loc.Email || "";
 
     form.setFieldsValue({
-      companyName: loc.locationName || value,
-      address1: loc.address1 || "",
-      address2: loc.address2 || "",
-      country: loc.countryCode || "USA",
+      companyName: locName,
+      address1: addr1,
+      address2: addr2,
+      country: ctry,
       postal: onlyZip,
-      city: loc.city || "",
-      state: loc.stateCode || "",
-      contactName: loc.contactName || "",
-      phone: formatPhoneNumber(loc.contactPhone) || "",
-      email: loc.contactEmail || "",
+      city: cty,
+      state: st,
+      contactName: contact,
+      phone: ph,
+      email: em,
       openTime: openTimeFormatted,
       closeTime: closeTimeFormatted,
       delOpenTime: openTimeFormatted,
       delCloseTime: closeTimeFormatted,
     });
+
+    if (onChange) {
+      onChange(form.getFieldsValue());
+    }
 
     if (onLocationSelect) {
       onLocationSelect(loc);
@@ -370,12 +421,33 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
       title="Destination Location" 
       extra={<Button type="link" className="add-master-btn add-line-btn">+ Add to Master</Button>}
     >
-      <Form layout="vertical" form={form} initialValues={{ country: "USA" }}>
-        <Form.Item label="Company Name" name="companyName">
+      <Form
+        layout="vertical"
+        form={form}
+        initialValues={{ country: "USA" }}
+        onValuesChange={(_, all) => {
+          if (onChange) onChange(all);
+        }}
+      >
+        <Form.Item 
+          label="Company Name" 
+          name="companyName"
+          rules={[{ required: true, message: "Destination Company Name is required" }]}
+        >
           <AutoComplete
             options={companyOptions}
             onSearch={handleSearchCompany}
             onSelect={handleSelectCompany}
+            onChange={(val) => {
+              form.setFieldsValue({ companyName: val });
+              const valKey = String(val || "").trim().toLowerCase();
+              const matchedLoc = locationsMapRef.current.get(valKey);
+              if (matchedLoc) {
+                handleSelectCompany(val, { location: matchedLoc });
+              } else if (onChange) {
+                onChange(form.getFieldsValue());
+              }
+            }}
             placeholder="Company name"
             allowClear
           >
@@ -385,7 +457,11 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
             />
           </AutoComplete>
         </Form.Item>
-        <Form.Item label="Address Line 1" name="address1">
+        <Form.Item 
+          label="Address Line 1" 
+          name="address1"
+          rules={[{ required: true, message: "Destination Address Line 1 is required" }]}
+        >
           <Input placeholder="Street address" />
         </Form.Item>
         <Form.Item label="Address Line 2" name="address2">
@@ -396,7 +472,11 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         </Form.Item>
         <Row gutter={[12, 12]}>
           <Col xs={24} md={8}>
-            <Form.Item label="Postal / ZIP" name="postal">
+            <Form.Item 
+              label="Postal / ZIP" 
+              name="postal"
+              rules={[{ required: true, message: "Postal / ZIP is required" }]}
+            >
               <AutoComplete
                 options={postalOptions}
                 onSearch={handleSearchPostal}
@@ -404,6 +484,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
                 onChange={(val) => {
                   form.setFieldsValue({ postal: val });
                   postalRef.current = val;
+                  if (onChange) onChange(form.getFieldsValue());
                 }}
                 onFocus={() => {
                   isFocusedRef.current = true;
@@ -421,12 +502,20 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
-            <Form.Item label="City" name="city">
+            <Form.Item 
+              label="City" 
+              name="city"
+              rules={[{ required: true, message: "City is required" }]}
+            >
               <Input placeholder="City" />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
-            <Form.Item label="State" name="state">
+            <Form.Item 
+              label="State" 
+              name="state"
+              rules={[{ required: true, message: "State is required" }]}
+            >
               <Input placeholder="ST" />
             </Form.Item>
           </Col>
