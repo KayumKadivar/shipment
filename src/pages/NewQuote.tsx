@@ -57,9 +57,9 @@ const createId = (prefix: string) => `${prefix}-${++quoteEntityId}`;
 
 const createItem = (): QuoteItem => ({
   id: createId("item"),
-  units: "",
+  units: "1",
   handlingUnit: "Pallet",
-  pieces: "",
+  pieces: "1",
   weight: "",
   weightUnit: "lbs",
   freightClass: "50",
@@ -91,6 +91,8 @@ const normalizePackages = (pkgs?: QuoteFormPackage[]): QuotePackage[] => {
     items: (pkg.items || []).map((item) => ({
       ...createItem(),
       ...item,
+      units: item.units !== undefined && item.units !== "" ? item.units : "1",
+      pieces: item.pieces !== undefined && item.pieces !== "" ? item.pieces : "1",
       hazMatProperShippingName: item.hazMatProperShippingName ?? "",
       hazMatPackingGroup: item.hazMatPackingGroup ?? "",
       hazMatPhone: item.hazMatPhone ?? "",
@@ -922,7 +924,7 @@ function NewQuote() {
         class: i.freightClass,
         weight: Number(i.weight) || 0,
         weightUnit: i.weightUnit,
-        units: Number(i.units) || 0,
+        units: Number(i.units) || 1,
         cubicFeet: 0,
         hazMat: i.hazMat,
         hazMatClass: i.hazMatClass || undefined,
@@ -939,8 +941,8 @@ function NewQuote() {
         hazmatGroup: i.hazMatPackingGroup || "",
         nmfc: i.nmfc || undefined,
         description: i.description || "Freight",
-        pallets: i.handlingUnit === "Pallet" ? Number(i.units) || 0 : 0,
-        pieces: Number(i.pieces) || 0,
+        pallets: i.handlingUnit === "Pallet" ? Number(i.units) || 1 : 0,
+        pieces: Number(i.pieces) || 1,
         length: Number(i.length) || 0,
         width: Number(i.width) || 0,
         height: Number(i.height) || 0,
@@ -1076,9 +1078,9 @@ function NewQuote() {
       destCountry: "USA",
       items: {
         [freshItem.id]: {
-          units: "",
+          units: "1",
           handlingUnit: freshItem.handlingUnit,
-          pieces: "",
+          pieces: "1",
           weight: "",
           freightClass: freshItem.freightClass,
           nmfc: "",
@@ -1256,13 +1258,13 @@ function NewQuote() {
                 <div className='quote-items-table'>
                   <div className='quote-items-table__head' aria-hidden='true'>
                     <span>Description</span>
-                    <span>Units <span className='required'>*</span></span>
+                    <span>Units</span>
                     <span>Handling Unit <span className='required'>*</span></span>
-                    <span>Pieces <span className='required'>*</span></span>
+                    <span>Pieces</span>
                     <span>Weight [lbs] <span className='required'>*</span></span>
                     <span>Class <span className='required'>*</span></span>
                     <span>Dimensions [inches]</span>
-                    <span>NMFC <span className='required'>*</span></span>
+                    <span>NMFC</span>
                     <span>Stackable</span>
                     <span>Hazmat</span>
                     <span />
@@ -1344,7 +1346,6 @@ function NewQuote() {
                       <ItemFormItem
                         name={['items', item.id, 'units']}
                         rules={[
-                          { required: true, message: "Units is required" },
                           {
                             validator: (_, val) => {
                               if (val !== undefined && val !== "" && (isNaN(Number(val)) || Number(val) <= 0)) {
@@ -1357,6 +1358,7 @@ function NewQuote() {
                       >
                         <Input
                           value={item.units}
+                          placeholder='1'
                           aria-label='Units'
                           onChange={(event) =>
                             updateItem(
@@ -1391,7 +1393,6 @@ function NewQuote() {
                       <ItemFormItem
                         name={['items', item.id, 'pieces']}
                         rules={[
-                          { required: true, message: "Pieces is required" },
                           {
                             validator: (_, val) => {
                               if (val !== undefined && val !== "" && (isNaN(Number(val)) || Number(val) <= 0)) {
@@ -1404,6 +1405,7 @@ function NewQuote() {
                       >
                         <Input
                           value={item.pieces}
+                          placeholder='1'
                           aria-label='Pieces'
                           onChange={(event) =>
                             updateItem(
@@ -1509,7 +1511,6 @@ function NewQuote() {
                         name={['items', item.id, 'nmfc']}
                         normalize={(value) => formatNMFC(value || "")}
                         rules={[
-                          { required: true, message: "NMFC is required" },
                           {
                             validator: (_, value) =>
                               !value || isValidNMFC(value)

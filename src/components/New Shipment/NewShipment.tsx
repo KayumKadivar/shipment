@@ -8,7 +8,7 @@ import {
   Row, Col, Flex, message, Spin, AutoComplete, Tooltip, Modal, Form,
 } from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { DownOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import './newshipment.css';
 import OriginLocation from './OriginLocation';
 import DestinationLocation from './DestinationLocation';
@@ -104,6 +104,8 @@ interface ShipmentPrefillQuote {
   selectedCarrier?: ShipmentPrefillCarrier;
   quoteResults?: ShipmentPrefillCarrier[];
   rate?: ShipmentPrefillCarrier;
+  carrierNote?: string;
+  specialNotes?: string;
 }
 
 interface ShipmentPrefillCarrier {
@@ -216,6 +218,50 @@ const NewShipment: React.FC = () => {
       dispatch(fetchAccessorials());
     }
   }, [accessorialsList, dispatch]);
+
+  // Client Markup Configuration from API
+  const [clientMarkupConfig, setClientMarkupConfig] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchClientMarkup = async () => {
+      const clientCodeToUse =
+        quote?.clientCode ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "DEVTS";
+
+      if (!clientCodeToUse) return;
+
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      try {
+        console.log(`Calling GetClientMarkup API for clientCode: ${clientCodeToUse}`);
+        const response = await axios.get(
+          `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCodeToUse)}`,
+          { headers }
+        );
+        console.log("GetClientMarkup API response:", response.data);
+
+        if (response.data?.isSuccess && response.data?.data) {
+          const rawData = response.data.data;
+          const config = Array.isArray(rawData) ? rawData[0] : rawData;
+          if (config) {
+            setClientMarkupConfig(config);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching GetClientMarkup:", error);
+      }
+    };
+
+    fetchClientMarkup();
+  }, [quote?.clientCode]);
 
   useEffect(() => {
     const productsSource = (quote?.quoteProducts && quote.quoteProducts.length > 0)
@@ -923,13 +969,9 @@ const NewShipment: React.FC = () => {
         message.error("Class is required.");
         return false;
       }
-      if (!item.nmfc || !isValidNMFC(item.nmfc)) {
+      if (item.nmfc && !isValidNMFC(item.nmfc)) {
         setTouchedNMFC((prev) => ({ ...prev, [item.id]: true }));
-        message.error(
-          !item.nmfc
-            ? "NMFC is required for all items (format: XXXXXX-XX, e.g. 123456-01)."
-            : `NMFC "${item.nmfc}" is invalid. Must be in 6 digit - 2 digit format (XXXXXX-XX, e.g. 123456-01).`
-        );
+        message.error(`NMFC "${item.nmfc}" is invalid. Must be in 6 digit - 2 digit format (XXXXXX-XX, e.g. 123456-01).`);
         return false;
       }
       if (item.hazmat) {
@@ -954,6 +996,8 @@ const NewShipment: React.FC = () => {
   const originFormValuesRef = useRef<any>({});
   const destinationFormValuesRef = useRef<any>({});
   const shipmentNotesRef = useRef<string>("");
+  const carrierNotesRef = useRef<string>("");
+  const specialNotesRef = useRef<string>("");
   const shipmentInfoValuesRef = useRef<any>({
     mode: "LTL",
     equipment: "LTL",
@@ -1168,19 +1212,19 @@ const NewShipment: React.FC = () => {
       const valPerPound = totalWeightCalc > 0 ? Number((declaredVal / totalWeightCalc).toFixed(2)) : 0;
 
       const payload = {
-        createLoadInTms: true,
-        sendCarrierPickupReq: Boolean(shipmentInfoValues.sendCarrierPickupReq),
+        createLoadInTms: false,
+        sendCarrierPickupReq: false,
         originName: origName,
         originAddress1: origAddress,
         originAddress2: originVals.address2 || "",
-        orgCountryCode: originVals.country || "USA",
+        orgCountryCode: originVals.country || "",
         orgStateCode: origState,
         orgPostalCode: origZip,
         orgCityName: origCity,
         destName: destName,
         destAddress1: destAddress,
         destAddress2: destinationVals.address2 || "",
-        destCountryCode: destinationVals.country || "USA",
+        destCountryCode: destinationVals.country || "",
         destStateCode: destState,
         destPostalCode: destZip,
         destCityName: destCity,
@@ -1200,11 +1244,11 @@ const NewShipment: React.FC = () => {
         orgWhoPhoneNumber: orgPhoneNumber,
         pickUpReadyTime: originVals.openTime || originVals.pickupOpenTime || "",
         pickUpCloseTime: originVals.closeTime || originVals.pickupCloseTime || "",
-        isTestMode: false,
+        isTestMode: true,
         brokerCode: quote?.profileCode || "",
         clientAddress1: quote?.clientAddress1 || "",
         clientAddress2: quote?.clientAddress2 || "",
-        clientCountryCode: quote?.clientCountryCode || "USA",
+        clientCountryCode: quote?.clientCountryCode || "",
         clientCityName: quote?.clientCityName || "",
         clientEmail: quote?.clientEmail || "",
         clientName: quote?.clientName || "",
@@ -1214,12 +1258,12 @@ const NewShipment: React.FC = () => {
         pickupTime: originVals.pickupOpenTime || originVals.openTime || "",
         originFax: originVals.fax || "",
         originEmail: originVals.email || "",
-        originNote: shipmentNotes || "",
+        originNote: originVals.shipperNotes || originVals.originNote || shipmentNotes || "",
         destContact: destinationVals.contactName || "",
         destPhoneNo: destinationVals.phone || "",
         destEmail: destinationVals.email || "",
         destFaxNo: destinationVals.fax || "",
-        destNote: "",
+        destNote: destinationVals.consigneeNotes || destinationVals.destNote || "",
         ref1Value: shipmentInfoValues.customerRef || (reference ? String(reference) : ""),
         ref2Value: "",
         ref3Value: "",
@@ -1231,12 +1275,12 @@ const NewShipment: React.FC = () => {
         requestedDeliveryTime: destinationVals.delOpenTime || destinationVals.openTime || "",
         shipmentValue: declaredVal,
         valuePerPound: valPerPound,
-        specialNotes: insuranceValues.specialInstructions || shipmentNotes || "",
-        carrierNote: shipmentNotes || "",
+        specialNotes: specialNotesRef.current || insuranceValues.specialInstructions || shipmentNotes || "",
+        carrierNote: carrierNotesRef.current || shipmentNotes || "",
         billToName: billToValues.companyName || "",
         billToAddress1: billToValues.address1 || "",
         billToAddress2: billToValues.address2 || "",
-        billToCountryCode: billToValues.country || "USA",
+        billToCountryCode: billToValues.country || "",
         billToPostalCode: (billToValues.postal || "").split(' - ')[0].trim(),
         billToStateCode: billToValues.state || "",
         billToCityName: billToValues.city || "",
@@ -1265,7 +1309,9 @@ const NewShipment: React.FC = () => {
         sellCarrierName: carrierName,
       };
 
-      console.log("Saving Shipment - BookShipment Payload:", payload);
+      console.log("=== BookShipment Payload (Formatted JSON) ===");
+      console.log(JSON.stringify(payload, null, 2));
+      console.log("=== BookShipment Payload (Object) ===", payload);
 
       const token = localStorage.getItem("authToken");
       const headers: Record<string, string> = {
@@ -1342,7 +1388,7 @@ const NewShipment: React.FC = () => {
 
       {/* ══ Top Layout ══ */}
       <Row gutter={[16, 16]} align="stretch" className="ns-top-row">
-        <Col xs={24} xl={16}>
+        <Col xs={24} xl={16} className="ns-top-left-col">
           <Flex vertical gap={16} className="ns-left-col">
             <Row gutter={[16, 16]}>
               <Col xs={24} md={12}>
@@ -1406,26 +1452,46 @@ const NewShipment: React.FC = () => {
                 />
               </Col>
             </Row>
-            <Card
-              title={
-                <Flex align="center" gap={8}>
-                  Notes <DownOutlined className="ns-notes-icon" />
-                </Flex>
-              }
-              className="notes-panel"
-            >
-              <Input.TextArea
-                placeholder="Add shipment notes, special instructions, or internal comments..."
-                className="notes-textarea"
-                defaultValue=""
-                onChange={(e) => { shipmentNotesRef.current = e.target.value; }}
-              />
-            </Card>
+            <Row gutter={[16, 16]} className="notes-row-stretch">
+              <Col xs={24} md={12} className="notes-col-stretch">
+                <Card
+                  title="Carrier notes"
+                  className="notes-panel"
+                >
+                  <Input.TextArea
+                    rows={8}
+                    placeholder="Add shipment notes, special instructions, or internal comments..."
+                    className="notes-textarea"
+                    defaultValue={quote?.carrierNote || ""}
+                    onChange={(e) => {
+                      carrierNotesRef.current = e.target.value;
+                      shipmentNotesRef.current = e.target.value;
+                    }}
+                  />
+                </Card>
+              </Col>
+              <Col xs={24} md={12} className="notes-col-stretch">
+                <Card
+                  title="Special Notes"
+                  className="notes-panel"
+                >
+                  <Input.TextArea
+                    rows={8}
+                    placeholder="Add shipment notes, special instructions, or internal comments..."
+                    className="notes-textarea"
+                    defaultValue={quote?.specialNotes || ""}
+                    onChange={(e) => {
+                      specialNotesRef.current = e.target.value;
+                    }}
+                  />
+                </Card>
+              </Col>
+            </Row>
           </Flex>
         </Col>
 
-        <Col xs={24} xl={8}>
-          <Flex vertical gap={16}>
+        <Col xs={24} xl={8} className="ns-top-right-col">
+          <Flex vertical gap={16} className="ns-right-col">
             <ShipmentInformation
               initialData={shipmentInfoData}
               onChange={(vals) => { shipmentInfoValuesRef.current = vals; }}
@@ -1460,7 +1526,7 @@ const NewShipment: React.FC = () => {
             <span>Class <em>*</em></span>
             <span>Dimensions [in]</span>
             <span>PCF/Density</span>
-            <span>NMFC <em>*</em></span>
+            <span>NMFC</span>
             <span className="col-center">Stackable</span>
             <span className="col-center">Hazmat</span>
             <span />
@@ -1584,10 +1650,10 @@ const NewShipment: React.FC = () => {
               />
 
               {(() => {
-                const isNmfcError =
-                  Boolean(((formSubmitted || touchedNMFC[item.id]) && (!item.nmfc || !isValidNMFC(item.nmfc))) ||
-                  (item.nmfc && !isValidNMFC(item.nmfc) && (touchedNMFC[item.id] || formSubmitted || item.nmfc.length >= 9)));
-                const nmfcMsg = !item.nmfc ? "NMFC is required" : "NMFC must be XXXXXX-XX";
+                const isNmfcError = Boolean(
+                  item.nmfc && !isValidNMFC(item.nmfc) && (touchedNMFC[item.id] || formSubmitted || item.nmfc.length >= 9)
+                );
+                const nmfcMsg = "NMFC must be XXXXXX-XX";
                 return renderWithTooltip(
                   <Input
                     placeholder="XXXXXX-XX"
@@ -1687,6 +1753,7 @@ const NewShipment: React.FC = () => {
             loadingRate={ratesLoading}
             onSelectCarrier={setSelectedCarrierInfo}
             onRateDetailsChange={(rates) => { rateDetailsRef.current = rates; }}
+            clientMarkupConfig={clientMarkupConfig}
           />
         </Col>
         <Col xs={24} xl={8}>

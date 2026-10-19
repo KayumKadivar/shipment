@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, Form, Input, Row, Col, Button, AutoComplete, Spin } from 'antd';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
@@ -21,6 +21,31 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isFocusedRef = useRef(false);
   const postalRef = useRef("");
+  const postalRowRef = useRef<HTMLDivElement>(null);
+  const [postalDropdownWidth, setPostalDropdownWidth] = useState<number | undefined>(undefined);
+
+  const updateDropdownWidth = useCallback(() => {
+    if (!postalRowRef.current) return;
+    const inputs = postalRowRef.current.querySelectorAll('input');
+    if (inputs.length >= 2) {
+      const postalRect = inputs[0].getBoundingClientRect();
+      const cityRect = inputs[1].getBoundingClientRect();
+      if (cityRect.top < postalRect.bottom && cityRect.right > postalRect.left) {
+        const width = Math.round(cityRect.right - postalRect.left);
+        if (width > 0) {
+          setPostalDropdownWidth(width);
+        }
+      } else {
+        setPostalDropdownWidth(Math.round(postalRect.width));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    updateDropdownWidth();
+    window.addEventListener('resize', updateDropdownWidth);
+    return () => window.removeEventListener('resize', updateDropdownWidth);
+  }, [updateDropdownWidth]);
 
   // Company Name Search State
   const [companyOptions, setCompanyOptions] = useState<{ value: string; label: React.ReactNode; location: any; key: string }[]>([]);
@@ -286,6 +311,7 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
             }))
           );
           if (isFocusedRef.current) {
+            updateDropdownWidth();
             setDropdownOpen(true);
           }
         } else {
@@ -392,43 +418,53 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
         <Form.Item label="Country" name="country">
           <CountrySelect />
         </Form.Item>
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={8}>
-            <Form.Item label="Postal / ZIP" name="postal">
-              <AutoComplete
-                options={postalOptions}
-                onSearch={handleSearchPostal}
-                onSelect={handleSelectPostal}
-                onChange={(val) => {
-                  form.setFieldsValue({ postal: val });
-                  postalRef.current = val;
-                }}
-                onFocus={() => {
-                  isFocusedRef.current = true;
-                  if (postalOptions.length > 0) {
-                    setDropdownOpen(true);
-                  }
-                }}
-                onBlur={handlePostalBlur}
-                placeholder="ZIP / Postal"
-                disabled={loading || loadingPostal}
-                notFoundContent={loadingPostal ? <Spin size="small" /> : null}
-                open={dropdownOpen}
-                onDropdownVisibleChange={(visible) => setDropdownOpen(visible)}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={8}>
-            <Form.Item label="City" name="city">
-              <Input placeholder="City" readOnly disabled />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={8}>
-            <Form.Item label="State" name="state">
-              <Input placeholder="ST" readOnly disabled />
-            </Form.Item>
-          </Col>
-        </Row>
+        <div ref={postalRowRef}>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={8}>
+              <Form.Item label="Postal / ZIP" name="postal">
+                <AutoComplete
+                  options={postalOptions}
+                  onSearch={handleSearchPostal}
+                  onSelect={handleSelectPostal}
+                  onChange={(val) => {
+                    form.setFieldsValue({ postal: val });
+                    postalRef.current = val;
+                  }}
+                  onFocus={() => {
+                    isFocusedRef.current = true;
+                    updateDropdownWidth();
+                    if (postalOptions.length > 0) {
+                      setDropdownOpen(true);
+                    }
+                  }}
+                  onBlur={handlePostalBlur}
+                  placeholder="ZIP / Postal"
+                  disabled={loading || loadingPostal}
+                  notFoundContent={loadingPostal ? <Spin size="small" /> : null}
+                  open={dropdownOpen}
+                  onDropdownVisibleChange={(visible) => {
+                    if (visible) updateDropdownWidth();
+                    setDropdownOpen(visible);
+                  }}
+                  popupMatchSelectWidth={postalDropdownWidth || false}
+                  popupStyle={{ minWidth: postalDropdownWidth || 360, width: postalDropdownWidth }}
+                  dropdownStyle={{ minWidth: postalDropdownWidth || 360, width: postalDropdownWidth }}
+                  popupClassName="postal-autocomplete-popup"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="City" name="city">
+                <Input placeholder="City" readOnly disabled />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="State" name="state">
+                <Input placeholder="ST" readOnly disabled />
+              </Form.Item>
+            </Col>
+          </Row>
+        </div>
         <Form.Item label="Fax No" name="fax">
           <Input placeholder="Fax No" />
         </Form.Item>

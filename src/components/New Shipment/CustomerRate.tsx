@@ -32,6 +32,7 @@ export interface CustomerRateProps {
     buyRate: { freight: number; fuel: number; discount: number; accesorialCostDetails: any[] };
     sellRate: { freight: number; fuel: number; discount: number; accesorialCostDetails: any[] };
   }) => void;
+  clientMarkupConfig?: any;
 }
 
 interface RateLineItem {
@@ -60,6 +61,15 @@ const formatCurrency = (val: number): string => {
   return isNeg ? `($${abs})` : `$${abs}`;
 };
 
+const normalizeMarkupType = (raw?: string): 'flat' | 'percentage' | 'netSellRate' => {
+  if (!raw) return 'flat';
+  const clean = String(raw).trim().toLowerCase().replace(/[\s_-]/g, '');
+  if (clean.includes('percent')) return 'percentage';
+  if (clean.includes('netsell') || clean.includes('sellrate') || clean.includes('net') || clean.includes('sell')) return 'netSellRate';
+  if (clean.includes('flat')) return 'flat';
+  return 'flat';
+};
+
 const CustomerRate: React.FC<CustomerRateProps> = ({
   carrierData,
   onRate,
@@ -68,6 +78,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   onClearError,
   onSelectCarrier,
   onRateDetailsChange,
+  clientMarkupConfig,
 }) => {
   const dispatch = useDispatch<AppDispatch>();
   const customerRate = useSelector((state: RootState) => state.customerRate);
@@ -83,8 +94,20 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   }, [accessorialsList, dispatch]);
 
   // Markup state
-  const [markupType, setMarkupType] = useState<'flat' | 'percentage'>('flat');
+  const [markupType, setMarkupType] = useState<'flat' | 'percentage' | 'netSellRate'>('flat');
   const [markup, setMarkup] = useState<string>("0");
+
+  useEffect(() => {
+    if (clientMarkupConfig) {
+      if (clientMarkupConfig.markupType) {
+        const selectedType = normalizeMarkupType(clientMarkupConfig.markupType);
+        setMarkupType(selectedType);
+      }
+      if (clientMarkupConfig.rate != null) {
+        setMarkup(String(clientMarkupConfig.rate));
+      }
+    }
+  }, [clientMarkupConfig]);
 
   // Carrier inputs and autocomplete state
   const [carrierName, setCarrierName] = useState<string>("");
@@ -379,10 +402,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     const fuelItems = rawItems.filter(
       (i) => isFuelCharge(i.code)
     );
+    const discountItems = rawItems.filter(
+      (i) => isDiscountCharge(i.code)
+    );
 
     const totalFreight = freightItems.reduce((acc, i) => acc + (i.buyAmount > 0 ? i.buyAmount : 0), 0);
     const totalFuel = fuelItems.reduce((acc, i) => acc + (i.buyAmount > 0 ? i.buyAmount : 0), 0);
+    const totalDiscount = discountItems.reduce((acc, i) => acc + i.buyAmount, 0); // negative number or 0
     const totalFreightFuel = totalFreight + totalFuel;
+    const netBaseBuy = totalFreight + totalDiscount + totalFuel;
 
     return rawItems.map((item) => {
       const isDiscount = isDiscountCharge(item.code);
@@ -411,6 +439,48 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         markupCalcText = `Percentage Markup: ${numericMarkup}%\nCalculation: ${formatCurrency(item.buyAmount)} × ${numericMarkup}% = ${formatCurrency(markupAmt)}\nEffective Amount: ${formatCurrency(item.buyAmount)} + ${formatCurrency(markupAmt)} = ${formatCurrency(item.buyAmount + markupAmt)}`;
         markupSubtext = numericMarkup > 0 ? `${formatShortNum(item.buyAmount)} × ${numericMarkup}% = ${formatShortNum(markupAmt)}` : "";
         customerCalcSubtext = numericMarkup > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
+      } else if (markupType === 'netSellRate') {
+        // Net Sell Rate markup: target net transportation sell rate (Freight + Fuel + Discount)
+        const targetSell = numericMarkup;
+        const totalBaseBuy = netBaseBuy > 0 ? netBaseBuy : totalFreightFuel;
+        const totalNetSellMarkup = targetSell > 0 ? targetSell - totalBaseBuy : 0;
+
+        if (isFreight) {
+          if (totalFreightFuel > 0) {
+            const freightProportionPercent = totalFreight / totalFreightFuel;
+            const itemShareOfFreight = totalFreight > 0 ? item.buyAmount / totalFreight : 1;
+            const totalFreightMarkup = totalNetSellMarkup * freightProportionPercent;
+            markupAmt = totalFreightMarkup * itemShareOfFreight;
+
+            const ratioStr = (totalFreight / totalFreightFuel).toFixed(4);
+            markupCalcText = `Net Sell Rate Target: ${formatCurrency(targetSell)}\nBase Net Buy: ${formatCurrency(totalBaseBuy)}\nTotal Markup: ${formatCurrency(totalNetSellMarkup)}\nStep 1 (Proportion): ${formatCurrency(item.buyAmount)} / ${formatCurrency(totalFreightFuel)} = ${ratioStr}\nStep 2 (Markup): ${ratioStr} × ${formatCurrency(totalNetSellMarkup)} = ${formatCurrency(markupAmt)}\nStep 3 (Customer): ${formatCurrency(item.buyAmount)} + ${formatCurrency(markupAmt)} = ${formatCurrency(item.buyAmount + markupAmt)}`;
+            markupSubtext = targetSell > 0 ? `Target ${formatShortNum(targetSell)}: markup ${formatShortNum(markupAmt)}` : "";
+            customerCalcSubtext = targetSell > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
+          } else if (totalFreight > 0) {
+            markupAmt = totalNetSellMarkup * (item.buyAmount / totalFreight);
+            markupCalcText = `Net Sell Rate Target: ${formatCurrency(targetSell)}\nMarkup applied to Freight: ${formatCurrency(markupAmt)}`;
+            markupSubtext = targetSell > 0 ? `Target ${formatShortNum(targetSell)}` : "";
+            customerCalcSubtext = targetSell > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
+          }
+        } else if (isFuel) {
+          if (totalFreightFuel > 0) {
+            const fuelProportionPercent = totalFuel / totalFreightFuel;
+            const itemShareOfFuel = totalFuel > 0 ? item.buyAmount / totalFuel : 1;
+            const totalFuelMarkup = totalNetSellMarkup * fuelProportionPercent;
+            markupAmt = totalFuelMarkup * itemShareOfFuel;
+
+            const ratioStr = (totalFuel / totalFreightFuel).toFixed(4);
+            const pct = (fuelProportionPercent * 100).toFixed(1);
+            markupCalcText = `Net Sell Rate Target: ${formatCurrency(targetSell)}\nBase Net Buy: ${formatCurrency(totalBaseBuy)}\nTotal Markup: ${formatCurrency(totalNetSellMarkup)}\nStep 1 (Proportion): ${formatCurrency(item.buyAmount)} / ${formatCurrency(totalFreightFuel)} = ${ratioStr} (${pct}%)\nStep 2 (Markup): ${ratioStr} × ${formatCurrency(totalNetSellMarkup)} = ${formatCurrency(markupAmt)}\nStep 3 (Customer): ${formatCurrency(item.buyAmount)} + ${formatCurrency(markupAmt)} = ${formatCurrency(item.buyAmount + markupAmt)}`;
+            markupSubtext = targetSell > 0 ? `Target ${formatShortNum(targetSell)}: markup ${formatShortNum(markupAmt)}` : "";
+            customerCalcSubtext = targetSell > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
+          } else if (totalFuel > 0) {
+            markupAmt = totalNetSellMarkup * (item.buyAmount / totalFuel);
+            markupCalcText = `Net Sell Rate Target: ${formatCurrency(targetSell)}\nMarkup applied to Fuel: ${formatCurrency(markupAmt)}`;
+            markupSubtext = targetSell > 0 ? `Target ${formatShortNum(targetSell)}` : "";
+            customerCalcSubtext = targetSell > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
+          }
+        }
       } else {
         // Flat markup: split proportionally between freight & fuel ONLY
         if (isFreight) {
@@ -773,9 +843,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
       <Form layout="vertical" className="compact-form">
 
-        {/* Row 1: Carrier + Mark Up (Flat / Percentage) + Rate Button */}
+        {/* Row 1: Carrier + Mark Up (Flat / Percentage / Net Sell Rate) + Rate Button */}
         <Row gutter={[12, 12]} className="mb-16">
-          <Col xs={24} md={8} lg={9}>
+          <Col xs={24} md={7} lg={7}>
             <Form.Item noStyle>
               <AutoComplete
                 value={carrierName}
@@ -803,27 +873,34 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={12} lg={11}>
+          <Col xs={24} md={14} lg={14}>
             <div className="text-muted-13 markup-row-wrap">
               <span className="markup-label">
                 Mark Up
               </span>
               <Checkbox
                 checked={markupType === 'flat'}
-                onChange={(e) => setMarkupType(e.target.checked ? 'flat' : 'percentage')}
+                onChange={() => setMarkupType('flat')}
                 className="markup-checkbox"
               >
                 Flat
               </Checkbox>
               <Checkbox
                 checked={markupType === 'percentage'}
-                onChange={(e) => setMarkupType(e.target.checked ? 'percentage' : 'flat')}
+                onChange={() => setMarkupType('percentage')}
                 className="markup-checkbox"
               >
                 Percentage
               </Checkbox>
+              <Checkbox
+                checked={markupType === 'netSellRate'}
+                onChange={() => setMarkupType('netSellRate')}
+                className="markup-checkbox"
+              >
+                Net Sell Rate
+              </Checkbox>
               <div className="markup-input-wrap">
-                {markupType === 'flat' && <span className="markup-unit-symbol">$</span>}
+                {(markupType === 'flat' || markupType === 'netSellRate') && <span className="markup-unit-symbol">$</span>}
                 <Input
                   value={markup}
                   onChange={(e) => {
@@ -836,7 +913,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               </div>
             </div>
           </Col>
-          <Col xs={24} md={4}>
+          <Col xs={24} md={3} lg={3}>
             <Button
               type="primary"
               className="btn-success w-100"
