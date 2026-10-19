@@ -22,6 +22,7 @@ export interface AppState {
   username: string | null;
   countries: Country[];
   profileCode: string | null;
+  isCorporate: boolean | null;
   loading: boolean;
   error: string | null;
 }

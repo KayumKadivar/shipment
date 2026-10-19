@@ -10,6 +10,9 @@ import carrierTrackingReducer from "../store/carrierTrackingSlice.ts";
 import shipmentReducer from "../store/shipmentSlice.ts";
 import quoteReducer from "../store/quoteSlice.ts";
 import packageTypesReducer from "../store/packageTypesSlice.ts";
+import equipmentReducer from "../store/equipmentSlice.ts";
+import serviceLevelReducer from "../store/serviceLevelSlice.ts";
+import paymentTermReducer from "../store/paymentTermSlice.ts";
 
 export const store = configureStore({
   reducer: {
@@ -24,6 +27,9 @@ export const store = configureStore({
     shipment: shipmentReducer,
     quote: quoteReducer,
     packageTypes: packageTypesReducer,
+    equipment: equipmentReducer,
+    serviceLevel: serviceLevelReducer,
+    paymentTerm: paymentTermReducer,
   },
 });
 

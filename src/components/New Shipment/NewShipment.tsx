@@ -101,6 +101,8 @@ interface ShipmentPrefillQuote {
   destinationStateCode?: string;
   destinationCountry?: string;
   mode?: string;
+  equipment?: string;
+  paymentTerms?: string;
   selectedCarrier?: ShipmentPrefillCarrier;
   quoteResults?: ShipmentPrefillCarrier[];
   rate?: ShipmentPrefillCarrier;
@@ -219,49 +221,7 @@ const NewShipment: React.FC = () => {
     }
   }, [accessorialsList, dispatch]);
 
-  // Client Markup Configuration from API
-  const [clientMarkupConfig, setClientMarkupConfig] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchClientMarkup = async () => {
-      const clientCodeToUse =
-        quote?.clientCode ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
-        DEFAULT_CLIENT_CODE ||
-        "DEVTS";
-
-      if (!clientCodeToUse) return;
-
-      const token = localStorage.getItem("authToken");
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        accept: "application/json, text/plain, */*",
-      };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
-      try {
-        console.log(`Calling GetClientMarkup API for clientCode: ${clientCodeToUse}`);
-        const response = await axios.get(
-          `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCodeToUse)}`,
-          { headers }
-        );
-        console.log("GetClientMarkup API response:", response.data);
-
-        if (response.data?.isSuccess && response.data?.data) {
-          const rawData = response.data.data;
-          const config = Array.isArray(rawData) ? rawData[0] : rawData;
-          if (config) {
-            setClientMarkupConfig(config);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching GetClientMarkup:", error);
-      }
-    };
-
-    fetchClientMarkup();
-  }, [quote?.clientCode]);
 
   useEffect(() => {
     const productsSource = (quote?.quoteProducts && quote.quoteProducts.length > 0)
@@ -571,11 +531,11 @@ const NewShipment: React.FC = () => {
             product: prod,
             label: (
               <div>
-                <span style={{ fontWeight: 600, color: "#1f2937", fontSize: 12 }}>
+                <span className="product-option-desc">
                   {prodDesc || "Unnamed Product"}
                 </span>
                 {subtext && (
-                  <span style={{ fontSize: 11, color: "#808080" }}>
+                  <span className="product-option-meta">
                     {subtext}
                   </span>
                 )}
@@ -636,6 +596,8 @@ const NewShipment: React.FC = () => {
     serviceLevel: selectedCarrier?.service || "",
     customerRef: String(reference || quote?.quoteRequestId || ""),
     mode: quote?.mode || "",
+    equipment: quote?.equipment || "",
+    paymentTerms: quote?.paymentTerms || "",
   };
 
   const rawCarrier: any = selectedCarrierRate || prefillData?.selectedCarrier || prefillData?.rate || quote?.selectedCarrier || quote?.quoteResults?.[0];
@@ -918,7 +880,7 @@ const NewShipment: React.FC = () => {
       overlayClassName="quote-item-error-tooltip"
       arrow={{ pointAtCenter: true }}
     >
-      <div style={{ width: "100%" }}>{child}</div>
+      <div className="w-100">{child}</div>
     </Tooltip>
   );
 
@@ -975,10 +937,6 @@ const NewShipment: React.FC = () => {
         return false;
       }
       if (item.hazmat) {
-        if (!item.hazmatClass) {
-          message.error("Hazmat Class is required when Hazmat is selected.");
-          return false;
-        }
         if (!item.hazmatUN) {
           message.error("Hazmat UN is required when Hazmat is selected.");
           return false;
@@ -1002,7 +960,7 @@ const NewShipment: React.FC = () => {
     mode: "LTL",
     equipment: "LTL",
     serviceLevel: "Standard",
-    priority: "Standard",
+    // priority: "Standard",
     paymentTerms: "3rd Party Prep",
     sendCarrierPickupReq: false,
   });
@@ -1086,6 +1044,27 @@ const NewShipment: React.FC = () => {
     if (!destZip) {
       message.error("Destination postal/ZIP code is required.");
       destinationForm.validateFields(['postal']).catch(() => {});
+      return;
+    }
+
+    const readyTime = (
+      originVals.openTime ||
+      originVals.pickupOpenTime ||
+      originForm?.getFieldValue?.("openTime") ||
+      originForm?.getFieldValue?.("pickupOpenTime") || ""
+    ).trim();
+
+    const closeTime = (
+      originVals.closeTime ||
+      originVals.pickupCloseTime ||
+      originForm?.getFieldValue?.("closeTime") ||
+      originForm?.getFieldValue?.("pickupCloseTime") ||
+      "05:00 PM"
+    ).trim();
+
+    if (!readyTime) {
+      message.error("Pickup time is required.");
+      originForm.validateFields(['openTime']).catch(() => {});
       return;
     }
 
@@ -1211,9 +1190,12 @@ const NewShipment: React.FC = () => {
       const declaredVal = Number(insuranceValues.shipmentValue) || 0;
       const valPerPound = totalWeightCalc > 0 ? Number((declaredVal / totalWeightCalc).toFixed(2)) : 0;
 
+      const sendCarrierPickupReq = Boolean(shipmentInfoValues.sendCarrierPickupReq);
+      const createLoadInTms = true;
+
       const payload = {
-        createLoadInTms: false,
-        sendCarrierPickupReq: false,
+        createLoadInTms,
+        sendCarrierPickupReq,
         originName: origName,
         originAddress1: origAddress,
         originAddress2: originVals.address2 || "",
@@ -1242,8 +1224,8 @@ const NewShipment: React.FC = () => {
         orgPhoneNumber,
         orgWhoEntered: loggedInUser,
         orgWhoPhoneNumber: orgPhoneNumber,
-        pickUpReadyTime: originVals.openTime || originVals.pickupOpenTime || "",
-        pickUpCloseTime: originVals.closeTime || originVals.pickupCloseTime || "",
+        pickUpReadyTime: readyTime,
+        pickUpCloseTime: closeTime,
         isTestMode: true,
         brokerCode: quote?.profileCode || "",
         clientAddress1: quote?.clientAddress1 || "",
@@ -1255,7 +1237,7 @@ const NewShipment: React.FC = () => {
         clientPhone: quote?.clientPhone || "",
         clientStateCode: quote?.clientStateCode || "",
         clientZipCode: quote?.clientZipCode || "",
-        pickupTime: originVals.pickupOpenTime || originVals.openTime || "",
+        pickupTime: readyTime,
         originFax: originVals.fax || "",
         originEmail: originVals.email || "",
         originNote: originVals.shipperNotes || originVals.originNote || shipmentNotes || "",
@@ -1272,7 +1254,7 @@ const NewShipment: React.FC = () => {
         brokerRefNo: shipmentInfoValues.inlandLd || shipmentInfoValues.customerRef || (reference ? String(reference) : ""),
         expectedShipDate: toIsoOrCurrent(originVals.expPickupDate || originVals.pickupDate),
         requestedDeliveryDate: toIsoOrCurrent(destinationVals.requestedDeliveryDate || destinationVals.expDeliveryDate || destinationVals.deliveryDate),
-        requestedDeliveryTime: destinationVals.delOpenTime || destinationVals.openTime || "",
+        requestedDeliveryTime: destinationVals.delOpenTime || destinationVals.openTime || destinationForm?.getFieldValue?.("delOpenTime") || destinationForm?.getFieldValue?.("openTime") || "08:00 AM",
         shipmentValue: declaredVal,
         valuePerPound: valPerPound,
         specialNotes: specialNotesRef.current || insuranceValues.specialInstructions || shipmentNotes || "",
@@ -1290,11 +1272,11 @@ const NewShipment: React.FC = () => {
         paymentTerms: shipmentInfoValues.paymentTerms || "3rd Party Prep",
         orgContactPerson: contactPerson,
         deliveryDate: toIsoOrCurrent(destinationVals.deliveryDate || destinationVals.expDeliveryDate),
-        deliveryTime: destinationVals.delOpenTime || destinationVals.openTime || "",
+        deliveryTime: destinationVals.delOpenTime || destinationVals.openTime || destinationForm?.getFieldValue?.("delOpenTime") || destinationForm?.getFieldValue?.("openTime") || "08:00 AM",
         carrierBolNo: shipmentInfoValues.carrierBolNo || "",
         buyRate,
         sellRate,
-        shipmentMode: shipmentInfoValues.mode || quote?.mode || "LTL",
+        // shipmentMode: shipmentInfoValues.mode || quote?.mode || "LTL",
         equipment: shipmentInfoValues.equipment || "LTL",
         totalLength,
         totalWidth,
@@ -1303,7 +1285,7 @@ const NewShipment: React.FC = () => {
         userName: loggedInUser,
         originPortCode: "",
         destinationPortCode: "",
-        requestedDeliveryTimeTo: destinationVals.delCloseTime || destinationVals.closeTime || "",
+        requestedDeliveryTimeTo: destinationVals.delCloseTime || destinationVals.closeTime || destinationForm?.getFieldValue?.("delCloseTime") || destinationForm?.getFieldValue?.("closeTime") || "05:00 PM",
         codAmount: Number(insuranceValues.codAmount) || 0,
         totalLinearFeet: 0,
         sellCarrierName: carrierName,
@@ -1459,7 +1441,7 @@ const NewShipment: React.FC = () => {
                   className="notes-panel"
                 >
                   <Input.TextArea
-                    rows={8}
+                    rows={4}
                     placeholder="Add shipment notes, special instructions, or internal comments..."
                     className="notes-textarea"
                     defaultValue={quote?.carrierNote || ""}
@@ -1476,7 +1458,7 @@ const NewShipment: React.FC = () => {
                   className="notes-panel"
                 >
                   <Input.TextArea
-                    rows={8}
+                    rows={4}
                     placeholder="Add shipment notes, special instructions, or internal comments..."
                     className="notes-textarea"
                     defaultValue={quote?.specialNotes || ""}
@@ -1559,7 +1541,7 @@ const NewShipment: React.FC = () => {
                     if (prod.isHazmat || prod.hazmat) handleUpdateField(item.id, 'hazmat', true);
                   }
                 }}
-                notFoundContent={loadingProducts ? <div style={{ padding: '6px 12px', textAlign: 'center' }}><Spin size="small" /></div> : undefined}
+                notFoundContent={loadingProducts ? <div className="product-autocomplete-loading"><Spin size="small" /></div> : undefined}
                 className="quote-item-autocomplete"
               >
                 <Input
@@ -1646,7 +1628,7 @@ const NewShipment: React.FC = () => {
                 value={item.pcfDensity ?? ''}
                 readOnly
                 tabIndex={-1}
-                style={{ backgroundColor: '#f5f5f5', cursor: 'default' }}
+                className="pcf-density-input"
               />
 
               {(() => {
@@ -1677,7 +1659,7 @@ const NewShipment: React.FC = () => {
                 />
               </div>
 
-              <div className="col-center" style={{ gap: 4 }}>
+              <div className="col-center hazmat-col">
                 <Checkbox
                   checked={item.hazmat}
                   onChange={(e) => {
@@ -1701,13 +1683,7 @@ const NewShipment: React.FC = () => {
                 />
                 {item.hazmat && (
                   <span
-                    style={{
-                      fontSize: 11,
-                      color: "#c9302c",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      textDecoration: "underline",
-                    }}
+                    className="hazmat-edit-link"
                     onClick={() => handleOpenHazmatModal(item)}
                   >
                     Edit
@@ -1753,7 +1729,7 @@ const NewShipment: React.FC = () => {
             loadingRate={ratesLoading}
             onSelectCarrier={setSelectedCarrierInfo}
             onRateDetailsChange={(rates) => { rateDetailsRef.current = rates; }}
-            clientMarkupConfig={clientMarkupConfig}
+            clientCode={quote?.clientCode}
           />
         </Col>
         <Col xs={24} xl={8}>
@@ -1800,9 +1776,9 @@ const NewShipment: React.FC = () => {
           </Button>,
         ]}
       >
-        <div style={{ paddingTop: 16 }}>
+        <div className="hazmat-modal-body">
           <Form layout="horizontal" labelCol={{ span: 11 }} wrapperCol={{ span: 13 }} labelAlign="left">
-            <Form.Item label="HAZMAT UN/NA#" style={{ marginBottom: 12 }}>
+            <Form.Item label="HAZMAT UN/NA#" className="hazmat-form-item">
               <Input
                 value={hazmatForm.hazmatUN}
                 onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatUN: e.target.value }))}
@@ -1810,28 +1786,28 @@ const NewShipment: React.FC = () => {
                 autoFocus
               />
             </Form.Item>
-            <Form.Item label="Hazmat Proper Shipping Name" style={{ marginBottom: 12 }}>
+            <Form.Item label="Hazmat Proper Shipping Name" className="hazmat-form-item">
               <Input
                 value={hazmatForm.hazmatProperShippingName}
                 onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatProperShippingName: e.target.value }))}
                 placeholder="Hazmat Proper Shipping Name"
               />
             </Form.Item>
-            <Form.Item label="Hazmat Class" style={{ marginBottom: 12 }}>
+            <Form.Item label="Hazmat Class" className="hazmat-form-item">
               <Input
                 value={hazmatForm.hazmatClass}
                 onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatClass: e.target.value }))}
                 placeholder="Hazmat Class"
               />
             </Form.Item>
-            <Form.Item label="Hazmat Packing Group" style={{ marginBottom: 12 }}>
+            <Form.Item label="Hazmat Packing Group" className="hazmat-form-item">
               <Input
                 value={hazmatForm.hazmatPackingGroup}
                 onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatPackingGroup: e.target.value }))}
                 placeholder="Hazmat Packing Group"
               />
             </Form.Item>
-            <Form.Item label="Hazmat Phone" style={{ marginBottom: 12 }}>
+            <Form.Item label="Hazmat Phone" className="hazmat-form-item">
               <Input
                 value={hazmatForm.hazmatPhone}
                 onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatPhone: formatPhoneNumber(e.target.value, prev.hazmatPhone) }))}
@@ -1839,7 +1815,7 @@ const NewShipment: React.FC = () => {
                 maxLength={14}
               />
             </Form.Item>
-            <Form.Item label="Hazmat Contact" style={{ marginBottom: 4 }}>
+            <Form.Item label="Hazmat Contact" className="hazmat-form-item-last">
               <Input
                 value={hazmatForm.hazmatContact}
                 onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazmatContact: e.target.value }))}

@@ -170,8 +170,12 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
 
   useEffect(() => {
     if (initialData) {
-      const openTimeFormatted = formatDisplayTime(initialData.openTime) || undefined;
-      const closeTimeFormatted = formatDisplayTime(initialData.closeTime) || undefined;
+      const openTimeFormatted =
+        formatDisplayTime(initialData.openTime) ||
+        form.getFieldValue("openTime");
+      const closeTimeFormatted =
+        formatDisplayTime(initialData.closeTime) ||
+        form.getFieldValue("closeTime");
       form.setFieldsValue({
         companyName: initialData.companyName || "",
         address1: initialData.address1 || "",
@@ -477,7 +481,13 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
       <Form
         layout="vertical"
         form={form}
-        initialValues={{ country: "USA" }}
+        initialValues={{
+          country: "USA",
+          openTime: "08:00 AM",
+          closeTime: "05:00 PM",
+          pickupOpenTime: "08:00 AM",
+          pickupCloseTime: "05:00 PM",
+        }}
         onValuesChange={(_, all) => {
           if (onChange) onChange(all);
         }}
@@ -617,13 +627,17 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
             </Form.Item>
           </Col>
           <Col xs={12} md={6}>
-            <Form.Item label="From" name="openTime">
-              <Select allowClear showSearch options={timeOptions} />
+            <Form.Item 
+              label="From" 
+              name="openTime"
+              rules={[{ required: true, message: "Pickup time is required" }]}
+            >
+              <Select allowClear showSearch options={timeOptions} placeholder="From" />
             </Form.Item>
           </Col>
           <Col xs={12} md={6}>
             <Form.Item label="To" name="closeTime">
-              <Select allowClear showSearch options={timeOptions} />
+              <Select allowClear showSearch options={timeOptions} placeholder="To" />
             </Form.Item>
           </Col>
         </Row>

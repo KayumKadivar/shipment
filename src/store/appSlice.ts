@@ -56,12 +56,18 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
   return error.message || fallback;
 }
 
+const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem("authToken") : null;
+const storedUsername = typeof localStorage !== "undefined" ? localStorage.getItem("username") : null;
+const storedProfileCode = typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null;
+const storedIsCorporate = typeof localStorage !== "undefined" ? localStorage.getItem("isCorporate") : null;
+
 const initialState: AppState = {
-  isAuthenticated: false,
-  token: null,
-  username: null,
+  isAuthenticated: Boolean(storedToken),
+  token: storedToken || null,
+  username: storedUsername || null,
   countries: [],
-  profileCode: null,
+  profileCode: storedProfileCode || null,
+  isCorporate: storedIsCorporate !== null ? storedIsCorporate === "true" : null,
   loading: false,
   error: null,
 };
@@ -90,7 +96,7 @@ export const fetchCountries = createAsyncThunk<
 );
 
 export const loginUser = createAsyncThunk<
-  { token: string; username: string; profileCode: string | null },
+  { token: string; username: string; profileCode: string | null; isCorporate?: boolean | null },
   { username: string; password: string },
   { rejectValue: string }
 >("app/loginUser", async ({ username, password }, { rejectWithValue }) => {
@@ -115,6 +121,7 @@ export const loginUser = createAsyncThunk<
       localStorage.setItem("authToken", token);
       localStorage.setItem("username", username.trim());
       let profileCode = null;
+      let isCorporate: boolean | null = null;
       
       // Call GetClientAndSubclientWithProfiles API
       try {
@@ -127,15 +134,21 @@ export const loginUser = createAsyncThunk<
             },
           }
         );
-        if (clientRes.data?.data?.profiles?.length > 0) {
-          profileCode = clientRes.data.data.profiles[0].profileCode;
-          localStorage.setItem("profileCode", profileCode as string);
+        if (clientRes.data?.data) {
+          if (clientRes.data.data.profiles?.length > 0) {
+            profileCode = clientRes.data.data.profiles[0].profileCode;
+            localStorage.setItem("profileCode", profileCode as string);
+          }
+          if (typeof clientRes.data.data.isCorporate === "boolean") {
+            isCorporate = clientRes.data.data.isCorporate;
+            localStorage.setItem("isCorporate", String(isCorporate));
+          }
         }
       } catch {
         // A profile is optional for authentication; protected screens can still load.
       }
 
-      return { token, username: username.trim(), profileCode };
+      return { token, username: username.trim(), profileCode, isCorporate };
     }
 
     return rejectWithValue(
@@ -157,7 +170,9 @@ const appSlice = createSlice({
   reducers: {
     login(
       state,
-      action: PayloadAction<{ token?: string; username?: string } | void>
+      action: PayloadAction<
+        { token?: string; username?: string; isCorporate?: boolean } | undefined
+      >
     ) {
       state.isAuthenticated = true;
       if (action.payload) {
@@ -169,6 +184,10 @@ const appSlice = createSlice({
           state.username = action.payload.username;
           localStorage.setItem("username", action.payload.username);
         }
+        if (typeof action.payload.isCorporate === "boolean") {
+          state.isCorporate = action.payload.isCorporate;
+          localStorage.setItem("isCorporate", String(action.payload.isCorporate));
+        }
       }
     },
     logout(state) {
@@ -176,10 +195,12 @@ const appSlice = createSlice({
       state.token = null;
       state.username = null;
       state.profileCode = null;
+      state.isCorporate = null;
       state.error = null;
       localStorage.removeItem("authToken");
       localStorage.removeItem("username");
       localStorage.removeItem("profileCode");
+      localStorage.removeItem("isCorporate");
     },
     clearLoginError(state) {
       state.error = null;
@@ -193,9 +214,11 @@ const appSlice = createSlice({
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.loading = false;
+        state.isAuthenticated = true;
         state.token = action.payload.token;
         state.username = action.payload.username;
         state.profileCode = action.payload.profileCode;
+        state.isCorporate = action.payload.isCorporate ?? null;
         state.error = null;
       })
       .addCase(loginUser.rejected, (state, action) => {

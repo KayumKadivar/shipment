@@ -100,7 +100,6 @@
 }
 
 .notes-row-stretch {
-  flex: 1;
   display: flex;
   align-items: stretch;
 }
@@ -108,39 +107,34 @@
 .notes-col-stretch {
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 .notes-panel {
-  flex: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
 .notes-panel .ant-card-body {
-  flex: 1;
   display: flex;
   flex-direction: column;
   padding: 16px;
+  flex: 1;
 }
 
 .notes-panel .notes-textarea,
 .notes-panel textarea,
 .notes-panel .ant-input,
 .notes-panel .ant-input-textarea {
-  flex: 1 !important;
-  display: flex !important;
   width: 100% !important;
-  min-height: 220px !important;
-  height: 100% !important;
+  min-height: 90px !important;
+  height: 110px !important;
   resize: vertical;
 }
 
 .notes-panel .ant-input-textarea textarea {
-  flex: 1 !important;
-  min-height: 220px !important;
-  height: 100% !important;
+  min-height: 90px !important;
+  height: 110px !important;
   resize: vertical;
 }
 
@@ -432,6 +426,17 @@
   color: white !important;
 }
 
+.rate-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rate-table-content {
+  min-width: 580px;
+  width: 100%;
+}
+
 .rate-header-row {
   background-color: #000;
   color: #fff;
@@ -441,7 +446,9 @@
   font-weight: 700;
   gap: 12px;
   align-items: center;
+  box-sizing: border-box;
 }
+
 .rate-item-row {
   background-color: #fff;
   border-bottom: 1px solid #f0f0f0;
@@ -454,28 +461,93 @@
   align-items: center;
   transition: background-color 0.15s ease;
   user-select: none;
+  box-sizing: border-box;
 }
+
 .rate-item-row:hover {
   background-color: #f8f9fa !important;
 }
+
 .rate-item-row.is-selected {
   background-color: #e6f4ff !important;
 }
+
+.rate-totals-section {
+  margin-top: 14px;
+}
+
+.rate-total-summary-row {
+  display: flex;
+  padding: 6px 16px;
+  gap: 12px;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.rate-total-row {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+}
+
+/* Explicit Column Widths with flex-shrink: 0 */
+.col-code,
 .col-80 {
-  width: 90px;
-  min-width: 80px;
+  flex: 0 0 65px;
+  width: 65px;
+  min-width: 65px;
   font-weight: 600;
+  box-sizing: border-box;
 }
+
+.col-desc,
 .col-flex-1 {
-  flex: 1;
+  flex: 1 1 110px;
+  min-width: 90px;
+  box-sizing: border-box;
 }
+
+.col-buy,
 .col-100 {
-  width: 130px;
-  min-width: 110px;
+  flex: 0 0 100px;
+  width: 100px;
+  min-width: 100px;
+  text-align: right;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
+
+.col-customer,
 .col-120 {
-  width: 175px;
-  min-width: 150px;
+  flex: 0 0 125px;
+  width: 125px;
+  min-width: 125px;
+  text-align: right;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.col-markup {
+  flex: 0 0 85px;
+  width: 85px;
+  min-width: 85px;
+  text-align: right;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.col-actions {
+  flex: 0 0 52px;
+  width: 52px;
+  min-width: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
+}
+
+.col-actions .rate-action-btn {
+  margin: 0;
 }
 .rate-calculation-explainer {
   margin-top: 14px;
@@ -521,7 +593,6 @@
 }
 .rate-edit-btn {
   color: #1677ff;
-  margin-left: 6px;
 }
 .rate-edit-btn:hover {
   color: #0958d9;
@@ -552,7 +623,6 @@
   color: #ff4d4f;
   padding: 2px 4px;
   font-size: 13px;
-  margin-left: 4px;
   line-height: 1;
   border-radius: 4px;
   transition: all 0.15s ease;
@@ -627,23 +697,12 @@
 
 /* Mark Up input */
 .input-sm-center {
-  width: 60px;
-  text-align: center;
+  width: 58px;
+  min-width: 58px;
+  /* text-align: center; */
+  padding: 4px 6px;
 }
 
-/* Rate totals row */
-.rate-total-summary-row {
-  display: flex;
-  padding: 4px 16px;
-  gap: 12px;
-  align-items: center;
-}
-
-.rate-total-row {
-  font-size: 14px;
-  font-weight: 700;
-  color: #333;
-}
 
 /* ── Accessorials Panel Styles ── */
 .accessorials-title-wrap {
@@ -694,6 +753,22 @@
   padding-right: 6px;
 }
 
+.accessorials-list-container .ant-row {
+  row-gap: 4px !important;
+}
+
+.accessorials-list-container .ant-checkbox-wrapper {
+  font-size: 11px !important;
+  line-height: 1.25;
+  color: #374151;
+  align-items: flex-start;
+  margin-inline-start: 0;
+}
+
+.accessorials-list-container .ant-checkbox {
+  top: 1px;
+}
+
 .accessorials-selected-group {
   margin-bottom: 4px;
 }
@@ -704,7 +779,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #d71920;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -712,13 +787,13 @@
 
 .accessorial-item-selected .ant-checkbox-wrapper {
   font-weight: 600;
-  color: #1a1a1a;
+  color: #111827;
 }
 
 .accessorials-divider {
   height: 1px;
   background-color: #e5e7eb;
-  margin: 10px 0;
+  margin: 6px 0;
 }
 
 /* Custom sleek scrollbar for Accessorials list */
@@ -897,12 +972,16 @@
 /* ═══════════════════════════════════════════════
    CUSTOMER RATE MARKUP ROW STYLES
 ═══════════════════════════════════════════════ */
+.customer-rate-header-row {
+  align-items: center;
+}
+
 .markup-row-wrap {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  width: 100%;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
   min-height: 32px;
 }
 
@@ -911,23 +990,31 @@
   color: #333;
   white-space: nowrap;
   margin-right: 2px;
+  font-size: 13px;
 }
 
 .markup-checkbox {
   margin-left: 0 !important;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.markup-checkbox .ant-checkbox + span {
+  padding-inline-start: 4px;
+  padding-inline-end: 2px;
 }
 
 .markup-input-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   white-space: nowrap;
-  margin-right: 4px;
 }
 
 .markup-unit-symbol {
   font-weight: 600;
   color: #333;
+  font-size: 13px;
 }
 
 /* ═══════════════════════════════════════════════
@@ -946,3 +1033,93 @@
   text-overflow: clip !important;
   font-size: 13px !important;
 }
+
+/* ═══════════════════════════════════════════════
+   PRODUCT TABLE HAZMAT & HELPERS
+═══════════════════════════════════════════════ */
+.hazmat-col {
+  gap: 4px;
+}
+
+.hazmat-edit-link {
+  font-size: 11px;
+  color: #c9302c;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: underline;
+  transition: color 0.15s ease;
+}
+
+.hazmat-edit-link:hover {
+  color: #a02622;
+}
+
+.pcf-density-input {
+  background-color: #f5f5f5 !important;
+  cursor: default !important;
+}
+
+.product-autocomplete-loading {
+  padding: 6px 12px;
+  text-align: center;
+}
+
+.product-option-desc {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 12px;
+}
+
+.product-option-meta {
+  font-size: 11px;
+  color: #808080;
+}
+
+.hazmat-modal-body {
+  padding-top: 16px;
+}
+
+.hazmat-form-item {
+  margin-bottom: 12px;
+}
+
+.hazmat-form-item-last {
+  margin-bottom: 4px;
+}
+
+/* ═══════════════════════════════════════════════
+   RATE TABLE CELL & HELPER CLASSES
+═══════════════════════════════════════════════ */
+.rate-desc-edit-input {
+  width: 100%;
+  max-width: 180px;
+}
+
+.rate-cell-loss {
+  color: #ff4d4f !important;
+  font-weight: 600;
+}
+
+.rate-markup-val {
+  font-weight: 600;
+}
+
+.rate-markup-val.has-markup {
+  color: #1677ff;
+}
+
+.rate-markup-dash {
+  color: #8c8c8c;
+  font-weight: 500;
+}
+
+.rate-action-placeholder {
+  display: inline-block;
+  width: 21px;
+}
+
+.send-carrier-pickup-item {
+  margin-top: 12px;
+  margin-bottom: 0 !important;
+}
+

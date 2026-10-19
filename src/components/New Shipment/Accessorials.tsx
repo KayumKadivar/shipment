@@ -87,7 +87,7 @@ const Accessorials: React.FC = () => {
         <div className="accessorials-list-container">
           {selectedList.length > 0 && (
             <div className="accessorials-selected-group">
-              <Row gutter={[12, 12]}>
+              <Row gutter={[10, 4]}>
                 {selectedList.map((item) => (
                   <Col span={12} key={item.accessorialID}>
                     <div className="accessorial-item-selected">
@@ -106,7 +106,7 @@ const Accessorials: React.FC = () => {
           )}
 
           {unselectedList.length > 0 && (
-            <Row gutter={[12, 12]}>
+            <Row gutter={[10, 4]}>
               {unselectedList.map((item) => (
                 <Col span={12} key={item.accessorialID}>
                   <div>

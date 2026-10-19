@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, Form, Input, Select, Button, Row, Col, Spin, message, Alert, Checkbox, AutoComplete } from 'antd';
+import { Card, Form, Input, Select, Button, Row, Col, Spin, message, Alert, Checkbox, AutoComplete, Flex } from 'antd';
 import { DeleteOutlined, EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
 import axios from 'axios';
 import type { AppDispatch, RootState } from '../../app/store';
 import { fetchCarrierRates, clearRateError, type CarrierSearchResult } from '../../store/customerRateSlice';
 import { fetchAccessorials } from '../../store/accessorialsSlice';
-import { API_BASE_URL } from '../../config/apiConfig';
+import { API_BASE_URL, DEFAULT_CLIENT_CODE } from '../../config/apiConfig';
 import './newshipment.css';
 
 export interface CustomerRateProps {
@@ -23,6 +23,8 @@ export interface CustomerRateProps {
     fuelCode?: string;
     accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[];
   };
+  clientCode?: string;
+  isCorporate?: boolean;
   onRate?: (scac?: string) => void | Promise<void>;
   loadingRate?: boolean;
   rateError?: string | null;
@@ -72,6 +74,8 @@ const normalizeMarkupType = (raw?: string): 'flat' | 'percentage' | 'netSellRate
 
 const CustomerRate: React.FC<CustomerRateProps> = ({
   carrierData,
+  clientCode,
+  isCorporate: propIsCorporate,
   onRate,
   loadingRate,
   rateError,
@@ -86,6 +90,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const { loading = false, error: storeError } = customerRate || {};
   const isRating = loadingRate ?? loading;
   const activeError = rateError !== undefined ? rateError : storeError;
+
+  // isCorporate: true shows BUY AMOUNT and MARKUP; false hides them (read from Redux store / prop / localStorage)
+  const storeIsCorporate = useSelector((state: RootState) => state.app.isCorporate);
+  const isCorporate = propIsCorporate !== undefined
+    ? propIsCorporate
+    : (storeIsCorporate ?? (typeof localStorage !== "undefined" && localStorage.getItem("isCorporate") === "true"));
 
   useEffect(() => {
     if (!accessorialsList || accessorialsList.length === 0) {
@@ -106,8 +116,54 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       if (clientMarkupConfig.rate != null) {
         setMarkup(String(clientMarkupConfig.rate));
       }
+      return;
     }
-  }, [clientMarkupConfig]);
+
+    const fetchClientMarkup = async () => {
+      const clientCodeToUse =
+        clientCode ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "DEVTS";
+
+      if (!clientCodeToUse) return;
+
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      try {
+        console.log(`[CustomerRate] Calling GetClientMarkup API for clientCode: ${clientCodeToUse}`);
+        const response = await axios.get(
+          `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCodeToUse)}`,
+          { headers }
+        );
+        console.log("[CustomerRate] GetClientMarkup API response:", response.data);
+
+        if (response.data?.isSuccess && response.data?.data) {
+          const rawData = response.data.data;
+          const config = Array.isArray(rawData) ? rawData[0] : rawData;
+          if (config) {
+            if (config.markupType) {
+              const selectedType = normalizeMarkupType(config.markupType);
+              setMarkupType(selectedType);
+            }
+            if (config.rate != null) {
+              setMarkup(String(config.rate));
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[CustomerRate] Error fetching GetClientMarkup:", error);
+      }
+    };
+
+    fetchClientMarkup();
+  }, [clientCode, clientMarkupConfig]);
 
   // Carrier inputs and autocomplete state
   const [carrierName, setCarrierName] = useState<string>("");
@@ -402,15 +458,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     const fuelItems = rawItems.filter(
       (i) => isFuelCharge(i.code)
     );
-    const discountItems = rawItems.filter(
-      (i) => isDiscountCharge(i.code)
-    );
-
     const totalFreight = freightItems.reduce((acc, i) => acc + (i.buyAmount > 0 ? i.buyAmount : 0), 0);
     const totalFuel = fuelItems.reduce((acc, i) => acc + (i.buyAmount > 0 ? i.buyAmount : 0), 0);
-    const totalDiscount = discountItems.reduce((acc, i) => acc + i.buyAmount, 0); // negative number or 0
     const totalFreightFuel = totalFreight + totalFuel;
-    const netBaseBuy = totalFreight + totalDiscount + totalFuel;
 
     return rawItems.map((item) => {
       const isDiscount = isDiscountCharge(item.code);
@@ -440,47 +490,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         markupSubtext = numericMarkup > 0 ? `${formatShortNum(item.buyAmount)} × ${numericMarkup}% = ${formatShortNum(markupAmt)}` : "";
         customerCalcSubtext = numericMarkup > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
       } else if (markupType === 'netSellRate') {
-        // Net Sell Rate markup: target net transportation sell rate (Freight + Fuel + Discount)
-        const targetSell = numericMarkup;
-        const totalBaseBuy = netBaseBuy > 0 ? netBaseBuy : totalFreightFuel;
-        const totalNetSellMarkup = targetSell > 0 ? targetSell - totalBaseBuy : 0;
-
-        if (isFreight) {
-          if (totalFreightFuel > 0) {
-            const freightProportionPercent = totalFreight / totalFreightFuel;
-            const itemShareOfFreight = totalFreight > 0 ? item.buyAmount / totalFreight : 1;
-            const totalFreightMarkup = totalNetSellMarkup * freightProportionPercent;
-            markupAmt = totalFreightMarkup * itemShareOfFreight;
-
-            const ratioStr = (totalFreight / totalFreightFuel).toFixed(4);
-            markupCalcText = `Net Sell Rate Target: ${formatCurrency(targetSell)}\nBase Net Buy: ${formatCurrency(totalBaseBuy)}\nTotal Markup: ${formatCurrency(totalNetSellMarkup)}\nStep 1 (Proportion): ${formatCurrency(item.buyAmount)} / ${formatCurrency(totalFreightFuel)} = ${ratioStr}\nStep 2 (Markup): ${ratioStr} × ${formatCurrency(totalNetSellMarkup)} = ${formatCurrency(markupAmt)}\nStep 3 (Customer): ${formatCurrency(item.buyAmount)} + ${formatCurrency(markupAmt)} = ${formatCurrency(item.buyAmount + markupAmt)}`;
-            markupSubtext = targetSell > 0 ? `Target ${formatShortNum(targetSell)}: markup ${formatShortNum(markupAmt)}` : "";
-            customerCalcSubtext = targetSell > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
-          } else if (totalFreight > 0) {
-            markupAmt = totalNetSellMarkup * (item.buyAmount / totalFreight);
-            markupCalcText = `Net Sell Rate Target: ${formatCurrency(targetSell)}\nMarkup applied to Freight: ${formatCurrency(markupAmt)}`;
-            markupSubtext = targetSell > 0 ? `Target ${formatShortNum(targetSell)}` : "";
-            customerCalcSubtext = targetSell > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
-          }
-        } else if (isFuel) {
-          if (totalFreightFuel > 0) {
-            const fuelProportionPercent = totalFuel / totalFreightFuel;
-            const itemShareOfFuel = totalFuel > 0 ? item.buyAmount / totalFuel : 1;
-            const totalFuelMarkup = totalNetSellMarkup * fuelProportionPercent;
-            markupAmt = totalFuelMarkup * itemShareOfFuel;
-
-            const ratioStr = (totalFuel / totalFreightFuel).toFixed(4);
-            const pct = (fuelProportionPercent * 100).toFixed(1);
-            markupCalcText = `Net Sell Rate Target: ${formatCurrency(targetSell)}\nBase Net Buy: ${formatCurrency(totalBaseBuy)}\nTotal Markup: ${formatCurrency(totalNetSellMarkup)}\nStep 1 (Proportion): ${formatCurrency(item.buyAmount)} / ${formatCurrency(totalFreightFuel)} = ${ratioStr} (${pct}%)\nStep 2 (Markup): ${ratioStr} × ${formatCurrency(totalNetSellMarkup)} = ${formatCurrency(markupAmt)}\nStep 3 (Customer): ${formatCurrency(item.buyAmount)} + ${formatCurrency(markupAmt)} = ${formatCurrency(item.buyAmount + markupAmt)}`;
-            markupSubtext = targetSell > 0 ? `Target ${formatShortNum(targetSell)}: markup ${formatShortNum(markupAmt)}` : "";
-            customerCalcSubtext = targetSell > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
-          } else if (totalFuel > 0) {
-            markupAmt = totalNetSellMarkup * (item.buyAmount / totalFuel);
-            markupCalcText = `Net Sell Rate Target: ${formatCurrency(targetSell)}\nMarkup applied to Fuel: ${formatCurrency(markupAmt)}`;
-            markupSubtext = targetSell > 0 ? `Target ${formatShortNum(targetSell)}` : "";
-            customerCalcSubtext = targetSell > 0 ? `${formatShortNum(item.buyAmount)} + ${formatShortNum(markupAmt)} = ${formatShortNum(item.buyAmount + markupAmt)}` : "";
-          }
-        }
+        // Net Sell Rate: no automatic markup applied from top input (Customer Amount = Buy Amount unless edited directly in table)
+        markupAmt = 0;
+        markupCalcText = "Net Sell Rate: No markup applied (Customer Amount equals Buy Amount)";
+        markupSubtext = "";
+        customerCalcSubtext = "";
       } else {
         // Flat markup: split proportionally between freight & fuel ONLY
         if (isFreight) {
@@ -844,8 +858,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       <Form layout="vertical" className="compact-form">
 
         {/* Row 1: Carrier + Mark Up (Flat / Percentage / Net Sell Rate) + Rate Button */}
-        <Row gutter={[12, 12]} className="mb-16">
-          <Col xs={24} md={7} lg={7}>
+        <Row gutter={[10, 10]} align="middle" className="mb-16 customer-rate-header-row">
+          <Col xs={24} md={isCorporate ? 6 : 18} lg={isCorporate ? 6 : 18}>
             <Form.Item noStyle>
               <AutoComplete
                 value={carrierName}
@@ -873,47 +887,51 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={14} lg={14}>
-            <div className="text-muted-13 markup-row-wrap">
-              <span className="markup-label">
-                Mark Up
-              </span>
-              <Checkbox
-                checked={markupType === 'flat'}
-                onChange={() => setMarkupType('flat')}
-                className="markup-checkbox"
-              >
-                Flat
-              </Checkbox>
-              <Checkbox
-                checked={markupType === 'percentage'}
-                onChange={() => setMarkupType('percentage')}
-                className="markup-checkbox"
-              >
-                Percentage
-              </Checkbox>
-              <Checkbox
-                checked={markupType === 'netSellRate'}
-                onChange={() => setMarkupType('netSellRate')}
-                className="markup-checkbox"
-              >
-                Net Sell Rate
-              </Checkbox>
-              <div className="markup-input-wrap">
-                {(markupType === 'flat' || markupType === 'netSellRate') && <span className="markup-unit-symbol">$</span>}
-                <Input
-                  value={markup}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9.]/g, '');
-                    setMarkup(val);
-                  }}
-                  className="input-sm-center"
-                />
-                {markupType === 'percentage' && <span className="markup-unit-symbol">%</span>}
+          {isCorporate && (
+            <Col xs={24} md={15} lg={15}>
+              <div className="text-muted-13 markup-row-wrap">
+                <span className="markup-label">
+                  Mark Up
+                </span>
+                <Checkbox
+                  checked={markupType === 'flat'}
+                  onChange={() => setMarkupType('flat')}
+                  className="markup-checkbox"
+                >
+                  Flat
+                </Checkbox>
+                <Checkbox
+                  checked={markupType === 'percentage'}
+                  onChange={() => setMarkupType('percentage')}
+                  className="markup-checkbox"
+                >
+                  Percentage
+                </Checkbox>
+                <Checkbox
+                  checked={markupType === 'netSellRate'}
+                  onChange={() => setMarkupType('netSellRate')}
+                  className="markup-checkbox"
+                >
+                  Net Sell Rate
+                </Checkbox>
+                {markupType !== 'netSellRate' && (
+                  <div className="markup-input-wrap">
+                    {markupType === 'flat' && <span className="markup-unit-symbol">$</span>}
+                    <Input
+                      value={markup}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                        setMarkup(val);
+                      }}
+                      className="input-sm-center"
+                    />
+                    {markupType === 'percentage' && <span className="markup-unit-symbol">%</span>}
+                  </div>
+                )}
               </div>
-            </div>
-          </Col>
-          <Col xs={24} md={3} lg={3}>
+            </Col>
+          )}
+          <Col xs={24} md={isCorporate ? 3 : 6} lg={isCorporate ? 3 : 6}>
             <Button
               type="primary"
               className="btn-success w-100"
@@ -1002,13 +1020,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       <div className="rate-table-wrapper">
         <div className="rate-table-content">
           <div className="rate-header-row">
-            <div className="col-80">CODE</div>
-            <div className="col-flex-1">DESCRIPTION</div>
-            <div className="col-100 text-right">BUY AMOUNT</div>
-            <div className="col-120 text-right">CUSTOMER AMOUNT</div>
-            <div className="col-120 text-right">
-              MARKUP
-            </div>
+            <div className="col-code">CODE</div>
+            <div className="col-desc">DESCRIPTION</div>
+            {isCorporate && <div className="col-buy text-right">BUY AMOUNT</div>}
+            <div className="col-customer text-right">CUSTOMER AMOUNT</div>
+            {isCorporate && <div className="col-markup text-right">MARKUP</div>}
+            {isCorporate && <div className="col-actions" />}
           </div>
           {isRating ? (
             <div className="rate-empty-state">
@@ -1024,8 +1041,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                   onClick={() => setSelectedRowId(selectedRowId === item.id ? null : item.id)}
                   onDoubleClick={() => handleStartEdit(item)}
                 >
-                  <div className="col-80">{item.code}</div>
-                  <div className="col-flex-1">
+                  <div className="col-code">{item.code}</div>
+                  <div className="col-desc">
                     {isEditing && item.isCustom ? (
                       <Input
                         size="small"
@@ -1033,32 +1050,34 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         onChange={(e) => setEditDescription(e.target.value)}
                         onPressEnter={handleSaveEdit}
                         onClick={(e) => e.stopPropagation()}
-                        style={{ width: '100%', maxWidth: 180 }}
+                        className="rate-desc-edit-input"
                       />
                     ) : (
                       <span>{item.description}</span>
                     )}
                   </div>
-                  <div className="col-100 text-right">
-                    {isEditing ? (
-                      <Input
-                        size="small"
-                        prefix="$"
-                        value={editBuyAmount}
-                        onChange={(e) => handleBuyAmountChange(e.target.value)}
-                        onPressEnter={handleSaveEdit}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') handleCancelEdit();
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="rate-inline-edit-input"
-                        autoFocus
-                      />
-                    ) : (
-                      formatCurrency(item.buyAmount)
-                    )}
-                  </div>
-                  <div className="col-120 text-right">
+                  {isCorporate && (
+                    <div className="col-buy text-right">
+                      {isEditing ? (
+                        <Input
+                          size="small"
+                          prefix="$"
+                          value={editBuyAmount}
+                          onChange={(e) => handleBuyAmountChange(e.target.value)}
+                          onPressEnter={handleSaveEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') handleCancelEdit();
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rate-inline-edit-input"
+                          autoFocus
+                        />
+                      ) : (
+                        formatCurrency(item.buyAmount)
+                      )}
+                    </div>
+                  )}
+                  <div className="col-customer text-right">
                     {isEditing ? (
                       <Input
                         size="small"
@@ -1073,89 +1092,84 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         className="rate-inline-edit-input"
                       />
                     ) : (
-                      <div
-                        style={{
-                          fontWeight: 600,
-                          color: item.buyAmount > item.customerAmount ? '#ff4d4f' : 'inherit',
-                        }}
-                      >
+                      <div className={item.buyAmount > item.customerAmount ? "rate-cell-loss" : "rate-markup-val"}>
                         {formatCurrency(item.customerAmount)}
                       </div>
                     )}
                   </div>
-                  <div className="col-120 text-right rate-item-cell-right">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                      {isEditing ? (
-                        <>
-                          <button
-                            type="button"
-                            className="rate-action-btn rate-save-btn"
-                            title="Save"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSaveEdit();
-                            }}
-                          >
-                            <CheckOutlined />
-                          </button>
-                          <button
-                            type="button"
-                            className="rate-action-btn rate-cancel-btn"
-                            title="Cancel"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCancelEdit();
-                            }}
-                          >
-                            <CloseOutlined />
-                          </button>
-                        </>
+                  {isCorporate && (
+                    <div className="col-markup text-right">
+                      {item.isEligibleForMarkup ? (
+                        <span className={`rate-markup-val ${item.markupAmount > 0 ? 'has-markup' : ''}`}>
+                          {formatCurrency(item.markupAmount)}
+                        </span>
                       ) : (
-                        <>
-                          {item.isEligibleForMarkup ? (
-                            <span
-                              style={{
-                                fontWeight: 600,
-                                color: item.markupAmount > 0 ? '#1677ff' : 'inherit',
-                              }}
-                            >
-                              {formatCurrency(item.markupAmount)}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#8c8c8c', fontWeight: 500 }}>-</span>
-                          )}
-
-                          <button
-                            type="button"
-                            className="rate-action-btn rate-edit-btn"
-                            title="Edit charge"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartEdit(item);
-                            }}
-                          >
-                            <EditOutlined />
-                          </button>
-
-                          {!isFreightCharge(item.code, item.description) ? (
-                            <button
-                              type="button"
-                              className="rate-action-btn rate-remove-btn"
-                              title="Remove charge"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveCharge(item.id);
-                              }}
-                            >
-                              <DeleteOutlined />
-                            </button>
-                          ) : (
-                            <span style={{ display: 'inline-block', width: 23 }} />
-                          )}
-                        </>
+                        <span className="rate-markup-dash">-</span>
                       )}
                     </div>
-                  </div>
+                  )}
+                  {isCorporate && (
+                    <div className="col-actions">
+                      <Flex align="center" justify="flex-end" gap={4}>
+                        {isEditing ? (
+                          <>
+                            <button
+                              type="button"
+                              className="rate-action-btn rate-save-btn"
+                              title="Save"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSaveEdit();
+                              }}
+                            >
+                              <CheckOutlined />
+                            </button>
+                            <button
+                              type="button"
+                              className="rate-action-btn rate-cancel-btn"
+                              title="Cancel"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCancelEdit();
+                              }}
+                            >
+                              <CloseOutlined />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="rate-action-btn rate-edit-btn"
+                              title="Edit charge"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartEdit(item);
+                              }}
+                            >
+                              <EditOutlined />
+                            </button>
+
+                            {!isFreightCharge(item.code, item.description) ? (
+                              <button
+                                type="button"
+                                className="rate-action-btn rate-remove-btn"
+                                title="Remove charge"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveCharge(item.id);
+                                }}
+                              >
+                                <DeleteOutlined />
+                              </button>
+                            ) : (
+                              <span className="rate-action-placeholder" />
+                            )}
+                          </>
+                        )}
+                      </Flex>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -1164,42 +1178,51 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               No rates added yet. Click Rate to fetch carrier pricing.
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Totals */}
-      <div className="mt-16">
-        <div className="rate-total-summary-row mb-12 text-muted-13">
-          <div className="col-80"></div>
-          <div className="col-flex-1">Net Freight</div>
-          <div className="col-100 text-right">
-            <strong className="text-dark-13">{formatCurrency(netFreightBuy)}</strong>
-          </div>
-          <div className="col-120 text-right">
-            <strong
-              className="text-dark-13"
-              style={{ color: netFreightBuy > netFreightCustomer ? '#ff4d4f' : undefined }}
-            >
-              {formatCurrency(netFreightCustomer)}
-            </strong>
-          </div>
-          <div className="col-120 text-right">
-            <strong className="text-dark-13">{formatCurrency(netFreightMarkup)}</strong>
-          </div>
-        </div>
-        <div className="rate-total-summary-row mb-16 rate-total-row">
-          <div className="col-80"></div>
-          <div className="col-flex-1">Total</div>
-          <div className="col-100 text-right">
-            <span>{formatCurrency(totalBuy)}</span>
-          </div>
-          <div className="col-120 text-right">
-            <span style={{ color: totalBuy > totalCustomer ? '#ff4d4f' : 'inherit' }}>
-              {formatCurrency(totalCustomer)}
-            </span>
-          </div>
-          <div className="col-120 text-right">
-            <span>{formatCurrency(totalMarkup)}</span>
+          {/* Totals inside rate-table-content for 100% synchronized horizontal alignment */}
+          <div className="rate-totals-section">
+            <div className="rate-total-summary-row mb-12 text-muted-13">
+              <div className="col-code"></div>
+              <div className="col-desc">Net Freight</div>
+              {isCorporate && (
+                <div className="col-buy text-right">
+                  <strong className="text-dark-13">{formatCurrency(netFreightBuy)}</strong>
+                </div>
+              )}
+              <div className="col-customer text-right">
+                <strong
+                  className={`text-dark-13 ${netFreightBuy > netFreightCustomer ? 'rate-cell-loss' : ''}`}
+                >
+                  {formatCurrency(netFreightCustomer)}
+                </strong>
+              </div>
+              {isCorporate && (
+                <div className="col-markup text-right">
+                  <strong className="text-dark-13">{formatCurrency(netFreightMarkup)}</strong>
+                </div>
+              )}
+              {isCorporate && <div className="col-actions" />}
+            </div>
+            <div className="rate-total-summary-row mb-16 rate-total-row">
+              <div className="col-code"></div>
+              <div className="col-desc">Total</div>
+              {isCorporate && (
+                <div className="col-buy text-right">
+                  <span>{formatCurrency(totalBuy)}</span>
+                </div>
+              )}
+              <div className="col-customer text-right">
+                <span className={totalBuy > totalCustomer ? 'rate-cell-loss' : ''}>
+                  {formatCurrency(totalCustomer)}
+                </span>
+              </div>
+              {isCorporate && (
+                <div className="col-markup text-right">
+                  <span>{formatCurrency(totalMarkup)}</span>
+                </div>
+              )}
+              {isCorporate && <div className="col-actions" />}
+            </div>
           </div>
         </div>
       </div>

@@ -145,8 +145,12 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
 
   useEffect(() => {
     if (initialData) {
-      const openTimeFormatted = formatDisplayTime(initialData.openTime) || undefined;
-      const closeTimeFormatted = formatDisplayTime(initialData.closeTime) || undefined;
+      const openTimeFormatted =
+        formatDisplayTime(initialData.openTime) ||
+        form.getFieldValue("openTime");
+      const closeTimeFormatted =
+        formatDisplayTime(initialData.closeTime) ||
+        form.getFieldValue("closeTime");
       form.setFieldsValue({
         companyName: initialData.companyName || "",
         address1: initialData.address1 || "",
@@ -452,7 +456,13 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
       <Form
         layout="vertical"
         form={form}
-        initialValues={{ country: "USA" }}
+        initialValues={{
+          country: "USA",
+          openTime: "08:00 AM",
+          closeTime: "05:00 PM",
+          delOpenTime: "08:00 AM",
+          delCloseTime: "05:00 PM",
+        }}
         onValuesChange={(_, all) => {
           if (onChange) onChange(all);
         }}

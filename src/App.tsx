@@ -17,6 +17,9 @@ import Login from "./pages/Login.tsx";
 import AppRouter from "./router/index.tsx";
 import { login, logout, fetchCountries } from "./store/appSlice.ts";
 import { fetchAccessorials } from "./store/accessorialsSlice";
+import { fetchEquipment } from "./store/equipmentSlice";
+import { fetchServiceLevel } from "./store/serviceLevelSlice";
+import { fetchPaymentTerm } from "./store/paymentTermSlice";
 import {
   saveCustomerProduct,
   setProducts as setProductsInStore,
@@ -92,6 +95,9 @@ function App() {
     if (isAuthenticated) {
       dispatch(fetchAccessorials());
       dispatch(fetchCountries());
+      dispatch(fetchEquipment());
+      dispatch(fetchServiceLevel());
+      dispatch(fetchPaymentTerm());
     }
   }, [isAuthenticated, dispatch]);
 
