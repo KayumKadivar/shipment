@@ -5,9 +5,11 @@ import {
   SearchOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { Button, Empty, Input, Select, Spin, Result, message } from "antd";
+import { Button, Checkbox, Empty, Input, Select, Spin, Result, message } from "antd";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import axios from "axios";
+import { API_BASE_URL, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
 import {
   COST_CODE_GROSS,
@@ -29,11 +31,35 @@ import {
   type ViewMode,
 } from "./Rate";
 
+const normalizeMarkupType = (
+  raw?: string,
+): "flat" | "percentage" | "netSellRate" => {
+  if (!raw) return "flat";
+  const clean = String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
+  if (clean.includes("percent")) return "percentage";
+  if (
+    clean.includes("netsell") ||
+    clean.includes("sellrate") ||
+    clean.includes("net") ||
+    clean.includes("sell")
+  )
+    return "netSellRate";
+  if (clean.includes("flat")) return "flat";
+  return "flat";
+};
+
 function QuoteRateDetail() {
   const navigate = useNavigate();
   const { reference } = useParams<{ reference: string }>();
   const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
+
+  // Markup state
+  const [markupType, setMarkupType] = useState<"flat" | "percentage" | "netSellRate">("flat");
+  const [markup, setMarkup] = useState<string>("0");
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("rate-asc");
@@ -54,6 +80,49 @@ function QuoteRateDetail() {
     }
     dispatch(fetchAccessorials());
   }, [dispatch, reference]);
+
+  useEffect(() => {
+    const fetchClientMarkup = async () => {
+      const clientCodeToUse =
+        apiQuote?.clientCode ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "DEVTS";
+
+      if (!clientCodeToUse) return;
+
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCodeToUse)}`,
+          { headers },
+        );
+        if (response.data?.isSuccess && response.data?.data) {
+          const rawData = response.data.data;
+          const config = Array.isArray(rawData) ? rawData[0] : rawData;
+          if (config) {
+            if (config.markupType) {
+              setMarkupType(normalizeMarkupType(config.markupType));
+            }
+            if (config.rate != null) {
+              setMarkup(String(config.rate));
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[QuoteRateDetail] Error fetching GetClientMarkup:", error);
+      }
+    };
+
+    fetchClientMarkup();
+  }, [apiQuote?.clientCode]);
 
   const originCountry = apiQuote?.originCountry || "USA";
   const destCountry = apiQuote?.destinationCountry || "USA";
@@ -292,7 +361,11 @@ function QuoteRateDetail() {
               clientCode: quoteToSend.clientCode || "Devts",
             }
           : undefined,
-        selectedCarrier: rate,
+        selectedCarrier: {
+          ...rate,
+          markupType,
+          markup,
+        },
         reference,
       },
     });
@@ -572,9 +645,54 @@ function QuoteRateDetail() {
           </div>
 
           {!loading && (
-            <p className='rate-results-count'>
-              {`Showing ${visibleRates.length} of ${rates.length} carriers`}
-            </p>
+            <div className='rate-results-subbar'>
+              <p className='rate-results-count'>
+                {`Showing ${visibleRates.length} of ${rates.length} carriers`}
+              </p>
+              <div className='text-muted-13 markup-row-wrap quote-summary-markup'>
+                <span className='markup-label'>Mark Up</span>
+                <Checkbox
+                  checked={markupType === "flat"}
+                  onChange={() => setMarkupType("flat")}
+                  className='markup-checkbox'
+                >
+                  Flat
+                </Checkbox>
+                <Checkbox
+                  checked={markupType === "percentage"}
+                  onChange={() => setMarkupType("percentage")}
+                  className='markup-checkbox'
+                >
+                  %
+                </Checkbox>
+                <Checkbox
+                  checked={markupType === "netSellRate"}
+                  onChange={() => setMarkupType("netSellRate")}
+                  className='markup-checkbox'
+                >
+                  Net Sell Rate
+                </Checkbox>
+                <div className='markup-input-wrap'>
+                  {(markupType === "flat" || markupType === "netSellRate") && (
+                    <span className='markup-unit-symbol'>$</span>
+                  )}
+                  <Input
+                    value={markup}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, "");
+                      setMarkup(val);
+                    }}
+                    className='input-sm-center'
+                  />
+                  {markupType === "percentage" && (
+                    <span className='markup-unit-symbol'>%</span>
+                  )}
+                </div>
+                <Button className='markup-apply-btn'>
+                  Apply
+                </Button>
+              </div>
+            </div>
           )}
 
           {loading && (

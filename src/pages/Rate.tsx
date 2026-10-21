@@ -13,9 +13,11 @@ import {
   useLoadScript,
   type Libraries,
 } from "@react-google-maps/api";
-import { Button, Empty, Input, Select, Spin, message } from "antd";
+import { Button, Checkbox, Empty, Input, Select, Spin, message } from "antd";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { API_BASE_URL, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
 import { fetchCarrierLogo, saveCustomerQuote, clearQuoteFormData } from "../store/customerRateSlice";
 // import abfLogo from "../assets/image 55.png";
@@ -381,9 +383,6 @@ export function CarrierCard({
               <dt>Gross Charge : {rate.grossCharge}</dt>
               <dt>Discount : {rate.discount}</dt>
               <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
-              {/* <dt>Gross Charge : {rate.grossCharge?.toLocaleString("en-US", { style: "currency", currency: "USD" })}</dt>
-              <dt>Discount : {rate.discount?.toLocaleString("en-US", { style: "currency", currency: "USD" })}</dt>
-              <dt>Fuel Surcharge : {rate.fuelSurcharge?.toLocaleString("en-US", { style: "currency", currency: "USD" })}</dt> */}
             </div>
             <div className='rate-detail-accessorials'>
               {rate.accessorialCharges?.map((charge, idx) => (
@@ -397,10 +396,35 @@ export function CarrierCard({
   );
 }
 
+const normalizeMarkupType = (
+  raw?: string,
+): "flat" | "percentage" | "netSellRate" => {
+  if (!raw) return "flat";
+  const clean = String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, "");
+  if (clean.includes("percent")) return "percentage";
+  if (
+    clean.includes("netsell") ||
+    clean.includes("sellrate") ||
+    clean.includes("net") ||
+    clean.includes("sell")
+  )
+    return "netSellRate";
+  if (clean.includes("flat")) return "flat";
+  return "flat";
+};
+
 function Rate() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
+
+  // Markup state
+  const [markupType, setMarkupType] = useState<"flat" | "percentage" | "netSellRate">("flat");
+  const [markup, setMarkup] = useState<string>("0");
+
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("rate-asc");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -426,6 +450,49 @@ function Rate() {
   const shipmentDate = quoteRequest?.shipmentDate 
     ? new Date(quoteRequest.shipmentDate).toLocaleDateString("en-US", { month: '2-digit', day: '2-digit', year: 'numeric' })
     : "";
+
+  useEffect(() => {
+    const fetchClientMarkup = async () => {
+      const clientCodeToUse =
+        quoteRequest?.clientCode ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "DEVTS";
+
+      if (!clientCodeToUse) return;
+
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCodeToUse)}`,
+          { headers },
+        );
+        if (response.data?.isSuccess && response.data?.data) {
+          const rawData = response.data.data;
+          const config = Array.isArray(rawData) ? rawData[0] : rawData;
+          if (config) {
+            if (config.markupType) {
+              setMarkupType(normalizeMarkupType(config.markupType));
+            }
+            if (config.rate != null) {
+              setMarkup(String(config.rate));
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[Rate] Error fetching GetClientMarkup:", error);
+      }
+    };
+
+    fetchClientMarkup();
+  }, [quoteRequest?.clientCode]);
 
   const visibleRates = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -766,9 +833,54 @@ function Rate() {
           </div>
 
           {!loadingRates && (
-            <p className='rate-results-count'>
-              {`Showing ${visibleRates.length} of ${(ratesFromStore || []).length} carriers`}
-            </p>
+            <div className='rate-results-subbar'>
+              <p className='rate-results-count'>
+                {`Showing ${visibleRates.length} of ${(ratesFromStore || []).length} carriers`}
+              </p>
+              <div className='text-muted-13 markup-row-wrap quote-summary-markup'>
+                <span className='markup-label'>Mark Up</span>
+                <Checkbox
+                  checked={markupType === "flat"}
+                  onChange={() => setMarkupType("flat")}
+                  className="markup-checkbox"
+                >
+                  Flat
+                </Checkbox>
+                <Checkbox
+                  checked={markupType === "percentage"}
+                  onChange={() => setMarkupType("percentage")}
+                  className="markup-checkbox"
+                >
+                  %
+                </Checkbox>
+                <Checkbox
+                  checked={markupType === "netSellRate"}
+                  onChange={() => setMarkupType("netSellRate")}
+                  className="markup-checkbox"
+                >
+                  Net Sell Rate
+                </Checkbox>
+                <div className="markup-input-wrap">
+                  {(markupType === "flat" || markupType === "netSellRate") && (
+                    <span className="markup-unit-symbol">$</span>
+                  )}
+                  <Input
+                    value={markup}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, "");
+                      setMarkup(val);
+                    }}
+                    className="input-sm-center"
+                  />
+                  {markupType === "percentage" && (
+                    <span className="markup-unit-symbol">%</span>
+                  )}
+                </div>
+                <Button className="markup-apply-btn">
+                  Apply
+                </Button>
+              </div>
+            </div>
           )}
           {loadingRates && (
             <div style={{ textAlign: "center", padding: "40px 0" }}>

@@ -4,7 +4,20 @@ import {
   TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { Button, Checkbox, Input, Select, AutoComplete, Spin, DatePicker, message, Form, Alert, Tooltip, Modal } from "antd";
+import {
+  Button,
+  Checkbox,
+  Input,
+  Select,
+  AutoComplete,
+  Spin,
+  DatePicker,
+  message,
+  Form,
+  Alert,
+  Tooltip,
+  Modal,
+} from "antd";
 import type { FormItemProps } from "antd";
 import CountrySelect from "../components/CountrySelect";
 import React, { useMemo, useState, useEffect, useRef } from "react";
@@ -15,9 +28,19 @@ import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import { fetchAccessorials } from "../store/accessorialsSlice";
-import { fetchCarrierRates, setQuoteFormData, clearQuoteFormData, clearRateError, type QuoteFormPackage } from "../store/customerRateSlice";
+import {
+  fetchCarrierRates,
+  setQuoteFormData,
+  clearQuoteFormData,
+  clearRateError,
+  type QuoteFormPackage,
+} from "../store/customerRateSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
-import { API_BASE_URL, SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
+import {
+  API_BASE_URL,
+  SRV_TOKEN,
+  DEFAULT_CLIENT_CODE,
+} from "../config/apiConfig";
 import axios from "axios";
 
 type ItemField =
@@ -92,7 +115,8 @@ const normalizePackages = (pkgs?: QuoteFormPackage[]): QuotePackage[] => {
       ...createItem(),
       ...item,
       units: item.units !== undefined && item.units !== "" ? item.units : "1",
-      pieces: item.pieces !== undefined && item.pieces !== "" ? item.pieces : "1",
+      pieces:
+        item.pieces !== undefined && item.pieces !== "" ? item.pieces : "1",
       hazMatProperShippingName: item.hazMatProperShippingName ?? "",
       hazMatPackingGroup: item.hazMatPackingGroup ?? "",
       hazMatPhone: item.hazMatPhone ?? "",
@@ -143,6 +167,21 @@ const classOptions = [
   "500",
 ].map((value) => ({ value, label: value }));
 
+const parsePostalString = (str?: string | null) => {
+  if (!str || !str.includes(" - ")) return null;
+  const parts = str.split(" - ");
+  const zip = parts[0]?.trim();
+  const locationPart = parts.slice(1).join(" - ").trim();
+  if (!locationPart || !locationPart.includes(",")) return null;
+  const locParts = locationPart.split(",");
+  const c = locParts[0]?.trim();
+  const s = locParts.slice(1).join(",").trim();
+  if (c && s) {
+    return { zip, city: c, state: s };
+  }
+  return null;
+};
+
 function QuoteLocationCard({
   title,
   zipLabel,
@@ -183,187 +222,266 @@ function QuoteLocationCard({
   const { searchPostals, loadingPostal } = usePostalLookup();
   const zipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const postalRef = useRef(postal);
-  const [postalOptions, setPostalOptions] = useState<{ value: string; label: string; city: string; state: string; key: string }[]>([]);
+  const cityRef = useRef(city || "");
+  const stateRef = useRef(state || "");
+  const [postalOptions, setPostalOptions] = useState<
+    { value: string; label: string; city: string; state: string; key: string }[]
+  >([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const isFocusedRef = useRef(false);
 
+  useEffect(() => {
+    postalRef.current = postal;
+  }, [postal]);
+
+  useEffect(() => {
+    if (city) {
+      cityRef.current = city;
+    }
+  }, [city]);
+
+  useEffect(() => {
+    if (state) {
+      stateRef.current = state;
+    }
+  }, [state]);
+
   const handleSearchPostal = (value: string) => {
-    if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
-    const searchVal = value.split(' - ')[0];
-    if (searchVal.length >= 3) {
+    if (zipTimeoutRef.current) {
+      clearTimeout(zipTimeoutRef.current);
+    }
+
+    if (value && value.includes(" - ")) {
+      setDropdownOpen(false);
+      return;
+    }
+
+    const trimmed = (value || "").trim();
+    const cleanZip = trimmed.split(" - ")[0].trim();
+    setPostal(trimmed);
+    postalRef.current = trimmed;
+
+    if (cleanZip.length >= 3) {
+      if (isFocusedRef.current) {
+        setDropdownOpen(true);
+      }
       zipTimeoutRef.current = setTimeout(async () => {
-        const results = await searchPostals(searchVal, country);
-        
+        const currentCountry = country || form.getFieldValue(countryName) || "USA";
+        const results = await searchPostals(cleanZip, currentCountry);
+
         if (results && results.length === 1) {
-          const full = `${results[0].postalCode || searchVal} - ${results[0].city}, ${results[0].state}`;
+          const full = `${results[0].postalCode || cleanZip} - ${results[0].city}, ${results[0].state}`;
+          form.setFieldsValue({
+            [postalName]: full,
+          });
           setPostal(full);
           setCity(results[0].city);
           setState(results[0].state);
-          form.setFieldsValue({ [postalName]: full });
-          form.validateFields([postalName]).catch(() => {});
+          cityRef.current = results[0].city;
+          stateRef.current = results[0].state;
+          postalRef.current = full;
           setPostalOptions([]);
           setDropdownOpen(false);
         } else if (results && results.length > 1) {
-          const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || searchVal}|${r.city}|${r.state}`)))
-            .map(str => {
-              const [p, c, s] = str.split('|');
-              return { postalCode: p, city: c, state: s };
-            });
+          const uniqueResults = Array.from(
+            new Set(
+              results.map(
+                (r) => `${r.postalCode || cleanZip}|${r.city}|${r.state}`,
+              ),
+            ),
+          ).map((str) => {
+            const [p, c, s] = str.split("|");
+            return { postalCode: p, city: c, state: s };
+          });
+
           setPostalOptions(
-            uniqueResults.map((r, idx) => ({
-              value: `${r.postalCode} - ${r.city}, ${r.state}`,
-              label: `${r.postalCode} - ${r.city}, ${r.state}`,
-              city: r.city,
-              state: r.state,
-              key: `postal-${idx}`
-            }))
+            uniqueResults.map((r, idx) => {
+              const full = `${r.postalCode} - ${r.city}, ${r.state}`;
+              return {
+                value: full,
+                label: full,
+                postalCode: r.postalCode,
+                city: r.city,
+                state: r.state,
+                key: `postal-${idx}`,
+              };
+            }),
           );
           if (isFocusedRef.current) {
             setDropdownOpen(true);
           }
         } else {
           setPostalOptions([]);
-          setDropdownOpen(false);
         }
-      }, 600);
+      }, 300);
     } else {
       setPostalOptions([]);
       setDropdownOpen(false);
     }
   };
 
-  const handleSelectPostal = (value: string, option: { city: string; state: string }) => {
-    setPostal(value);
-    setCity(option.city);
-    setState(option.state);
-    form.setFieldsValue({ [postalName]: value });
-    form.validateFields([postalName]).catch(() => {});
+  const handleSelectPostal = (value: string, option: any) => {
+    const full = option?.label || value;
+    form.setFieldsValue({
+      [postalName]: full,
+    });
+    setPostal(full);
+    postalRef.current = full;
+    const optCity = option?.city || parsePostalString(full)?.city || "";
+    const optState = option?.state || parsePostalString(full)?.state || "";
+    if (optCity) {
+      cityRef.current = optCity;
+      setCity(optCity);
+    }
+    if (optState) {
+      stateRef.current = optState;
+      setState(optState);
+    }
     setDropdownOpen(false);
   };
 
   const handlePostalBlur = async () => {
     isFocusedRef.current = false;
-    const val = postalRef.current;
-    if (!val) return;
-    const searchVal = val.split(' - ')[0];
-    if (searchVal.length < 3) return;
-    if (zipTimeoutRef.current) clearTimeout(zipTimeoutRef.current);
-    const results = await searchPostals(searchVal, country);
+    const postalVal = form.getFieldValue(postalName);
+    if (!postalVal) return;
+
+    if (String(postalVal).includes(" - ")) {
+      setDropdownOpen(false);
+      const parsed = parsePostalString(String(postalVal));
+      if (parsed) {
+        if (!cityRef.current || !stateRef.current) {
+          cityRef.current = parsed.city;
+          stateRef.current = parsed.state;
+          setCity(parsed.city);
+          setState(parsed.state);
+        }
+      }
+      return;
+    }
+
+    if (zipTimeoutRef.current) {
+      clearTimeout(zipTimeoutRef.current);
+    }
+
+    const cleanZip = String(postalVal).split(" - ")[0].trim();
+    if (cleanZip.length < 3) return;
+
+    const currentCountry = country || form.getFieldValue(countryName) || "USA";
+    const results = await searchPostals(cleanZip, currentCountry);
+
     if (results && results.length === 1) {
-      const full = `${results[0].postalCode || searchVal} - ${results[0].city}, ${results[0].state}`;
+      const full = `${results[0].postalCode || cleanZip} - ${results[0].city}, ${results[0].state}`;
+      form.setFieldsValue({
+        [postalName]: full,
+      });
       setPostal(full);
       setCity(results[0].city);
       setState(results[0].state);
-      form.setFieldsValue({ [postalName]: full });
-      form.validateFields([postalName]).catch(() => {});
+      cityRef.current = results[0].city;
+      stateRef.current = results[0].state;
+      postalRef.current = full;
       setPostalOptions([]);
-      setDropdownOpen(false);
     } else if (results && results.length > 1) {
-      const uniqueResults = Array.from(new Set(results.map(r => `${r.postalCode || searchVal}|${r.city}|${r.state}`)))
-        .map(str => {
-          const [p, c, s] = str.split('|');
-          return { postalCode: p, city: c, state: s };
-        });
+      const uniqueResults = Array.from(
+        new Set(
+          results.map(
+            (r) => `${r.postalCode || cleanZip}|${r.city}|${r.state}`,
+          ),
+        ),
+      ).map((str) => {
+        const [p, c, s] = str.split("|");
+        return { postalCode: p, city: c, state: s };
+      });
+
       setPostalOptions(
-        uniqueResults.map((r, idx) => ({
-          value: `${r.postalCode} - ${r.city}, ${r.state}`,
-          label: `${r.postalCode} - ${r.city}, ${r.state}`,
-          city: r.city,
-          state: r.state,
-          key: `postal-${idx}`
-        }))
+        uniqueResults.map((r, idx) => {
+          const full = `${r.postalCode} - ${r.city}, ${r.state}`;
+          return {
+            value: full,
+            label: full,
+            postalCode: r.postalCode,
+            city: r.city,
+            state: r.state,
+            key: `postal-${idx}`,
+          };
+        }),
       );
     }
   };
 
   return (
-    <section className='new-quote-card quote-location-card'>
-      <header className='new-quote-card__header'>
+    <section className="new-quote-card quote-location-card">
+      <header className="new-quote-card__header">
         <h2>{title}</h2>
-        <Button size='small' icon={<TeamOutlined />}>
+        <Button size="small" icon={<TeamOutlined />}>
           Address Book
         </Button>
       </header>
-      <div className='quote-location-card__body'>
+      <div className="quote-location-card__body">
         {includeDate ? (
           <Form.Item
-            className='new-quote-field quote-location-card__date'
-            label='Pickup Date'
-            name={dateName || 'pickupDate'}
+            className="new-quote-field quote-location-card__date"
+            label="Pickup Date"
+            name={dateName || "pickupDate"}
             required
-            rules={[{ required: true, message: 'Pickup Date is required' }]}
+            rules={[{ required: true, message: "Pickup Date is required" }]}
           >
             <DatePicker
-              style={{ width: '100%' }}
+              style={{ width: "100%" }}
               format="MM-DD-YYYY"
-              aria-label='Pickup date'
+              aria-label="Pickup date"
               value={date ? dayjs(date) : null}
               onChange={(d) => {
                 const val = d ? d.format("YYYY-MM-DD") : null;
                 setDate?.(val);
-                form.setFieldsValue({ [dateName || 'pickupDate']: d });
-                form.validateFields([dateName || 'pickupDate']).catch(() => {});
+                form.setFieldsValue({ [dateName || "pickupDate"]: d });
+                form.validateFields([dateName || "pickupDate"]).catch(() => {});
               }}
             />
           </Form.Item>
         ) : null}
+
         <Form.Item
-          className='new-quote-field'
+          className="new-quote-field"
+          style={{ width: "100%" }}
           label={zipLabel}
           name={postalName}
           required
-          rules={[
-            { required: true, message: `${zipLabel} is required` },
-            {
-              validator: (_, value) => {
-                if (!value || String(value).trim() === "") {
-                  return Promise.resolve();
-                }
-                const clean = String(value).split(" - ")[0].trim();
-                if (clean.length < 3) {
-                  return Promise.reject(new Error(`${zipLabel} must be at least 3 digits`));
-                }
-                if (!city || !state) {
-                  return Promise.reject(new Error("Please select location from dropdown"));
-                }
-                return Promise.resolve();
-              },
-            },
-          ]}
+          rules={[{ required: true, message: `${zipLabel} is required` }]}
         >
           <AutoComplete
-            value={postal}
+            style={{ width: "100%" }}
+            filterOption={false}
             options={postalOptions}
+            popupStyle={{ minWidth: 250 }}
             onSearch={handleSearchPostal}
             onSelect={handleSelectPostal}
-            onChange={(val) => {
-              setPostal(val);
-              postalRef.current = val;
-              form.setFieldsValue({ [postalName]: val });
-            }}
             onFocus={() => {
               isFocusedRef.current = true;
+              const val = form.getFieldValue(postalName);
               if (postalOptions.length > 0) {
                 setDropdownOpen(true);
+              } else if (val && String(val).trim().length >= 3 && !String(val).includes(" - ")) {
+                handleSearchPostal(String(val).trim());
               }
             }}
             onBlur={handlePostalBlur}
-            disabled={loadingPostal}
-            notFoundContent={loadingPostal ? <Spin size="small" /> : null}
             open={dropdownOpen}
             onDropdownVisibleChange={(visible) => setDropdownOpen(visible)}
+            placeholder="ZIP / Postal"
+            notFoundContent={loadingPostal ? <Spin size="small" /> : null}
           />
         </Form.Item>
 
         <Form.Item
-          className='new-quote-field'
-          label='Country'
+          className="new-quote-field"
+          label="Country"
           name={countryName}
           required
-          rules={[{ required: true, message: 'Country is required' }]}
+          rules={[{ required: true, message: "Country is required" }]}
         >
           <CountrySelect
-            className='quote-country-select'
+            className="quote-country-select"
             value={country}
             onChange={(val: string) => {
               setCountry(val);
@@ -390,8 +508,13 @@ const ItemTooltipWrapper: React.FC<ItemTooltipWrapperProps> = ({
   const { status, errors } = Form.Item.useStatus();
   const hasError = status === "error" && Boolean(errors && errors.length > 0);
   const errorMessage = hasError ? (errors[0] as string) : "";
-  const validChild = React.isValidElement(children) ? (children as React.ReactElement<any>) : null;
-  const childProps = (validChild ? validChild.props : {}) as Record<string, any>;
+  const validChild = React.isValidElement(children)
+    ? (children as React.ReactElement<any>)
+    : null;
+  const childProps = (validChild ? validChild.props : {}) as Record<
+    string,
+    any
+  >;
 
   return (
     <Tooltip
@@ -435,13 +558,8 @@ const ItemFormItem: React.FC<FormItemProps> = ({
   ...restProps
 }) => {
   return (
-    <Form.Item
-      {...restProps}
-      className={`quote-item-input ${className || ""}`}
-    >
-      <ItemTooltipWrapper>
-        {children}
-      </ItemTooltipWrapper>
+    <Form.Item {...restProps} className={`quote-item-input ${className || ""}`}>
+      <ItemTooltipWrapper>{children}</ItemTooltipWrapper>
     </Form.Item>
   );
 };
@@ -450,27 +568,35 @@ function NewQuote() {
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const [form] = Form.useForm();
-  const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
+  const quoteFormData = useAppSelector(
+    (state) => state.customerRate.quoteFormData,
+  );
 
   const [packages, setPackages] = useState<QuotePackage[]>(() =>
     quoteFormData?.packages && quoteFormData.packages.length > 0
       ? normalizePackages(quoteFormData.packages)
-      : [createPackage()]
+      : [createPackage()],
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [accessorialSearch, setAccessorialSearch] = useState("");
   const [selectedAccessorials, setSelectedAccessorials] = useState<string[]>(
-    () => quoteFormData?.selectedAccessorials || []
+    () => quoteFormData?.selectedAccessorials || [],
   );
-  
-  const { data: accessorialOptions } = useAppSelector((state) => state.accessorials);
+
+  const { data: accessorialOptions } = useAppSelector(
+    (state) => state.accessorials,
+  );
   const profileCode = useAppSelector((state) => state.app.profileCode);
   const { clients } = useAppSelector((state) => state.customerLocation);
   const rateLoading = useAppSelector((state) => state.customerRate.loading);
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
-    () => quoteFormData?.selectedClientCode || sessionStorage.getItem("quotes_selectedClientCode") || sessionStorage.getItem("customerLocation_selectedClientCode") || ""
+    () =>
+      quoteFormData?.selectedClientCode ||
+      sessionStorage.getItem("quotes_selectedClientCode") ||
+      sessionStorage.getItem("customerLocation_selectedClientCode") ||
+      "",
   );
 
   useEffect(() => {
@@ -480,18 +606,30 @@ function NewQuote() {
     };
   }, [dispatch]);
 
-  const [origPostal, setOrigPostal] = useState(() => quoteFormData?.origPostal || "");
+  const [origPostal, setOrigPostal] = useState(
+    () => quoteFormData?.origPostal || "",
+  );
   const [origCity, setOrigCity] = useState(() => quoteFormData?.origCity || "");
-  const [origState, setOrigState] = useState(() => quoteFormData?.origState || "");
-  const [origCountry, setOrigCountry] = useState(() => quoteFormData?.origCountry || "USA");
+  const [origState, setOrigState] = useState(
+    () => quoteFormData?.origState || "",
+  );
+  const [origCountry, setOrigCountry] = useState(
+    () => quoteFormData?.origCountry || "USA",
+  );
   const [pickupDate, setPickupDate] = useState<string | null>(
-    () => quoteFormData?.pickupDate || dayjs().format("YYYY-MM-DD")
+    () => quoteFormData?.pickupDate || dayjs().format("YYYY-MM-DD"),
   );
 
-  const [destPostal, setDestPostal] = useState(() => quoteFormData?.destPostal || "");
+  const [destPostal, setDestPostal] = useState(
+    () => quoteFormData?.destPostal || "",
+  );
   const [destCity, setDestCity] = useState(() => quoteFormData?.destCity || "");
-  const [destState, setDestState] = useState(() => quoteFormData?.destState || "");
-  const [destCountry, setDestCountry] = useState(() => quoteFormData?.destCountry || "USA");
+  const [destState, setDestState] = useState(
+    () => quoteFormData?.destState || "",
+  );
+  const [destCountry, setDestCountry] = useState(
+    () => quoteFormData?.destCountry || "USA",
+  );
 
   useEffect(() => {
     dispatch(fetchAccessorials());
@@ -503,7 +641,9 @@ function NewQuote() {
   )
     ? selectedClientCode
     : clients.find((client) => client.clientCode === DEFAULT_CLIENT_CODE)
-        ?.clientCode || clients[0]?.clientCode || "";
+        ?.clientCode ||
+      clients[0]?.clientCode ||
+      "";
 
   const handleClientChange = (value: string) => {
     setSelectedClientCode(value);
@@ -515,7 +655,9 @@ function NewQuote() {
     { value: string; key: string; product: any; label: React.ReactNode }[]
   >([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
-  const searchProductTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchProductTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const fetchProducts = async (query = "") => {
     setLoadingProducts(true);
@@ -546,7 +688,7 @@ function NewQuote() {
       const response = await axios.post(
         `${API_BASE_URL}/Product/SearchProducts`,
         payload,
-        { headers }
+        { headers },
       );
 
       console.log("SearchProducts API response:", response.data);
@@ -554,7 +696,7 @@ function NewQuote() {
       let dataList: any[] = [];
       if (response.data?.isSuccess && response.data?.data) {
         const raw = response.data.data;
-        dataList = Array.isArray(raw) ? raw : (raw.items || []);
+        dataList = Array.isArray(raw) ? raw : raw.items || [];
       }
 
       if (dataList.length > 0) {
@@ -574,8 +716,17 @@ function NewQuote() {
             key: `prod-opt-${prod.productId || idx}-${idx}`,
             product: prod,
             label: (
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, padding: "2px 0" }}>
-                <span style={{ fontWeight: 600, color: "#1f2937", fontSize: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                  padding: "2px 0",
+                }}
+              >
+                <span
+                  style={{ fontWeight: 600, color: "#1f2937", fontSize: 12 }}
+                >
                   {prodDesc || "Unnamed Product"}
                 </span>
                 {subtext && (
@@ -620,15 +771,24 @@ function NewQuote() {
       if (quoteFormData.packages && quoteFormData.packages.length > 0) {
         setPackages(normalizePackages(quoteFormData.packages));
       }
-      if (quoteFormData.origPostal !== undefined) setOrigPostal(quoteFormData.origPostal);
-      if (quoteFormData.origCity !== undefined) setOrigCity(quoteFormData.origCity);
-      if (quoteFormData.origState !== undefined) setOrigState(quoteFormData.origState);
-      if (quoteFormData.origCountry !== undefined) setOrigCountry(quoteFormData.origCountry);
-      if (quoteFormData.destPostal !== undefined) setDestPostal(quoteFormData.destPostal);
-      if (quoteFormData.destCity !== undefined) setDestCity(quoteFormData.destCity);
-      if (quoteFormData.destState !== undefined) setDestState(quoteFormData.destState);
-      if (quoteFormData.destCountry !== undefined) setDestCountry(quoteFormData.destCountry);
-      if (quoteFormData.pickupDate !== undefined) setPickupDate(quoteFormData.pickupDate);
+      if (quoteFormData.origPostal !== undefined)
+        setOrigPostal(quoteFormData.origPostal);
+      if (quoteFormData.origCity !== undefined)
+        setOrigCity(quoteFormData.origCity);
+      if (quoteFormData.origState !== undefined)
+        setOrigState(quoteFormData.origState);
+      if (quoteFormData.origCountry !== undefined)
+        setOrigCountry(quoteFormData.origCountry);
+      if (quoteFormData.destPostal !== undefined)
+        setDestPostal(quoteFormData.destPostal);
+      if (quoteFormData.destCity !== undefined)
+        setDestCity(quoteFormData.destCity);
+      if (quoteFormData.destState !== undefined)
+        setDestState(quoteFormData.destState);
+      if (quoteFormData.destCountry !== undefined)
+        setDestCountry(quoteFormData.destCountry);
+      if (quoteFormData.pickupDate !== undefined)
+        setPickupDate(quoteFormData.pickupDate);
       if (quoteFormData.selectedAccessorials !== undefined) {
         setSelectedAccessorials(quoteFormData.selectedAccessorials);
       }
@@ -657,7 +817,11 @@ function NewQuote() {
       });
 
       form.setFieldsValue({
-        pickupDate: quoteFormData.pickupDate ? dayjs(quoteFormData.pickupDate) : (pickupDate ? dayjs(pickupDate) : undefined),
+        pickupDate: quoteFormData.pickupDate
+          ? dayjs(quoteFormData.pickupDate)
+          : pickupDate
+            ? dayjs(pickupDate)
+            : undefined,
         origPostal: quoteFormData.origPostal ?? origPostal,
         origCountry: quoteFormData.origCountry ?? origCountry,
         destPostal: quoteFormData.destPostal ?? destPostal,
@@ -703,9 +867,7 @@ function NewQuote() {
     const query = accessorialSearch.trim().toLowerCase();
     const options = accessorialOptions.map((a) => a.accessorialName);
     const filtered = query
-      ? options.filter((option) =>
-          option.toLowerCase().includes(query),
-        )
+      ? options.filter((option) => option.toLowerCase().includes(query))
       : options;
 
     const selectedSet = new Set(selectedAccessorials);
@@ -716,8 +878,12 @@ function NewQuote() {
   }, [accessorialSearch, accessorialOptions, selectedAccessorials]);
 
   const [isHazmatModalOpen, setIsHazmatModalOpen] = useState(false);
-  const [activeHazmatPackageId, setActiveHazmatPackageId] = useState<string | null>(null);
-  const [activeHazmatItem, setActiveHazmatItem] = useState<QuoteItem | null>(null);
+  const [activeHazmatPackageId, setActiveHazmatPackageId] = useState<
+    string | null
+  >(null);
+  const [activeHazmatItem, setActiveHazmatItem] = useState<QuoteItem | null>(
+    null,
+  );
   const [hazmatForm, setHazmatForm] = useState({
     hazMatUN: "",
     hazMatProperShippingName: "",
@@ -775,7 +941,7 @@ function NewQuote() {
       hazMatPackingGroup: string;
       hazMatPhone: string;
       hazMatContact: string;
-    }
+    },
   ) => {
     setPackages((current) =>
       current.map((quotePackage) =>
@@ -797,8 +963,8 @@ function NewQuote() {
                 };
               }),
             }
-          : quotePackage
-      )
+          : quotePackage,
+      ),
     );
   };
 
@@ -823,8 +989,12 @@ function NewQuote() {
                     hazMat: isStackable ? false : item.hazMat,
                     hazMatClass: isStackable ? "" : item.hazMatClass,
                     hazMatUN: isStackable ? "" : item.hazMatUN,
-                    hazMatProperShippingName: isStackable ? "" : item.hazMatProperShippingName,
-                    hazMatPackingGroup: isStackable ? "" : item.hazMatPackingGroup,
+                    hazMatProperShippingName: isStackable
+                      ? ""
+                      : item.hazMatProperShippingName,
+                    hazMatPackingGroup: isStackable
+                      ? ""
+                      : item.hazMatPackingGroup,
                     hazMatPhone: isStackable ? "" : item.hazMatPhone,
                     hazMatContact: isStackable ? "" : item.hazMatContact,
                   };
@@ -899,11 +1069,13 @@ function NewQuote() {
     try {
       await form.validateFields();
     } catch (errorInfo) {
-      console.log('Form validation failed:', errorInfo);
-      const firstError = document.querySelector('.ant-form-item-has-error');
+      console.log("Form validation failed:", errorInfo);
+      const firstError = document.querySelector(".ant-form-item-has-error");
       if (firstError) {
-        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const inputToFocus = firstError.querySelector('input, .ant-select-selector') as HTMLElement;
+        firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+        const inputToFocus = firstError.querySelector(
+          "input, .ant-select-selector",
+        ) as HTMLElement;
         if (inputToFocus) {
           inputToFocus.focus();
         }
@@ -911,7 +1083,11 @@ function NewQuote() {
       return;
     }
 
-    if (!packages || packages.length === 0 || !packages.some((p) => p.items.length > 0)) {
+    if (
+      !packages ||
+      packages.length === 0 ||
+      !packages.some((p) => p.items.length > 0)
+    ) {
       message.error("Please add at least one item before rating.");
       return;
     }
@@ -949,18 +1125,26 @@ function NewQuote() {
         packageType: i.handlingUnit,
         linearFeet: 0,
         stackable: i.stackable,
-      }))
+      })),
     );
+
+    const parsedOrig = parsePostalString(origPostal);
+    const resolvedOrigCity = origCity || parsedOrig?.city || "";
+    const resolvedOrigState = origState || parsedOrig?.state || "";
+
+    const parsedDest = parsePostalString(destPostal);
+    const resolvedDestCity = destCity || parsedDest?.city || "";
+    const resolvedDestState = destState || parsedDest?.state || "";
 
     const payload = {
       serviceToken: SRV_TOKEN,
-      origZip: origPostal.split(' - ')[0],
-      origCity: origCity,
-      origState: origState,
+      origZip: origPostal.split(" - ")[0].trim(),
+      origCity: resolvedOrigCity,
+      origState: resolvedOrigState,
       origCountry: origCountry,
-      destZip: destPostal.split(' - ')[0],
-      destCity: destCity,
-      destState: destState,
+      destZip: destPostal.split(" - ")[0].trim(),
+      destCity: resolvedDestCity,
+      destState: resolvedDestState,
       destCountry: destCountry,
       hazmatProperShippingName: firstHazmat?.hazMatProperShippingName || "",
       hazmatClass: firstHazmat?.hazMatClass || "",
@@ -974,7 +1158,9 @@ function NewQuote() {
         .map((a) => a.accesorialCode || a.accessorialName),
       profileCode: profileCode,
       clientCode: DEFAULT_CLIENT_CODE,
-      clientName: clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE)?.clientName || "",
+      clientName:
+        clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE)?.clientName ||
+        "",
       scac: undefined,
       shipmentDate: pickupDate || new Date().toISOString(),
       zoneCode: undefined,
@@ -1013,7 +1199,7 @@ function NewQuote() {
         packages,
         selectedAccessorials,
         selectedClientCode: activeClientCode,
-      })
+      }),
     );
 
     console.log("Saving API Request Payload:", payload);
@@ -1026,7 +1212,8 @@ function NewQuote() {
       if (fetchCarrierRates.fulfilled.match(resultAction)) {
         const rates = resultAction.payload;
         if (!rates || rates.length === 0) {
-          const noRatesMsg = "No carrier rates returned from the API for the selected route. Please check shipment and location details.";
+          const noRatesMsg =
+            "No carrier rates returned from the API for the selected route. Please check shipment and location details.";
           setApiError(noRatesMsg);
           message.error(noRatesMsg);
           return;
@@ -1085,13 +1272,13 @@ function NewQuote() {
           freightClass: freshItem.freightClass,
           nmfc: "",
           description: "",
-        }
-      }
+        },
+      },
     });
   };
 
   return (
-    <div className='new-quote-scroll'>
+    <div className="new-quote-scroll">
       <Spin
         fullscreen
         spinning={isSubmitting}
@@ -1100,30 +1287,34 @@ function NewQuote() {
       />
       <Form
         form={form}
-        layout='vertical'
+        layout="vertical"
         colon={false}
         requiredMark={(label, { required }) => (
           <span>
             {label}
-            {required && <span className='quote-required-star'> *</span>}
+            {required && <span className="quote-required-star"> *</span>}
           </span>
         )}
         scrollToFirstError
         onFinish={handleSeeRates}
-        className='new-quote-form'
+        className="new-quote-form"
       >
-        <section className='new-quote-page'>
-          <div className='new-quote-page__topline'>
-            <div className='new-quote-page__top-left'>
-              <button className='new-quote-back' type='button' onClick={() => navigate("/quote-summary")}>
+        <section className="new-quote-page">
+          <div className="new-quote-page__topline">
+            <div className="new-quote-page__top-left">
+              <button
+                className="new-quote-back"
+                type="button"
+                onClick={() => navigate("/quote-summary")}
+              >
                 &larr; All Quotes
               </button>
-              <div className='location-client-row quote-client-dropdown'>
+              <div className="location-client-row quote-client-dropdown">
                 <span>Client:</span>
                 <Select
                   showSearch
                   allowClear
-                  placeholder='Search or select client...'
+                  placeholder="Search or select client..."
                   value={selectedClientCode || undefined}
                   onChange={handleClientChange}
                   style={{ minWidth: 260 }}
@@ -1146,35 +1337,36 @@ function NewQuote() {
                 />
               </div>
             </div>
-            <div className='new-quote-page__top-actions'>
-              <Button danger onClick={handleCancelQuote}>Cancel Quote</Button>
+            <div className="new-quote-page__top-actions">
+              <Button danger onClick={handleCancelQuote}>
+                Cancel Quote
+              </Button>
             </div>
           </div>
 
           {apiError && (
             <div className="quote-error-message">
               <Alert
-                type='error'
+                type="error"
                 showIcon
                 closable
-                message='Rating API Error'
+                message="Rating API Error"
                 description={apiError}
                 onClose={() => setApiError(null)}
-
               />
             </div>
           )}
 
-          <div className='new-quote-layout'>
-            <main className='new-quote-main'>
-              <div className='new-quote-location-grid'>
+          <div className="new-quote-layout">
+            <main className="new-quote-main">
+              <div className="new-quote-location-grid">
                 <QuoteLocationCard
-                  title='Pickup'
-                  zipLabel='Pickup Zip Code'
+                  title="Pickup"
+                  zipLabel="Pickup Zip Code"
                   includeDate
-                  postalName='origPostal'
-                  countryName='origCountry'
-                  dateName='pickupDate'
+                  postalName="origPostal"
+                  countryName="origCountry"
+                  dateName="pickupDate"
                   postal={origPostal}
                   setPostal={setOrigPostal}
                   city={origCity}
@@ -1188,10 +1380,10 @@ function NewQuote() {
                   form={form}
                 />
                 <QuoteLocationCard
-                  title='Destination'
-                  zipLabel='Dest. Zip Code'
-                  postalName='destPostal'
-                  countryName='destCountry'
+                  title="Destination"
+                  zipLabel="Dest. Zip Code"
+                  postalName="destPostal"
+                  countryName="destCountry"
                   postal={destPostal}
                   setPostal={setDestPostal}
                   city={destCity}
@@ -1205,32 +1397,36 @@ function NewQuote() {
               </div>
             </main>
 
-            <aside className='new-quote-aside'>
-              <section className='new-quote-card quote-accessorial-card'>
-                <header className='new-quote-card__header'>
+            <aside className="new-quote-aside">
+              <section className="new-quote-card quote-accessorial-card">
+                <header className="new-quote-card__header">
                   <h2>Accessorials</h2>
                 </header>
                 <Input
-                  className='quote-accessorial-search'
+                  className="quote-accessorial-search"
                   value={accessorialSearch}
-                  placeholder='Search accessorials...'
+                  placeholder="Search accessorials..."
                   allowClear
                   onChange={(event) => setAccessorialSearch(event.target.value)}
                 />
-                <div className='quote-accessorial-list'>
+                <div className="quote-accessorial-list">
                   {visibleAccessorials.map((option) => {
                     const checked = selectedAccessorials.includes(option);
                     return (
-                      <label className={checked ? "is-checked" : ""} key={option}>
+                      <label
+                        className={checked ? "is-checked" : ""}
+                        key={option}
+                      >
                         <Checkbox
                           checked={checked}
                           onChange={(event) =>
                             setSelectedAccessorials((current) =>
                               event.target.checked
-                               ? [...current, option]
+                                ? [...current, option]
                                 : current.filter((value) => value !== option),
                             )
-                          }>
+                          }
+                        >
                           {option}
                         </Checkbox>
                       </label>
@@ -1241,28 +1437,35 @@ function NewQuote() {
             </aside>
           </div>
 
-          <div className='new-quote-packages'>
+          <div className="new-quote-packages">
             {packages.map((quotePackage) => (
               <section
-                className='new-quote-card quote-items-card'
-                key={quotePackage.id}>
-                <header className='new-quote-card__header quote-items-card__header'>
+                className="new-quote-card quote-items-card"
+                key={quotePackage.id}
+              >
+                <header className="new-quote-card__header quote-items-card__header">
                   <h2>Items</h2>
-                  <div className='quote-item-flags'>
-                    <Button size='small' icon={<TeamOutlined />}>
+                  <div className="quote-item-flags">
+                    <Button size="small" icon={<TeamOutlined />}>
                       Inventory
                     </Button>
                   </div>
                 </header>
 
-                <div className='quote-items-table'>
-                  <div className='quote-items-table__head' aria-hidden='true'>
+                <div className="quote-items-table">
+                  <div className="quote-items-table__head" aria-hidden="true">
                     <span>Description</span>
                     <span>Units</span>
-                    <span>Handling Unit <span className='required'>*</span></span>
+                    <span>
+                      Handling Unit <span className="required">*</span>
+                    </span>
                     <span>Pieces</span>
-                    <span>Weight [lbs] <span className='required'>*</span></span>
-                    <span>Class <span className='required'>*</span></span>
+                    <span>
+                      Weight [lbs] <span className="required">*</span>
+                    </span>
+                    <span>
+                      Class <span className="required">*</span>
+                    </span>
                     <span>Dimensions [inches]</span>
                     <span>NMFC</span>
                     <span>Stackable</span>
@@ -1271,12 +1474,12 @@ function NewQuote() {
                   </div>
 
                   {quotePackage.items.map((item) => (
-                    <div className='quote-item-row' key={item.id}>
+                    <div className="quote-item-row" key={item.id}>
                       <AutoComplete
                         value={item.description}
                         options={productOptions}
-                        placeholder='Description'
-                        aria-label='Description'
+                        placeholder="Description"
+                        aria-label="Description"
                         onSearch={handleSearchProducts}
                         onFocus={() => {
                           if (productOptions.length === 0) {
@@ -1290,7 +1493,10 @@ function NewQuote() {
                             "description",
                             value,
                           );
-                          form.setFieldValue(["items", item.id, "description"], value);
+                          form.setFieldValue(
+                            ["items", item.id, "description"],
+                            value,
+                          );
                         }}
                         onSelect={(value, option) => {
                           updateItem(
@@ -1299,41 +1505,111 @@ function NewQuote() {
                             "description",
                             value,
                           );
-                          form.setFieldValue(["items", item.id, "description"], value);
+                          form.setFieldValue(
+                            ["items", item.id, "description"],
+                            value,
+                          );
 
                           const prod = (option as any)?.product;
                           if (prod) {
                             if (prod.productClass) {
-                              updateItem(quotePackage.id, item.id, "freightClass", String(prod.productClass));
-                              form.setFieldValue(["items", item.id, "freightClass"], String(prod.productClass));
+                              updateItem(
+                                quotePackage.id,
+                                item.id,
+                                "freightClass",
+                                String(prod.productClass),
+                              );
+                              form.setFieldValue(
+                                ["items", item.id, "freightClass"],
+                                String(prod.productClass),
+                              );
                             }
                             if (prod.productNMFC) {
-                              updateItem(quotePackage.id, item.id, "nmfc", String(prod.productNMFC));
-                              form.setFieldValue(["items", item.id, "nmfc"], String(prod.productNMFC));
+                              updateItem(
+                                quotePackage.id,
+                                item.id,
+                                "nmfc",
+                                String(prod.productNMFC),
+                              );
+                              form.setFieldValue(
+                                ["items", item.id, "nmfc"],
+                                String(prod.productNMFC),
+                              );
                             }
                             if (prod.weight) {
-                              updateItem(quotePackage.id, item.id, "weight", String(prod.weight));
-                              form.setFieldValue(["items", item.id, "weight"], String(prod.weight));
+                              updateItem(
+                                quotePackage.id,
+                                item.id,
+                                "weight",
+                                String(prod.weight),
+                              );
+                              form.setFieldValue(
+                                ["items", item.id, "weight"],
+                                String(prod.weight),
+                              );
                             }
                             if (prod.length) {
-                              updateItem(quotePackage.id, item.id, "length", String(prod.length));
-                              form.setFieldValue(["items", item.id, "length"], String(prod.length));
+                              updateItem(
+                                quotePackage.id,
+                                item.id,
+                                "length",
+                                String(prod.length),
+                              );
+                              form.setFieldValue(
+                                ["items", item.id, "length"],
+                                String(prod.length),
+                              );
                             }
                             if (prod.width) {
-                              updateItem(quotePackage.id, item.id, "width", String(prod.width));
-                              form.setFieldValue(["items", item.id, "width"], String(prod.width));
+                              updateItem(
+                                quotePackage.id,
+                                item.id,
+                                "width",
+                                String(prod.width),
+                              );
+                              form.setFieldValue(
+                                ["items", item.id, "width"],
+                                String(prod.width),
+                              );
                             }
                             if (prod.height) {
-                              updateItem(quotePackage.id, item.id, "height", String(prod.height));
-                              form.setFieldValue(["items", item.id, "height"], String(prod.height));
+                              updateItem(
+                                quotePackage.id,
+                                item.id,
+                                "height",
+                                String(prod.height),
+                              );
+                              form.setFieldValue(
+                                ["items", item.id, "height"],
+                                String(prod.height),
+                              );
                             }
                             if (prod.isHazmat || prod.hazmat) {
-                              updateItem(quotePackage.id, item.id, "hazMat", true);
-                              form.setFieldValue(["items", item.id, "hazMat"], true);
+                              updateItem(
+                                quotePackage.id,
+                                item.id,
+                                "hazMat",
+                                true,
+                              );
+                              form.setFieldValue(
+                                ["items", item.id, "hazMat"],
+                                true,
+                              );
                             }
                           }
                         }}
-                        notFoundContent={loadingProducts ? <div style={{ padding: '6px 12px', textAlign: 'center' }}><Spin size="small" /></div> : undefined}
+                        notFoundContent={
+                          loadingProducts ? (
+                            <div
+                              style={{
+                                padding: "6px 12px",
+                                textAlign: "center",
+                              }}
+                            >
+                              <Spin size="small" />
+                            </div>
+                          ) : undefined
+                        }
                         className="quote-item-autocomplete"
                       >
                         <Input
@@ -1344,11 +1620,15 @@ function NewQuote() {
                       </AutoComplete>
 
                       <ItemFormItem
-                        name={['items', item.id, 'units']}
+                        name={["items", item.id, "units"]}
                         rules={[
                           {
                             validator: (_, val) => {
-                              if (val !== undefined && val !== "" && (isNaN(Number(val)) || Number(val) <= 0)) {
+                              if (
+                                val !== undefined &&
+                                val !== "" &&
+                                (isNaN(Number(val)) || Number(val) <= 0)
+                              ) {
                                 return Promise.reject(new Error("Must be > 0"));
                               }
                               return Promise.resolve();
@@ -1358,8 +1638,8 @@ function NewQuote() {
                       >
                         <Input
                           value={item.units}
-                          placeholder='1'
-                          aria-label='Units'
+                          placeholder="1"
+                          aria-label="Units"
                           onChange={(event) =>
                             updateItem(
                               quotePackage.id,
@@ -1372,13 +1652,18 @@ function NewQuote() {
                       </ItemFormItem>
 
                       <ItemFormItem
-                        name={['items', item.id, 'handlingUnit']}
-                        rules={[{ required: true, message: "Handling unit is required" }]}
+                        name={["items", item.id, "handlingUnit"]}
+                        rules={[
+                          {
+                            required: true,
+                            message: "Handling unit is required",
+                          },
+                        ]}
                       >
                         <Select
                           value={item.handlingUnit}
                           options={handlingUnitOptions}
-                          aria-label='Handling unit'
+                          aria-label="Handling unit"
                           onChange={(value) =>
                             updateItem(
                               quotePackage.id,
@@ -1391,11 +1676,15 @@ function NewQuote() {
                       </ItemFormItem>
 
                       <ItemFormItem
-                        name={['items', item.id, 'pieces']}
+                        name={["items", item.id, "pieces"]}
                         rules={[
                           {
                             validator: (_, val) => {
-                              if (val !== undefined && val !== "" && (isNaN(Number(val)) || Number(val) <= 0)) {
+                              if (
+                                val !== undefined &&
+                                val !== "" &&
+                                (isNaN(Number(val)) || Number(val) <= 0)
+                              ) {
                                 return Promise.reject(new Error("Must be > 0"));
                               }
                               return Promise.resolve();
@@ -1405,8 +1694,8 @@ function NewQuote() {
                       >
                         <Input
                           value={item.pieces}
-                          placeholder='1'
-                          aria-label='Pieces'
+                          placeholder="1"
+                          aria-label="Pieces"
                           onChange={(event) =>
                             updateItem(
                               quotePackage.id,
@@ -1419,12 +1708,16 @@ function NewQuote() {
                       </ItemFormItem>
 
                       <ItemFormItem
-                        name={['items', item.id, 'weight']}
+                        name={["items", item.id, "weight"]}
                         rules={[
                           { required: true, message: "Weight is required" },
                           {
                             validator: (_, val) => {
-                              if (val !== undefined && val !== "" && (isNaN(Number(val)) || Number(val) <= 0)) {
+                              if (
+                                val !== undefined &&
+                                val !== "" &&
+                                (isNaN(Number(val)) || Number(val) <= 0)
+                              ) {
                                 return Promise.reject(new Error("Must be > 0"));
                               }
                               return Promise.resolve();
@@ -1434,7 +1727,7 @@ function NewQuote() {
                       >
                         <Input
                           value={item.weight}
-                          aria-label='Weight [lbs]'
+                          aria-label="Weight [lbs]"
                           onChange={(event) =>
                             updateItem(
                               quotePackage.id,
@@ -1447,13 +1740,15 @@ function NewQuote() {
                       </ItemFormItem>
 
                       <ItemFormItem
-                        name={['items', item.id, 'freightClass']}
-                        rules={[{ required: true, message: "Class is required" }]}
+                        name={["items", item.id, "freightClass"]}
+                        rules={[
+                          { required: true, message: "Class is required" },
+                        ]}
                       >
                         <Select
                           value={item.freightClass}
                           options={classOptions}
-                          aria-label='Freight class'
+                          aria-label="Freight class"
                           onChange={(value) =>
                             updateItem(
                               quotePackage.id,
@@ -1465,11 +1760,11 @@ function NewQuote() {
                         />
                       </ItemFormItem>
 
-                      <div className='quote-item-combined quote-item-combined--dimensions'>
+                      <div className="quote-item-combined quote-item-combined--dimensions">
                         <Input
                           value={item.length}
-                          placeholder='L'
-                          aria-label='Length'
+                          placeholder="L"
+                          aria-label="Length"
                           onChange={(event) =>
                             updateItem(
                               quotePackage.id,
@@ -1481,8 +1776,8 @@ function NewQuote() {
                         />
                         <Input
                           value={item.width}
-                          placeholder='W'
-                          aria-label='Width'
+                          placeholder="W"
+                          aria-label="Width"
                           onChange={(event) =>
                             updateItem(
                               quotePackage.id,
@@ -1494,8 +1789,8 @@ function NewQuote() {
                         />
                         <Input
                           value={item.height}
-                          placeholder='H'
-                          aria-label='Height'
+                          placeholder="H"
+                          aria-label="Height"
                           onChange={(event) =>
                             updateItem(
                               quotePackage.id,
@@ -1508,7 +1803,7 @@ function NewQuote() {
                       </div>
 
                       <ItemFormItem
-                        name={['items', item.id, 'nmfc']}
+                        name={["items", item.id, "nmfc"]}
                         normalize={(value) => formatNMFC(value || "")}
                         rules={[
                           {
@@ -1516,7 +1811,7 @@ function NewQuote() {
                               !value || isValidNMFC(value)
                                 ? Promise.resolve()
                                 : Promise.reject(
-                                    new Error("NMFC must be XXXXXX-XX")
+                                    new Error("NMFC must be XXXXXX-XX"),
                                   ),
                           },
                         ]}
@@ -1524,8 +1819,8 @@ function NewQuote() {
                         <Input
                           value={item.nmfc}
                           maxLength={9}
-                          placeholder='XXXXXX-XX'
-                          aria-label='NMFC'
+                          placeholder="XXXXXX-XX"
+                          aria-label="NMFC"
                           onChange={(event) =>
                             updateItem(
                               quotePackage.id,
@@ -1539,7 +1834,7 @@ function NewQuote() {
 
                       <Checkbox
                         checked={item.stackable}
-                        aria-label='Stackable'
+                        aria-label="Stackable"
                         onChange={(event) =>
                           updateItem(
                             quotePackage.id,
@@ -1550,10 +1845,16 @@ function NewQuote() {
                         }
                       />
 
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
                         <Checkbox
                           checked={item.hazMat}
-                          aria-label='Hazmat'
+                          aria-label="Hazmat"
                           onChange={(event) => {
                             if (event.target.checked) {
                               handleOpenHazmatModal(quotePackage.id, item);
@@ -1579,7 +1880,9 @@ function NewQuote() {
                               fontWeight: 600,
                               textDecoration: "underline",
                             }}
-                            onClick={() => handleOpenHazmatModal(quotePackage.id, item)}
+                            onClick={() =>
+                              handleOpenHazmatModal(quotePackage.id, item)
+                            }
                           >
                             Edit
                           </span>
@@ -1587,11 +1890,11 @@ function NewQuote() {
                       </div>
 
                       <Button
-                        type='text'
+                        type="text"
                         danger
                         icon={<DeleteOutlined />}
                         disabled={isOnlyItem}
-                        aria-label='Delete item'
+                        aria-label="Delete item"
                         title={
                           isOnlyItem
                             ? "At least one item is required"
@@ -1604,20 +1907,21 @@ function NewQuote() {
                 </div>
 
                 <Button
-                  className='quote-add-item'
-                  size='small'
+                  className="quote-add-item"
+                  size="small"
                   icon={<PlusOutlined />}
-                  onClick={() => addItem(quotePackage.id)}>
+                  onClick={() => addItem(quotePackage.id)}
+                >
                   Add Item
                 </Button>
               </section>
             ))}
           </div>
 
-          <div className='new-quote-rate-actions'>
+          <div className="new-quote-rate-actions">
             <Button
-              type='primary'
-              htmlType='submit'
+              type="primary"
+              htmlType="submit"
               loading={isSubmitting || rateLoading}
             >
               See Rates
@@ -1632,53 +1936,99 @@ function NewQuote() {
           centered
           width={500}
           footer={[
-            <Button key="ok" type="primary" danger onClick={handleHazmatModalOk}>
+            <Button
+              key="ok"
+              type="primary"
+              danger
+              onClick={handleHazmatModalOk}
+            >
               OK
             </Button>,
           ]}
         >
           <div style={{ paddingTop: 16 }}>
-            <Form layout="horizontal" labelCol={{ span: 11 }} wrapperCol={{ span: 13 }} labelAlign="left">
+            <Form
+              layout="horizontal"
+              labelCol={{ span: 11 }}
+              wrapperCol={{ span: 13 }}
+              labelAlign="left"
+            >
               <Form.Item label="HAZMAT UN/NA#" style={{ marginBottom: 12 }}>
                 <Input
                   value={hazmatForm.hazMatUN}
-                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatUN: e.target.value }))}
+                  onChange={(e) =>
+                    setHazmatForm((prev) => ({
+                      ...prev,
+                      hazMatUN: e.target.value,
+                    }))
+                  }
                   placeholder="HAZMAT UN/NA#"
                   autoFocus
                 />
               </Form.Item>
-              <Form.Item label="Hazmat Proper Shipping Name" style={{ marginBottom: 12 }}>
+              <Form.Item
+                label="Hazmat Proper Shipping Name"
+                style={{ marginBottom: 12 }}
+              >
                 <Input
                   value={hazmatForm.hazMatProperShippingName}
-                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatProperShippingName: e.target.value }))}
+                  onChange={(e) =>
+                    setHazmatForm((prev) => ({
+                      ...prev,
+                      hazMatProperShippingName: e.target.value,
+                    }))
+                  }
                   placeholder="Hazmat Proper Shipping Name"
                 />
               </Form.Item>
               <Form.Item label="Hazmat Class" style={{ marginBottom: 12 }}>
                 <Input
                   value={hazmatForm.hazMatClass}
-                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatClass: e.target.value }))}
+                  onChange={(e) =>
+                    setHazmatForm((prev) => ({
+                      ...prev,
+                      hazMatClass: e.target.value,
+                    }))
+                  }
                   placeholder="Hazmat Class"
                 />
               </Form.Item>
-              <Form.Item label="Hazmat Packing Group" style={{ marginBottom: 12 }}>
+              <Form.Item
+                label="Hazmat Packing Group"
+                style={{ marginBottom: 12 }}
+              >
                 <Input
                   value={hazmatForm.hazMatPackingGroup}
-                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatPackingGroup: e.target.value }))}
+                  onChange={(e) =>
+                    setHazmatForm((prev) => ({
+                      ...prev,
+                      hazMatPackingGroup: e.target.value,
+                    }))
+                  }
                   placeholder="Hazmat Packing Group"
                 />
               </Form.Item>
               <Form.Item label="Hazmat Phone" style={{ marginBottom: 12 }}>
                 <Input
                   value={hazmatForm.hazMatPhone}
-                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatPhone: e.target.value }))}
+                  onChange={(e) =>
+                    setHazmatForm((prev) => ({
+                      ...prev,
+                      hazMatPhone: e.target.value,
+                    }))
+                  }
                   placeholder="Hazmat Phone"
                 />
               </Form.Item>
               <Form.Item label="Hazmat Contact" style={{ marginBottom: 4 }}>
                 <Input
                   value={hazmatForm.hazMatContact}
-                  onChange={(e) => setHazmatForm((prev) => ({ ...prev, hazMatContact: e.target.value }))}
+                  onChange={(e) =>
+                    setHazmatForm((prev) => ({
+                      ...prev,
+                      hazMatContact: e.target.value,
+                    }))
+                  }
                   placeholder="Hazmat Contact"
                 />
               </Form.Item>

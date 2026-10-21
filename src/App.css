@@ -867,8 +867,6 @@ body {
   text-transform: uppercase;
 }
 
-
-
 .quote-country-select.ant-select,
 .quote-location-card .ant-select:not(.ant-select-auto-complete) {
   font-size: 11px;
@@ -5366,6 +5364,77 @@ body {
   font-size: 11px;
 }
 
+.rate-results-subbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin: 10px 4px 14px;
+}
+
+.rate-results-subbar .rate-results-count {
+  margin: 0;
+  color: #888a8f;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.quote-summary-markup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  min-height: 32px;
+}
+
+.quote-summary-markup .markup-label {
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  margin-right: 2px;
+  font-size: 13px;
+}
+
+.quote-summary-markup .markup-checkbox {
+  margin-left: 0 !important;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.quote-summary-markup .markup-checkbox .ant-checkbox + span {
+  padding-inline-start: 4px;
+  padding-inline-end: 2px;
+}
+
+.quote-summary-markup .markup-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.quote-summary-markup .markup-unit-symbol {
+  font-weight: 600;
+  color: #333;
+  font-size: 13px;
+}
+
+.quote-summary-markup .input-sm-center {
+  width: 58px;
+  min-width: 58px;
+  padding: 4px 6px;
+}
+
+.quote-summary-markup .markup-apply-btn {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 26px;
+  border-radius: 4px;
+}
+
 .rate-carrier-list {
   display: grid;
   gap: 20px;
@@ -6665,3 +6734,36 @@ body {
 .required {
   color: #df2027;
 }
+
+/* Sleek custom scrollbar for Ant Design dropdowns */
+.ant-select-dropdown ::-webkit-scrollbar,
+.ant-select-dropdown .rc-virtual-list-holder::-webkit-scrollbar,
+.ant-select-dropdown .rc-virtual-list-holder-inner::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ant-select-dropdown ::-webkit-scrollbar-track,
+.ant-select-dropdown .rc-virtual-list-holder::-webkit-scrollbar-track,
+.ant-select-dropdown .rc-virtual-list-holder-inner::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ant-select-dropdown ::-webkit-scrollbar-thumb,
+.ant-select-dropdown .rc-virtual-list-holder::-webkit-scrollbar-thumb,
+.ant-select-dropdown .rc-virtual-list-holder-inner::-webkit-scrollbar-thumb {
+  background: #bfbfbf;
+  border-radius: 4px;
+}
+
+.ant-select-dropdown ::-webkit-scrollbar-thumb:hover,
+.ant-select-dropdown .rc-virtual-list-holder::-webkit-scrollbar-thumb:hover,
+.ant-select-dropdown .rc-virtual-list-holder-inner::-webkit-scrollbar-thumb:hover {
+  background: #8c8c8c;
+}
+
+.ant-select-dropdown,
+.ant-select-dropdown .rc-virtual-list-holder {
+  scrollbar-width: thin;
+  scrollbar-color: #bfbfbf transparent;
+}

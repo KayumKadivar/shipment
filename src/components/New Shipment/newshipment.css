@@ -970,18 +970,42 @@
 }
 
 /* ═══════════════════════════════════════════════
-   CUSTOMER RATE MARKUP ROW STYLES
+   CUSTOMER RATE HEADER & MARKUP RESPONSIVE STYLES
 ═══════════════════════════════════════════════ */
 .customer-rate-header-row {
-  align-items: center;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px 14px !important;
+  flex-wrap: wrap !important;
+  width: 100% !important;
+}
+
+.cr-carrier-col {
+  flex: 1 1 220px;
+  min-width: 190px;
+  max-width: 320px;
+}
+
+.cr-carrier-col .ant-select,
+.cr-carrier-col .ant-select-auto-complete {
+  width: 100%;
+}
+
+.cr-markup-col {
+  flex: 0 1 auto;
+}
+
+.cr-actions-col {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .markup-row-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
+  gap: 8px 12px;
+  flex-wrap: wrap;
   min-height: 32px;
 }
 
@@ -1015,6 +1039,37 @@
   font-weight: 600;
   color: #333;
   font-size: 13px;
+}
+
+@media (max-width: 991px) {
+  .customer-rate-header-row {
+    gap: 10px 12px !important;
+  }
+  .cr-carrier-col {
+    flex: 1 1 200px;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .customer-rate-header-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .cr-carrier-col {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .cr-markup-col {
+    width: 100% !important;
+  }
+  .cr-actions-col {
+    width: 100% !important;
+    margin-left: 0 !important;
+  }
+  .cr-actions-col .ant-flex {
+    justify-content: flex-end !important;
+  }
 }
 
 /* ═══════════════════════════════════════════════

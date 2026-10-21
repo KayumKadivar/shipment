@@ -8,7 +8,8 @@ import {
   Row, Col, Flex, message, Spin, AutoComplete, Tooltip, Modal, Form,
 } from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined } from '@ant-design/icons';
+import { fetchClientsAndSubclients } from '../../store/customerLocationSlice';
 import './newshipment.css';
 import OriginLocation from './OriginLocation';
 import DestinationLocation from './DestinationLocation';
@@ -173,6 +174,72 @@ const NewShipment: React.FC = () => {
   const [destinationForm] = Form.useForm();
 
   const { data: accessorialsList = [], selectedAccessorialIds = [] } = useAppSelector((state) => state.accessorials);
+  const { clients = [] } = useAppSelector((state) => state.customerLocation);
+
+  const [selectedClientCode, setSelectedClientCode] = useState<string>(
+    () =>
+      quote?.clientCode ||
+      sessionStorage.getItem("quotes_selectedClientCode") ||
+      sessionStorage.getItem("customerLocation_selectedClientCode") ||
+      DEFAULT_CLIENT_CODE ||
+      ""
+  );
+
+  useEffect(() => {
+    dispatch(fetchClientsAndSubclients());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (quote?.clientCode) {
+      setSelectedClientCode(quote.clientCode);
+    }
+  }, [quote?.clientCode]);
+
+  useEffect(() => {
+    if (!selectedClientCode && clients.length > 0) {
+      const defaultClient =
+        clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE) || clients[0];
+      if (defaultClient?.clientCode) {
+        setSelectedClientCode(defaultClient.clientCode);
+      }
+    }
+  }, [clients, selectedClientCode]);
+
+  const clientOptions = useMemo(() => {
+    let list = [...clients];
+    if (quote?.clientCode && !list.some((c) => c.clientCode === quote.clientCode)) {
+      list.unshift({
+        clientCode: quote.clientCode,
+        clientName: quote.clientName || quote.clientCode,
+      });
+    }
+    return list.map((client) => ({
+      label: (
+        <span>
+          <UserOutlined style={{ marginRight: 8 }} />
+          {client.clientName}
+        </span>
+      ),
+      value: client.clientCode,
+      searchValue: `${client.clientName} ${client.clientCode}`,
+    }));
+  }, [clients, quote]);
+
+  const selectedClient = useMemo(() => {
+    return (
+      clients.find((c) => c.clientCode === selectedClientCode) ||
+      (quote?.clientCode === selectedClientCode
+        ? { clientName: quote.clientName, clientCode: quote.clientCode }
+        : null)
+    );
+  }, [clients, selectedClientCode, quote]);
+
+  const handleClientChange = (value: string) => {
+    setSelectedClientCode(value);
+    sessionStorage.setItem("quotes_selectedClientCode", value);
+    sessionStorage.setItem("customerLocation_selectedClientCode", value);
+    searchedZipsRef.current = {};
+  };
 
   // Manage multiple product lines from Redux
   const items = useAppSelector((state) => state.product.items);
@@ -330,7 +397,13 @@ const NewShipment: React.FC = () => {
     const fetchLocationsData = async () => {
       const origZip = (quote?.originZip || "").split(' - ')[0].trim();
       const destZip = (quote?.destinationZip || "").split(' - ')[0].trim();
-      const clientCode = quote?.clientCode || sessionStorage.getItem("customerLocation_selectedClientCode") || sessionStorage.getItem("quotes_selectedClientCode") || DEFAULT_CLIENT_CODE || "Devts";
+      const clientCode =
+        selectedClientCode ||
+        quote?.clientCode ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "Devts";
 
       const token = localStorage.getItem("authToken");
       const headers: Record<string, string> = {
@@ -459,7 +532,7 @@ const NewShipment: React.FC = () => {
     };
 
     fetchLocationsData();
-  }, [quote]);
+  }, [quote, selectedClientCode]);
 
   const fetchProducts = async (query: string) => {
     const trimmed = (query || "").trim();
@@ -485,6 +558,7 @@ const NewShipment: React.FC = () => {
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
       const clientCodeToUse =
+        selectedClientCode ||
         quote?.clientCode ||
         sessionStorage.getItem("quotes_selectedClientCode") ||
         sessionStorage.getItem("customerLocation_selectedClientCode") ||
@@ -771,8 +845,8 @@ const NewShipment: React.FC = () => {
       shipments,
       accessorialCodes,
       profileCode: quote?.profileCode,
-      clientCode: quote?.clientCode || DEFAULT_CLIENT_CODE,
-      clientName: quote?.clientName || "",
+      clientCode: selectedClientCode || quote?.clientCode || DEFAULT_CLIENT_CODE,
+      clientName: selectedClient?.clientName || quote?.clientName || "",
       scac: scacToUse,
       shipmentDate: new Date().toISOString(),
       zoneCode: undefined,
@@ -1081,6 +1155,7 @@ const NewShipment: React.FC = () => {
     setIsSavingShipment(true);
     try {
       const clientCodeToUse =
+        selectedClientCode ||
         quote?.clientCode ||
         sessionStorage.getItem("quotes_selectedClientCode") ||
         sessionStorage.getItem("customerLocation_selectedClientCode") ||
@@ -1233,7 +1308,7 @@ const NewShipment: React.FC = () => {
         clientCountryCode: quote?.clientCountryCode || "",
         clientCityName: quote?.clientCityName || "",
         clientEmail: quote?.clientEmail || "",
-        clientName: quote?.clientName || "",
+        clientName: selectedClient?.clientName || quote?.clientName || "",
         clientPhone: quote?.clientPhone || "",
         clientStateCode: quote?.clientStateCode || "",
         clientZipCode: quote?.clientZipCode || "",
@@ -1355,9 +1430,27 @@ const NewShipment: React.FC = () => {
       <Flex justify="space-between" align="flex-start" wrap="wrap" gap={16} className="ns-page-header">
         <div>
           <h1 className="ns-page-title">New Shipment</h1>
-          <Flex align="center" gap={10} >
+          <Flex align="center" gap={10} wrap="wrap">
             <span>Client:</span>
-            <strong>{quote?.clientName || ""}</strong>
+            {!quote ? (
+              <Select
+                id="new-shipment-client-select"
+                showSearch
+                placeholder="Select client..."
+                value={selectedClientCode || undefined}
+                onChange={handleClientChange}
+                style={{ minWidth: 260 }}
+                filterOption={(input, option) =>
+                  String((option as any)?.searchValue || "")
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
+                options={clientOptions}
+                loading={clients.length === 0}
+              />
+            ) : (
+              <strong>{quote?.clientName || selectedClient?.clientName || ""}</strong>
+            )}
             <span className='ns-credit-limit'>Credit limit: $0</span>
           </Flex>
         </div>
@@ -1379,7 +1472,7 @@ const NewShipment: React.FC = () => {
                   initialData={originData}
                   locationsList={originLocationsList}
                   loading={loadingOrigin}
-                  clientCode={quote?.clientCode}
+                  clientCode={selectedClientCode || quote?.clientCode}
                   onChange={(vals) => { originFormValuesRef.current = vals; }}
                   onLocationSelect={(loc) => {
                     const newOrigin = {
@@ -1409,7 +1502,7 @@ const NewShipment: React.FC = () => {
                   initialData={destinationData}
                   locationsList={destinationLocationsList}
                   loading={loadingDestination}
-                  clientCode={quote?.clientCode}
+                  clientCode={selectedClientCode || quote?.clientCode}
                   onChange={(vals) => { destinationFormValuesRef.current = vals; }}
                   onLocationSelect={(loc) => {
                     const newDest = {
@@ -1682,12 +1775,14 @@ const NewShipment: React.FC = () => {
                   }}
                 />
                 {item.hazmat && (
-                  <span
-                    className="hazmat-edit-link"
+                  <Button
                     onClick={() => handleOpenHazmatModal(item)}
-                  >
-                    Edit
-                  </span>
+                    type="text"
+                    icon={<EditOutlined />}
+                    size="small"
+                    title="Edit Hazmat"
+                    danger
+                  />
                 )}
               </div>
 
@@ -1729,12 +1824,12 @@ const NewShipment: React.FC = () => {
             loadingRate={ratesLoading}
             onSelectCarrier={setSelectedCarrierInfo}
             onRateDetailsChange={(rates) => { rateDetailsRef.current = rates; }}
-            clientCode={quote?.clientCode}
+            clientCode={selectedClientCode || quote?.clientCode}
           />
         </Col>
         <Col xs={24} xl={8}>
           <BillToLocation
-            clientCode={quote?.clientCode}
+            clientCode={selectedClientCode || quote?.clientCode}
             onChange={(vals) => { billToValuesRef.current = vals; }}
           />
         </Col>
