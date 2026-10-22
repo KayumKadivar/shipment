@@ -170,6 +170,18 @@ const NewShipment: React.FC = () => {
   const selectedCarrier = prefillData?.selectedCarrier;
   const reference = prefillData?.reference;
 
+  const queryParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const queryRef = queryParams.get("reference") || queryParams.get("ref") || queryParams.get("quoteRequestId");
+
+  const isFromReference = Boolean(
+    reference ||
+    quote?.quoteRequestId ||
+    selectedCarrier ||
+    prefillData?.rate ||
+    queryRef
+  );
+  const [hasRateChanged, setHasRateChanged] = useState<boolean>(false);
+
   const [originForm] = Form.useForm();
   const [destinationForm] = Form.useForm();
 
@@ -679,6 +691,7 @@ const NewShipment: React.FC = () => {
   const handleSelectRateFromModal = (rate: CarrierRate) => {
     setSelectedCarrierRate(rate);
     setIsRateModalOpen(false);
+    setHasRateChanged(false);
     setSelectedCarrierInfo({
       carrierId: rate.code || "",
       carrierName: rate.name || "",
@@ -872,6 +885,7 @@ const NewShipment: React.FC = () => {
     };
 
     try {
+      setIsRateModalOpen(true);
       const res = await dispatch(fetchCarrierRates(payload));
       if (fetchCarrierRates.fulfilled.match(res)) {
         const rates = res.payload;
@@ -879,7 +893,6 @@ const NewShipment: React.FC = () => {
           message.warning("No carrier rates returned from the API for the selected route.");
         } else {
           message.success("Carrier rates updated successfully.");
-          setIsRateModalOpen(true);
         }
       } else {
         const errorMsg = (res.payload as string) || res.error?.message || "Failed to fetch rates from carrier service.";
@@ -1413,7 +1426,7 @@ const NewShipment: React.FC = () => {
     }
   };
 
-  const isPageLoading = Boolean(loadingOrigin || loadingDestination || ratesLoading || isSavingShipment);
+  const isPageLoading = Boolean(loadingOrigin || loadingDestination || isSavingShipment);
 
   return (
     <div className="new-shipment-container">
@@ -1456,8 +1469,21 @@ const NewShipment: React.FC = () => {
         </div>
         <Flex gap={12}>
           <Button danger onClick={() => navigate('/shipments')}>Cancel</Button>
-          <Button onClick={() => { if (!validateProductItems()) return; }}>Save Quote</Button>
-          <Button type="primary" danger loading={isSavingShipment} onClick={handleSaveShipment}>Save Shipment</Button>
+          <Button
+            onClick={() => { if (!validateProductItems()) return; }}
+            disabled={isFromReference && hasRateChanged}
+          >
+            Save Quote
+          </Button>
+          <Button
+            type="primary"
+            danger
+            loading={isSavingShipment}
+            onClick={handleSaveShipment}
+            disabled={isFromReference && hasRateChanged}
+          >
+            Save Shipment
+          </Button>
         </Flex>
       </Flex>
 
@@ -1825,6 +1851,9 @@ const NewShipment: React.FC = () => {
             onSelectCarrier={setSelectedCarrierInfo}
             onRateDetailsChange={(rates) => { rateDetailsRef.current = rates; }}
             clientCode={selectedClientCode || quote?.clientCode}
+            isFromReference={isFromReference}
+            hasRateChanged={hasRateChanged}
+            onRateChanged={setHasRateChanged}
           />
         </Col>
         <Col xs={24} xl={8}>
@@ -1924,8 +1953,22 @@ const NewShipment: React.FC = () => {
       {/* ══ FOOTER BUTTONS ══ */}
       <Flex justify="flex-end" gap={12} wrap="wrap">
         <Button onClick={() => navigate('/shipments')} className="btn-outline">✕ Close</Button>
-        <Button className="btn-outline" onClick={() => { if (!validateProductItems()) return; }}>Save Quote</Button>
-        <Button type="primary" danger loading={isSavingShipment} onClick={handleSaveShipment}>Save Shipment</Button>
+        <Button
+          className="btn-outline"
+          onClick={() => { if (!validateProductItems()) return; }}
+          disabled={isFromReference && hasRateChanged}
+        >
+          Save Quote
+        </Button>
+        <Button
+          type="primary"
+          danger
+          loading={isSavingShipment}
+          onClick={handleSaveShipment}
+          disabled={isFromReference && hasRateChanged}
+        >
+          Save Shipment
+        </Button>
       </Flex>
 
     </div>

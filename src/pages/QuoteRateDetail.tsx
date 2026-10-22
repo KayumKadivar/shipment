@@ -34,12 +34,12 @@ import {
 const normalizeMarkupType = (
   raw?: string,
 ): "flat" | "percentage" | "netSellRate" => {
-  if (!raw) return "flat";
+  if (!raw) return "netSellRate";
   const clean = String(raw)
     .trim()
     .toLowerCase()
     .replace(/[\s_-]/g, "");
-  if (clean.includes("percent")) return "percentage";
+  if (clean.includes("percent")) return "netSellRate";
   if (
     clean.includes("netsell") ||
     clean.includes("sellrate") ||
@@ -47,8 +47,8 @@ const normalizeMarkupType = (
     clean.includes("sell")
   )
     return "netSellRate";
-  if (clean.includes("flat")) return "flat";
-  return "flat";
+  if (clean.includes("flat")) return "netSellRate";
+  return "netSellRate";
 };
 
 function QuoteRateDetail() {
@@ -58,7 +58,7 @@ function QuoteRateDetail() {
   const [messageApi, messageContext] = message.useMessage();
 
   // Markup state
-  const [markupType, setMarkupType] = useState<"flat" | "percentage" | "netSellRate">("flat");
+  const [markupType, setMarkupType] = useState<"flat" | "percentage" | "netSellRate">("netSellRate");
   const [markup, setMarkup] = useState<string>("0");
 
   const [search, setSearch] = useState("");
@@ -652,20 +652,6 @@ function QuoteRateDetail() {
               <div className='text-muted-13 markup-row-wrap quote-summary-markup'>
                 <span className='markup-label'>Mark Up</span>
                 <Checkbox
-                  checked={markupType === "flat"}
-                  onChange={() => setMarkupType("flat")}
-                  className='markup-checkbox'
-                >
-                  Flat
-                </Checkbox>
-                <Checkbox
-                  checked={markupType === "percentage"}
-                  onChange={() => setMarkupType("percentage")}
-                  className='markup-checkbox'
-                >
-                  %
-                </Checkbox>
-                <Checkbox
                   checked={markupType === "netSellRate"}
                   onChange={() => setMarkupType("netSellRate")}
                   className='markup-checkbox'
@@ -673,9 +659,7 @@ function QuoteRateDetail() {
                   Net Sell Rate
                 </Checkbox>
                 <div className='markup-input-wrap'>
-                  {(markupType === "flat" || markupType === "netSellRate") && (
-                    <span className='markup-unit-symbol'>$</span>
-                  )}
+                  <span className='markup-unit-symbol'>$</span>
                   <Input
                     value={markup}
                     onChange={(e) => {
@@ -684,9 +668,6 @@ function QuoteRateDetail() {
                     }}
                     className='input-sm-center'
                   />
-                  {markupType === "percentage" && (
-                    <span className='markup-unit-symbol'>%</span>
-                  )}
                 </div>
                 <Button className='markup-apply-btn'>
                   Apply
