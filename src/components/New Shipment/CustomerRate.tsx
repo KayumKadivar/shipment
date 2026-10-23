@@ -133,12 +133,20 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const storeIsCorporate = useSelector(
     (state: RootState) => state.app.isCorporate,
   );
+  const clients =
+    useSelector((state: RootState) => state.customerLocation?.clients) || [];
+  const selectedClient = clientCode
+    ? clients.find((c) => c.clientCode === clientCode)
+    : undefined;
+
   const isCorporate =
     propIsCorporate !== undefined
       ? propIsCorporate
-      : (storeIsCorporate ??
-        (typeof localStorage !== "undefined" &&
-          localStorage.getItem("isCorporate") === "true"));
+      : (typeof selectedClient?.isCorporate === "boolean"
+          ? selectedClient.isCorporate
+          : (storeIsCorporate ??
+            (typeof localStorage !== "undefined" &&
+              localStorage.getItem("isCorporate") === "true")));
 
   useEffect(() => {
     if (!accessorialsList || accessorialsList.length === 0) {

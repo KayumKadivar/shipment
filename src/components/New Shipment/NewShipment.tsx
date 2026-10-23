@@ -241,7 +241,7 @@ const NewShipment: React.FC = () => {
     return (
       clients.find((c) => c.clientCode === selectedClientCode) ||
       (quote?.clientCode === selectedClientCode
-        ? { clientName: quote.clientName, clientCode: quote.clientCode }
+        ? { clientName: quote.clientName, clientCode: quote.clientCode, isCorporate: undefined }
         : null)
     );
   }, [clients, selectedClientCode, quote]);
@@ -1851,6 +1851,7 @@ const NewShipment: React.FC = () => {
             onSelectCarrier={setSelectedCarrierInfo}
             onRateDetailsChange={(rates) => { rateDetailsRef.current = rates; }}
             clientCode={selectedClientCode || quote?.clientCode}
+            isCorporate={selectedClient?.isCorporate}
             isFromReference={isFromReference}
             hasRateChanged={hasRateChanged}
             onRateChanged={setHasRateChanged}

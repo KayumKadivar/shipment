@@ -60,6 +60,10 @@ const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem("
 const storedUsername = typeof localStorage !== "undefined" ? localStorage.getItem("username") : null;
 const storedProfileCode = typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null;
 const storedIsCorporate = typeof localStorage !== "undefined" ? localStorage.getItem("isCorporate") : null;
+const storedClientCode = typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null;
+const storedClientName = typeof localStorage !== "undefined" ? localStorage.getItem("clientName") : null;
+const storedRatingClientCode = typeof localStorage !== "undefined" ? localStorage.getItem("ratingClientCode") : null;
+const storedRatingProfileCode = typeof localStorage !== "undefined" ? localStorage.getItem("ratingProfileCode") : null;
 
 const initialState: AppState = {
   isAuthenticated: Boolean(storedToken),
@@ -68,6 +72,10 @@ const initialState: AppState = {
   countries: [],
   profileCode: storedProfileCode || null,
   isCorporate: storedIsCorporate !== null ? storedIsCorporate === "true" : null,
+  clientCode: storedClientCode || null,
+  clientName: storedClientName || null,
+  ratingClientCode: storedRatingClientCode || null,
+  ratingProfileCode: storedRatingProfileCode || null,
   loading: false,
   error: null,
 };
@@ -96,7 +104,16 @@ export const fetchCountries = createAsyncThunk<
 );
 
 export const loginUser = createAsyncThunk<
-  { token: string; username: string; profileCode: string | null; isCorporate?: boolean | null },
+  {
+    token: string;
+    username: string;
+    profileCode: string | null;
+    isCorporate?: boolean | null;
+    clientCode?: string | null;
+    clientName?: string | null;
+    ratingClientCode?: string | null;
+    ratingProfileCode?: string | null;
+  },
   { username: string; password: string },
   { rejectValue: string }
 >("app/loginUser", async ({ username, password }, { rejectWithValue }) => {
@@ -120,8 +137,12 @@ export const loginUser = createAsyncThunk<
       const token = response.data.data;
       localStorage.setItem("authToken", token);
       localStorage.setItem("username", username.trim());
-      let profileCode = null;
+      let profileCode: string | null = null;
       let isCorporate: boolean | null = null;
+      let clientCode: string | null = null;
+      let clientName: string | null = null;
+      let ratingClientCode: string | null = null;
+      let ratingProfileCode: string | null = null;
       
       // Call GetClientAndSubclientWithProfiles API
       try {
@@ -135,20 +156,50 @@ export const loginUser = createAsyncThunk<
           }
         );
         if (clientRes.data?.data) {
-          if (clientRes.data.data.profiles?.length > 0) {
-            profileCode = clientRes.data.data.profiles[0].profileCode;
-            localStorage.setItem("profileCode", profileCode as string);
-          }
-          if (typeof clientRes.data.data.isCorporate === "boolean") {
-            isCorporate = clientRes.data.data.isCorporate;
-            localStorage.setItem("isCorporate", String(isCorporate));
+          if (Array.isArray(clientRes.data.data)) {
+            const list = clientRes.data.data;
+            const logged = list.find((c: any) => c.isLoggedClient) || list[0];
+            if (logged) {
+              profileCode = logged.profileCode || null;
+              isCorporate = typeof logged.isCorporate === "boolean" ? logged.isCorporate : null;
+              clientCode = logged.clientCode || null;
+              clientName = logged.clientName || null;
+              ratingClientCode = logged.ratingClientCode ?? null;
+              ratingProfileCode = logged.ratingProfileCode ?? null;
+
+              if (profileCode) localStorage.setItem("profileCode", profileCode);
+              if (isCorporate !== null) localStorage.setItem("isCorporate", String(isCorporate));
+              if (clientCode) localStorage.setItem("clientCode", clientCode);
+              if (clientName) localStorage.setItem("clientName", clientName);
+              if (ratingClientCode) localStorage.setItem("ratingClientCode", ratingClientCode);
+              if (ratingProfileCode) localStorage.setItem("ratingProfileCode", ratingProfileCode);
+            }
+          } else {
+            // Fallback for legacy object format
+            if (clientRes.data.data.profiles?.length > 0) {
+              profileCode = clientRes.data.data.profiles[0].profileCode;
+              localStorage.setItem("profileCode", profileCode as string);
+            }
+            if (typeof clientRes.data.data.isCorporate === "boolean") {
+              isCorporate = clientRes.data.data.isCorporate;
+              localStorage.setItem("isCorporate", String(isCorporate));
+            }
           }
         }
       } catch {
         // A profile is optional for authentication; protected screens can still load.
       }
 
-      return { token, username: username.trim(), profileCode, isCorporate };
+      return {
+        token,
+        username: username.trim(),
+        profileCode,
+        isCorporate,
+        clientCode,
+        clientName,
+        ratingClientCode,
+        ratingProfileCode,
+      };
     }
 
     return rejectWithValue(
@@ -171,7 +222,16 @@ const appSlice = createSlice({
     login(
       state,
       action: PayloadAction<
-        { token?: string; username?: string; isCorporate?: boolean } | undefined
+        {
+          token?: string;
+          username?: string;
+          isCorporate?: boolean;
+          profileCode?: string;
+          clientCode?: string;
+          clientName?: string;
+          ratingClientCode?: string;
+          ratingProfileCode?: string;
+        } | undefined
       >
     ) {
       state.isAuthenticated = true;
@@ -188,6 +248,26 @@ const appSlice = createSlice({
           state.isCorporate = action.payload.isCorporate;
           localStorage.setItem("isCorporate", String(action.payload.isCorporate));
         }
+        if (action.payload.profileCode) {
+          state.profileCode = action.payload.profileCode;
+          localStorage.setItem("profileCode", action.payload.profileCode);
+        }
+        if (action.payload.clientCode) {
+          state.clientCode = action.payload.clientCode;
+          localStorage.setItem("clientCode", action.payload.clientCode);
+        }
+        if (action.payload.clientName) {
+          state.clientName = action.payload.clientName;
+          localStorage.setItem("clientName", action.payload.clientName);
+        }
+        if (action.payload.ratingClientCode) {
+          state.ratingClientCode = action.payload.ratingClientCode;
+          localStorage.setItem("ratingClientCode", action.payload.ratingClientCode);
+        }
+        if (action.payload.ratingProfileCode) {
+          state.ratingProfileCode = action.payload.ratingProfileCode;
+          localStorage.setItem("ratingProfileCode", action.payload.ratingProfileCode);
+        }
       }
     },
     logout(state) {
@@ -196,11 +276,19 @@ const appSlice = createSlice({
       state.username = null;
       state.profileCode = null;
       state.isCorporate = null;
+      state.clientCode = null;
+      state.clientName = null;
+      state.ratingClientCode = null;
+      state.ratingProfileCode = null;
       state.error = null;
       localStorage.removeItem("authToken");
       localStorage.removeItem("username");
       localStorage.removeItem("profileCode");
       localStorage.removeItem("isCorporate");
+      localStorage.removeItem("clientCode");
+      localStorage.removeItem("clientName");
+      localStorage.removeItem("ratingClientCode");
+      localStorage.removeItem("ratingProfileCode");
     },
     clearLoginError(state) {
       state.error = null;
@@ -219,6 +307,10 @@ const appSlice = createSlice({
         state.username = action.payload.username;
         state.profileCode = action.payload.profileCode;
         state.isCorporate = action.payload.isCorporate ?? null;
+        state.clientCode = action.payload.clientCode ?? null;
+        state.clientName = action.payload.clientName ?? null;
+        state.ratingClientCode = action.payload.ratingClientCode ?? null;
+        state.ratingProfileCode = action.payload.ratingProfileCode ?? null;
         state.error = null;
       })
       .addCase(loginUser.rejected, (state, action) => {

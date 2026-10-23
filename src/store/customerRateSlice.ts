@@ -137,6 +137,8 @@ export interface CarrierRateRequest extends Record<string, unknown> {
   clientName?: string;
   clientCode?: string;
   profileCode?: string | null;
+  ratingProfileCode?: string | null;
+  ratingClientCode?: string | null;
   shipments?: RatingShipment[];
   accessorialCodes?: string[];
   totalLinearFeet?: number;
@@ -235,9 +237,29 @@ export const fetchCarrierRates = createAsyncThunk<
   async (payload, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("authToken");
+
+      const ratingClientCode =
+        payload.ratingClientCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("ratingClientCode") : null) ||
+        payload.clientCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+        "";
+
+      const ratingProfileCode =
+        payload.ratingProfileCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("ratingProfileCode") : null) ||
+        payload.profileCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) || "";
+
+      const requestPayload = {
+        ...payload,
+        ratingProfileCode,
+        ratingClientCode,
+      };
+
       const response = await axios.post<RateApiResponse>(
         `${API_BASE_URL}/Rating/GetRates`,
-        payload,
+        requestPayload,
         {
           headers: {
             accept: "*/*",
@@ -401,8 +423,14 @@ export const saveCustomerQuote = createAsyncThunk<
         destinationStateCode: quoteRequest.destState || "",
         destinationZip: quoteRequest.destZip || "",
         clientName: quoteRequest.clientName || "",
-        clientCode: quoteRequest.clientCode || "",
-        profileCode: quoteRequest.profileCode || "",
+        clientCode: quoteRequest.clientCode || (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) || "",
+        profileCode:
+          quoteRequest.profileCode ||
+          (quoteRequest as any).ratingProfileCode ||
+          (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) ||
+          (typeof localStorage !== "undefined" ? localStorage.getItem("ratingProfileCode") : null) ||
+          quoteRequest.clientCode ||
+          "",
         isAgentQuote: true,
         marginType: quoteRequest.shipments?.[0]?.weightUnit || "",
         marginPercent: 0,

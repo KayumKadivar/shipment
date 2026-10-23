@@ -18,15 +18,24 @@ type ApiResponse<T> = {
   totalRecords?: number;
 };
 
-type ClientOption = {
-  clientName: string;
+export type ClientOption = {
   clientCode: string;
+  clientName: string;
+  profileCode?: string;
+  ratingClientCode?: string | null;
+  ratingProfileCode?: string | null;
+  isCorporate?: boolean;
+  isLoggedClient?: boolean;
 };
 
 type ClientApiItem = {
   clientName?: string;
   clientCode?: string;
   profileCode?: string;
+  ratingClientCode?: string | null;
+  ratingProfileCode?: string | null;
+  isCorporate?: boolean;
+  isLoggedClient?: boolean;
   profiles?: ClientApiItem[];
   subClients?: ClientApiItem[];
 };
@@ -80,7 +89,7 @@ type LocationListApiResponse = ApiResponse<
 
 interface CustomerLocationState {
   locations: CustomerLocation[];
-  clients: { clientName: string; clientCode: string }[];
+  clients: ClientOption[];
   totalCount: number;
   loading: boolean;
   saving: boolean;
@@ -101,51 +110,85 @@ const initialState: CustomerLocationState = {
 // ============================================================
 export const fetchClientsAndSubclients = createAsyncThunk<
   ClientOption[],
-  void,
+  string | void,
   { rejectValue: string }
 >(
   "customerLocation/fetchClientsAndSubclients",
-  async (_, { rejectWithValue }) => {
+  async (clientCode, { rejectWithValue }) => {
     try {
-      const response = await axios.get<ClientLookupApiResponse>(
-        `${API_BASE_URL}/GetClientAndSubclientWithProfiles`,
-        {
-          params: {
-            srvToken: SRV_TOKEN,
-            clientCode: DEFAULT_CLIENT_CODE
-          }
-        },
-      );
+      const codeToUse = clientCode || DEFAULT_CLIENT_CODE;
+      let response;
+      try {
+        response = await axios.get<ClientLookupApiResponse>(
+          `${API_BASE_URL}/GetClientAndSubclientWithProfiles/GetClientAndSubclientWithProfilesByClientCode`,
+          {
+            params: {
+              srvToken: SRV_TOKEN,
+              clientCode: codeToUse,
+            },
+          },
+        );
+      } catch {
+        response = await axios.get<ClientLookupApiResponse>(
+          `${API_BASE_URL}/GetClientAndSubclientWithProfiles`,
+          {
+            params: {
+              srvToken: SRV_TOKEN,
+              clientCode: codeToUse,
+            },
+          },
+        );
+      }
       
-      if (Array.isArray(response.data)) {
-        return response.data.map((c) => ({
-          clientName: c.clientName || c.profileCode || "",
-          clientCode: c.clientCode || c.profileCode || ""
+      const resData = response.data;
+      if (Array.isArray(resData)) {
+        return resData.map((c) => ({
+          clientCode: c.clientCode || c.profileCode || "",
+          clientName: c.clientName || c.profileCode || c.clientCode || "",
+          profileCode: c.profileCode || "",
+          ratingClientCode: c.ratingClientCode ?? null,
+          ratingProfileCode: c.ratingProfileCode ?? null,
+          isCorporate: c.isCorporate,
+          isLoggedClient: c.isLoggedClient,
         }));
       }
 
-      if (!response.data?.isSuccess || !response.data?.data) {
+      if (resData && typeof resData === "object" && "data" in resData && Array.isArray(resData.data)) {
+        return resData.data.map((c) => ({
+          clientCode: c.clientCode || c.profileCode || "",
+          clientName: c.clientName || c.profileCode || c.clientCode || "",
+          profileCode: c.profileCode || "",
+          ratingClientCode: c.ratingClientCode ?? null,
+          ratingProfileCode: c.ratingProfileCode ?? null,
+          isCorporate: c.isCorporate,
+          isLoggedClient: c.isLoggedClient,
+        }));
+      }
+
+      if (!resData || (typeof resData === "object" && "isSuccess" in resData && !resData.isSuccess)) {
         return rejectWithValue("Failed to fetch clients.");
       }
 
-      if (Array.isArray(response.data.data)) {
-        return response.data.data.map((c) => ({
-          clientName: c.clientName || c.profileCode || "",
-          clientCode: c.clientCode || c.profileCode || ""
+      if (resData && typeof resData === "object" && "data" in resData && resData.data) {
+        const d = resData.data as any;
+        const mainClient: ClientOption = {
+          clientCode: d.clientCode || d.profileCode || "",
+          clientName: d.clientName || d.profileCode || "",
+          profileCode: d.profileCode || "",
+          isCorporate: d.isCorporate,
+          isLoggedClient: true,
+        };
+        const subClients: ClientOption[] = (d.subClients || d.profiles || []).map((s: any) => ({
+          clientCode: s.clientCode || s.profileCode || "",
+          clientName: s.clientName || s.profileCode || "",
+          profileCode: s.profileCode || "",
+          isCorporate: s.isCorporate,
+          isLoggedClient: false,
         }));
+        return [mainClient, ...subClients];
       }
 
-      const mainClient = {
-        clientName: response.data.data.clientName || response.data.data.profileCode || "",
-        clientCode: response.data.data.clientCode || response.data.data.profileCode || ""
-      };
-      
-      const subClients = (response.data.data.subClients || response.data.data.profiles || []).map((s) => ({
-        clientName: s.clientName || s.profileCode || "",
-        clientCode: s.clientCode || s.profileCode || ""
-      }));
-      
-      return [mainClient, ...subClients];
+      return rejectWithValue("Failed to fetch clients.");
     } catch (error: unknown) {
       console.error("FetchClients API Error:", error);
       return rejectWithValue(
@@ -180,7 +223,7 @@ export const saveCustomerLocation = createAsyncThunk(
         stateCode: payloadData.stateCode || payloadData.state || "",
         countryCode: payloadData.countryCode || payloadData.country || "",
         zipCode: payloadData.zipCode || payloadData.postal || "",
-        clientCode: sessionStorage.getItem("customerLocation_selectedClientCode") || DEFAULT_CLIENT_CODE,
+        clientCode: (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("customerLocation_selectedClientCode") : null) || DEFAULT_CLIENT_CODE,
         contactName: payloadData.contactName || "",
         contactPhone: payloadData.phone || "",
         contactEmail: payloadData.email || "",
@@ -239,7 +282,7 @@ export const updateCustomerLocation = createAsyncThunk(
         stateCode: payloadData.stateCode || payloadData.state || "",
         countryCode: payloadData.countryCode || payloadData.country || "",
         zipCode: payloadData.zipCode || payloadData.postal || "",
-        clientCode: sessionStorage.getItem("customerLocation_selectedClientCode") || DEFAULT_CLIENT_CODE,
+        clientCode: (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("customerLocation_selectedClientCode") : null) || DEFAULT_CLIENT_CODE,
         contactName: payloadData.contactName || "",
         contactPhone: payloadData.phone || (payloadData as any).contactPhone || "",
         contactEmail: payloadData.email || (payloadData as any).contactEmail || "",

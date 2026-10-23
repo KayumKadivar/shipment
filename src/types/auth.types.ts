@@ -16,6 +16,16 @@ export interface Country {
   countryName: string;
 }
 
+export interface ClientProfileItem {
+  clientCode: string;
+  clientName: string;
+  profileCode: string;
+  ratingClientCode: string | null;
+  ratingProfileCode: string | null;
+  isCorporate: boolean;
+  isLoggedClient: boolean;
+}
+
 export interface AppState {
   isAuthenticated: boolean;
   token: string | null;
@@ -23,6 +33,10 @@ export interface AppState {
   countries: Country[];
   profileCode: string | null;
   isCorporate: boolean | null;
+  clientCode: string | null;
+  clientName: string | null;
+  ratingClientCode: string | null;
+  ratingProfileCode: string | null;
   loading: boolean;
   error: string | null;
 }

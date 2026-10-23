@@ -1,7 +1,6 @@
 import {
   AppstoreOutlined,
   BarsOutlined,
-  ExclamationCircleOutlined,
   SearchOutlined,
   SendOutlined,
 } from "@ant-design/icons";
@@ -489,14 +488,6 @@ function QuoteRateDetail() {
           </Button>
         </div>
       </header>
-
-      <div className='rate-capacity-warning' role='alert'>
-        <ExclamationCircleOutlined />
-        <span>
-          Your quote exceeds some carrier capacity rules, so we didn't include
-          those carriers in this list.
-        </span>
-      </div>
 
       <div className='rate-content-grid'>
         <aside className='rate-context'>

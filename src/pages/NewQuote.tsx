@@ -1156,10 +1156,26 @@ function NewQuote() {
       accessorialCodes: accessorialOptions
         .filter((a) => selectedAccessorials.includes(a.accessorialName))
         .map((a) => a.accesorialCode || a.accessorialName),
-      profileCode: profileCode,
-      clientCode: DEFAULT_CLIENT_CODE,
+      profileCode:
+        profileCode ||
+        clients.find((c) => c.clientCode === activeClientCode)?.profileCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) ||
+        "",
+      clientCode: activeClientCode || "",
       clientName:
-        clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE)?.clientName ||
+        clients.find((c) => c.clientCode === activeClientCode)?.clientName ||
+        "",
+      ratingClientCode:
+        clients.find((c) => c.clientCode === activeClientCode)?.ratingClientCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("ratingClientCode") : null) ||
+        activeClientCode ||
+        "",
+      ratingProfileCode:
+        clients.find((c) => c.clientCode === activeClientCode)?.ratingProfileCode ||
+        profileCode ||
+        clients.find((c) => c.clientCode === activeClientCode)?.profileCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("ratingProfileCode") : null) ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) ||
         "",
       scac: undefined,
       shipmentDate: pickupDate || new Date().toISOString(),
