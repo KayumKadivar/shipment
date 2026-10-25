@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Card,
   Form,
@@ -19,7 +19,6 @@ import {
   EditOutlined,
   CheckOutlined,
   CloseOutlined,
-  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
@@ -116,9 +115,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   onSelectCarrier,
   onRateDetailsChange,
   clientMarkupConfig,
-  isFromReference = false,
-  hasRateChanged = false,
-  onRateChanged,
+  isFromReference: _isFromReference = false,
+  hasRateChanged: _hasRateChanged = false,
+  onRateChanged: _onRateChanged,
 }) => {
 
   const dispatch = useDispatch<AppDispatch>();
@@ -143,10 +142,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     propIsCorporate !== undefined
       ? propIsCorporate
       : (typeof selectedClient?.isCorporate === "boolean"
-          ? selectedClient.isCorporate
-          : (storeIsCorporate ??
-            (typeof localStorage !== "undefined" &&
-              localStorage.getItem("isCorporate") === "true")));
+        ? selectedClient.isCorporate
+        : (storeIsCorporate ??
+          (typeof localStorage !== "undefined" &&
+            localStorage.getItem("isCorporate") === "true")));
 
   useEffect(() => {
     if (!accessorialsList || accessorialsList.length === 0) {
@@ -157,65 +156,32 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   // Markup & Net Sell Rate states
   const [isMarkupEnabled, setIsMarkupEnabled] = useState<boolean>(false);
   const [markupDropdownOption, setMarkupDropdownOption] =
-    useState<string>("% Freight");
+    useState<string>("Flat");
   const [markup, setMarkup] = useState<string>("0");
 
+  // Net Sell Rate states
   const [isNetSellRateEnabled, setIsNetSellRateEnabled] =
     useState<boolean>(false);
   const [netSellRate, setNetSellRate] = useState<string>("0");
 
-  // Applied markup state (only active/recalculated when user clicks 'Apply')
+  // Applied markup state (active and recalculated on table when applied)
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<{
     isMarkupEnabled: boolean;
     markupDropdownOption: string;
     numericMarkup: number;
     isNetSellRateEnabled: boolean;
     numericNetSellRate: number;
+    ppsFreight: number;
+    ppsFuel: number;
   }>({
     isMarkupEnabled: false,
-    markupDropdownOption: "% Freight",
+    markupDropdownOption: "Flat",
     numericMarkup: 0,
     isNetSellRateEnabled: false,
     numericNetSellRate: 0,
+    ppsFreight: 0,
+    ppsFuel: 0,
   });
-
-  interface BaselineSnapshot {
-    carrierName: string;
-    isMarkupEnabled: boolean;
-    markupDropdownOption: string;
-    markup: string;
-    isNetSellRateEnabled: boolean;
-    netSellRate: string;
-    topCount: string;
-    baseBuyAmounts: Record<string, number>;
-    baseDescriptions: Record<string, string>;
-    baseCustomerAmounts: Record<string, number>;
-  }
-
-  const baselineRef = useRef<BaselineSnapshot | null>(null);
-  const hasUserInteractedRef = useRef<boolean>(false);
-
-  const syncBaselineMarkup = (opts: {
-    isMarkupEnabled: boolean;
-    markupDropdownOption?: string;
-    markup?: string;
-    isNetSellRateEnabled: boolean;
-    netSellRate?: string;
-  }) => {
-    if (baselineRef.current) {
-      baselineRef.current.isMarkupEnabled = opts.isMarkupEnabled;
-      if (opts.markupDropdownOption !== undefined) {
-        baselineRef.current.markupDropdownOption = opts.markupDropdownOption;
-      }
-      if (opts.markup !== undefined) {
-        baselineRef.current.markup = opts.markup;
-      }
-      baselineRef.current.isNetSellRateEnabled = opts.isNetSellRateEnabled;
-      if (opts.netSellRate !== undefined) {
-        baselineRef.current.netSellRate = opts.netSellRate;
-      }
-    }
-  };
 
   useEffect(() => {
     if (clientMarkupConfig) {
@@ -224,38 +190,33 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         if (raw.includes("netsell")) {
           setIsNetSellRateEnabled(true);
           setIsMarkupEnabled(false);
-          if (clientMarkupConfig.rate != null) {
-            setNetSellRate(String(clientMarkupConfig.rate));
-          }
+          const rateVal =
+            clientMarkupConfig.rate != null
+              ? String(clientMarkupConfig.rate)
+              : "0";
+          setNetSellRate(rateVal);
         } else {
           setIsMarkupEnabled(true);
           setIsNetSellRateEnabled(false);
+          let opt = "Flat";
           if (raw.includes("flat")) {
-            setMarkupDropdownOption("Flat");
+            opt = "Flat";
           } else if (raw.includes("acc")) {
-            setMarkupDropdownOption("% Freight + Fuel + Accessorial");
+            opt = "% Freight + Fuel + Accessorial";
           } else if (raw.includes("fuel")) {
-            setMarkupDropdownOption("% Freight + Fuel");
+            opt = "% Freight + Fuel";
           } else {
-            setMarkupDropdownOption("% Freight");
+            opt = "% Freight";
           }
-          if (clientMarkupConfig.minimum != null) {
-            setMarkup(String(clientMarkupConfig.minimum));
-          } else if (clientMarkupConfig.rate != null) {
-            setMarkup(String(clientMarkupConfig.rate));
-          }
+          setMarkupDropdownOption(opt);
+          const val =
+            clientMarkupConfig.minimum != null
+              ? String(clientMarkupConfig.minimum)
+              : clientMarkupConfig.rate != null
+              ? String(clientMarkupConfig.rate)
+              : "0";
+          setMarkup(val);
         }
-        const isNetSell = raw.includes("netsell");
-        const opt = raw.includes("flat") ? "Flat" : raw.includes("acc") ? "% Freight + Fuel + Accessorial" : raw.includes("fuel") ? "% Freight + Fuel" : "% Freight";
-        const valStr = String(clientMarkupConfig.minimum ?? clientMarkupConfig.rate ?? "0");
-        const netStr = String(clientMarkupConfig.rate ?? "0");
-        syncBaselineMarkup({
-          isMarkupEnabled: !isNetSell,
-          markupDropdownOption: opt,
-          markup: valStr,
-          isNetSellRateEnabled: isNetSell,
-          netSellRate: netStr,
-        });
       }
       return;
     }
@@ -265,38 +226,33 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       if (raw.includes("netsell")) {
         setIsNetSellRateEnabled(true);
         setIsMarkupEnabled(false);
-        if ((carrierData as any).markup != null) {
-          setNetSellRate(String((carrierData as any).markup));
-        }
+        const rateVal =
+          (carrierData as any).markup != null
+            ? String((carrierData as any).markup)
+            : "0";
+        setNetSellRate(rateVal);
       } else {
         setIsMarkupEnabled(true);
         setIsNetSellRateEnabled(false);
+        let opt = "Flat";
         if (raw.includes("flat")) {
-          setMarkupDropdownOption("Flat");
+          opt = "Flat";
         } else if (raw.includes("acc")) {
-          setMarkupDropdownOption("% Freight + Fuel + Accessorial");
+          opt = "% Freight + Fuel + Accessorial";
         } else if (raw.includes("fuel")) {
-          setMarkupDropdownOption("% Freight + Fuel");
+          opt = "% Freight + Fuel";
         } else {
-          setMarkupDropdownOption("% Freight");
+          opt = "% Freight";
         }
-        if ((carrierData as any).minimum != null) {
-          setMarkup(String((carrierData as any).minimum));
-        } else if ((carrierData as any).markup != null) {
-          setMarkup(String((carrierData as any).markup));
-        }
+        setMarkupDropdownOption(opt);
+        const val =
+          (carrierData as any).minimum != null
+            ? String((carrierData as any).minimum)
+            : (carrierData as any).markup != null
+            ? String((carrierData as any).markup)
+            : "0";
+        setMarkup(val);
       }
-      const isNetSell = raw.includes("netsell");
-      const opt = raw.includes("flat") ? "Flat" : raw.includes("acc") ? "% Freight + Fuel + Accessorial" : raw.includes("fuel") ? "% Freight + Fuel" : "% Freight";
-      const valStr = String((carrierData as any).minimum ?? (carrierData as any).markup ?? "0");
-      const netStr = String((carrierData as any).markup ?? "0");
-      syncBaselineMarkup({
-        isMarkupEnabled: !isNetSell,
-        markupDropdownOption: opt,
-        markup: valStr,
-        isNetSellRateEnabled: isNetSell,
-        netSellRate: netStr,
-      });
       return;
     }
 
@@ -339,38 +295,31 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               if (raw.includes("netsell")) {
                 setIsNetSellRateEnabled(true);
                 setIsMarkupEnabled(false);
-                if (config.rate != null) {
-                  setNetSellRate(String(config.rate));
-                }
+                const rateVal =
+                  config.rate != null ? String(config.rate) : "0";
+                setNetSellRate(rateVal);
               } else {
                 setIsMarkupEnabled(true);
                 setIsNetSellRateEnabled(false);
+                let opt = "Flat";
                 if (raw.includes("flat")) {
-                  setMarkupDropdownOption("Flat");
+                  opt = "Flat";
                 } else if (raw.includes("acc")) {
-                  setMarkupDropdownOption("% Freight + Fuel + Accessorial");
+                  opt = "% Freight + Fuel + Accessorial";
                 } else if (raw.includes("fuel")) {
-                  setMarkupDropdownOption("% Freight + Fuel");
+                  opt = "% Freight + Fuel";
                 } else {
-                  setMarkupDropdownOption("% Freight");
+                  opt = "% Freight";
                 }
-                if (config.minimum != null) {
-                  setMarkup(String(config.minimum));
-                } else if (config.rate != null) {
-                  setMarkup(String(config.rate));
-                }
+                setMarkupDropdownOption(opt);
+                const val =
+                  config.minimum != null
+                    ? String(config.minimum)
+                    : config.rate != null
+                    ? String(config.rate)
+                    : "0";
+                setMarkup(val);
               }
-              const isNetSell = raw.includes("netsell");
-              const opt = raw.includes("flat") ? "Flat" : raw.includes("acc") ? "% Freight + Fuel + Accessorial" : raw.includes("fuel") ? "% Freight + Fuel" : "% Freight";
-              const valStr = String(config.minimum ?? config.rate ?? "0");
-              const netStr = String(config.rate ?? "0");
-              syncBaselineMarkup({
-                isMarkupEnabled: !isNetSell,
-                markupDropdownOption: opt,
-                markup: valStr,
-                isNetSellRateEnabled: isNetSell,
-                netSellRate: netStr,
-              });
             }
           }
         }
@@ -380,7 +329,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     };
 
     fetchClientMarkup();
-  }, [clientCode, clientMarkupConfig]);
+  }, [clientCode, clientMarkupConfig, carrierData]);
 
   // Carrier inputs and autocomplete state
   const [carrierName, setCarrierName] = useState<string>("");
@@ -399,7 +348,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     null,
   );
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [topCount, setTopCount] = useState<string>("10");
 
   // Custom charge additions
   const [selectedChargeType, setSelectedChargeType] = useState<
@@ -426,10 +374,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     >
   >({});
 
-  // Active carrier priority:
-  // 1. prop `carrierData`
-  // 2. or first rate in store `rates[0]`
-  // 3. or null (clean blank state)
+
   const activeCarrier = useMemo(() => {
     if (
       carrierData &&
@@ -442,7 +387,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
   const prevActiveCarrierRef = useRef<any>(null);
 
-  // Sync carrier inputs only when activeCarrier actually changes from external source
   useEffect(() => {
     const prev = prevActiveCarrierRef.current;
     const hasChanged =
@@ -455,8 +399,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       setRemovedLineIds([]);
       setEditedAmounts({});
       setEditingRowId(null);
-      baselineRef.current = null;
-      hasUserInteractedRef.current = false;
       if (activeCarrier) {
         setCarrierName(activeCarrier.carrierName || "");
         if (activeCarrier.carrierCode || activeCarrier.carrierName) {
@@ -468,227 +410,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       }
     }
   }, [activeCarrier]);
-
-  const getBaseLineInfo = useCallback(() => {
-    const buyAmounts: Record<string, number> = {};
-    const descriptions: Record<string, string> = {};
-    const customerAmounts: Record<string, number> = {};
-
-    if (activeCarrier) {
-      const gross =
-        Number(activeCarrier.grossCharge) ||
-        (Number(activeCarrier.price) > 0 ? Number(activeCarrier.price) : 0);
-      const discount = Number(activeCarrier.discount) || 0;
-      const fuel = Number(activeCarrier.fuelSurcharge) || 0;
-      const accessorials = activeCarrier.accessorialCharges || [];
-
-      buyAmounts["line-gross"] = gross;
-      descriptions["line-gross"] = "Freight";
-      customerAmounts["line-gross"] = gross;
-
-      if (discount > 0 || activeCarrier.discountCode) {
-        buyAmounts["line-discount"] = -Math.abs(discount);
-        descriptions["line-discount"] = "Discount";
-        customerAmounts["line-discount"] = -Math.abs(discount);
-      }
-
-      if (fuel > 0 || activeCarrier.fuelCode) {
-        buyAmounts["line-fuel"] = fuel;
-        descriptions["line-fuel"] = "Fuel surcharge";
-        customerAmounts["line-fuel"] = fuel;
-      }
-
-      accessorials.forEach((acc: any, index: number) => {
-        const id = `line-acc-${acc.code || index}`;
-        const amt = Number(acc.accessorialCharge) || 0;
-        buyAmounts[id] = amt;
-        descriptions[id] = acc.accessorialDescription || "Accessorial";
-        customerAmounts[id] = amt;
-      });
-    }
-
-    return { buyAmounts, descriptions, customerAmounts };
-  }, [activeCarrier]);
-
-  // Capture baseline once activeCarrier is ready
-  useEffect(() => {
-    if (!activeCarrier) return;
-    if (baselineRef.current !== null) return;
-
-    const { buyAmounts, descriptions, customerAmounts } = getBaseLineInfo();
-    baselineRef.current = {
-      carrierName: activeCarrier.carrierName || "",
-      isMarkupEnabled,
-      markupDropdownOption,
-      markup: String(markup || "0"),
-      isNetSellRateEnabled,
-      netSellRate: String(netSellRate || "0"),
-      topCount: String(topCount || "10"),
-      baseBuyAmounts: buyAmounts,
-      baseDescriptions: descriptions,
-      baseCustomerAmounts: customerAmounts,
-    };
-  }, [
-    activeCarrier,
-    getBaseLineInfo,
-    isMarkupEnabled,
-    markupDropdownOption,
-    markup,
-    isNetSellRateEnabled,
-    netSellRate,
-    topCount,
-  ]);
-
-  const checkIfRateChanged = useCallback((): boolean => {
-    if (!hasUserInteractedRef.current) {
-      return false;
-    }
-    const base = baselineRef.current;
-    if (!base) return false;
-
-    // 1. Carrier name check
-    const currentCarrier = (carrierName || "").trim().toLowerCase();
-    const baseCarrier = (base.carrierName || "").trim().toLowerCase();
-    if (currentCarrier !== baseCarrier) {
-      return true;
-    }
-
-    // 2. Markup checkbox check
-    if (isMarkupEnabled !== base.isMarkupEnabled) {
-      return true;
-    }
-
-    // 3. Markup dropdown & value (if enabled)
-    if (isMarkupEnabled) {
-      if (markupDropdownOption !== base.markupDropdownOption) {
-        return true;
-      }
-      const curMarkupNum = Number(markup) || 0;
-      const baseMarkupNum = Number(base.markup) || 0;
-      if (Math.abs(curMarkupNum - baseMarkupNum) > 0.001) {
-        return true;
-      }
-    }
-
-    // 4. Net Sell Rate checkbox & value
-    if (isNetSellRateEnabled !== base.isNetSellRateEnabled) {
-      return true;
-    }
-    if (isNetSellRateEnabled) {
-      const curNetSellNum = Number(netSellRate) || 0;
-      const baseNetSellNum = Number(base.netSellRate) || 0;
-      if (Math.abs(curNetSellNum - baseNetSellNum) > 0.001) {
-        return true;
-      }
-    }
-
-    // 5. Applied Markup Config
-    if (appliedMarkupConfig.isMarkupEnabled) {
-      if (appliedMarkupConfig.markupDropdownOption !== base.markupDropdownOption) {
-        return true;
-      }
-      if (Math.abs(appliedMarkupConfig.numericMarkup - (Number(base.markup) || 0)) > 0.001) {
-        return true;
-      }
-    }
-
-    // 6. Get Top count check
-    const curTop = (topCount || "10").trim();
-    const baseTop = (base.topCount || "10").trim();
-    if (curTop !== baseTop) {
-      return true;
-    }
-
-    // 7. Custom charges check
-    if (customCharges.length > 0) {
-      return true;
-    }
-
-    // 8. Removed charges check
-    if (removedLineIds.length > 0) {
-      return true;
-    }
-
-    // 9. Saved row edits check
-    for (const [id, edited] of Object.entries(editedAmounts)) {
-      const baseBuy = base.baseBuyAmounts[id];
-      const baseDesc = base.baseDescriptions[id];
-      const baseCustomer = base.baseCustomerAmounts[id];
-
-      if (edited.buyAmount !== undefined && baseBuy !== undefined) {
-        if (Math.abs(edited.buyAmount - baseBuy) > 0.001) {
-          return true;
-        }
-      }
-      if (edited.description && baseDesc) {
-        if (edited.description.trim() !== baseDesc.trim()) {
-          return true;
-        }
-      }
-      if (edited.customerAmount !== undefined && baseCustomer !== undefined) {
-        if (Math.abs(edited.customerAmount - baseCustomer) > 0.001) {
-          return true;
-        }
-      }
-    }
-
-    // 10. Active inline editing row check
-    if (editingRowId) {
-      const baseBuy = base.baseBuyAmounts[editingRowId];
-      const baseCustomer = base.baseCustomerAmounts[editingRowId];
-      const baseDesc = base.baseDescriptions[editingRowId];
-
-      const curEditBuy = parseFloat(editBuyAmount);
-      const curEditCustomer = parseFloat(editCustomerAmount);
-
-      if (!isNaN(curEditBuy) && baseBuy !== undefined) {
-        if (Math.abs(curEditBuy - Math.abs(baseBuy)) > 0.001) {
-          return true;
-        }
-      }
-      if (!isNaN(curEditCustomer) && baseCustomer !== undefined) {
-        if (Math.abs(curEditCustomer - Math.abs(baseCustomer)) > 0.001) {
-          return true;
-        }
-      }
-      if (editDescription && baseDesc) {
-        if (editDescription.trim() !== baseDesc.trim()) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }, [
-    carrierName,
-    isMarkupEnabled,
-    markupDropdownOption,
-    markup,
-    isNetSellRateEnabled,
-    netSellRate,
-    appliedMarkupConfig,
-    topCount,
-    customCharges,
-    removedLineIds,
-    editedAmounts,
-    editingRowId,
-    editBuyAmount,
-    editCustomerAmount,
-    editDescription,
-  ]);
-
-  const triggerRateChange = useCallback(() => {
-    hasUserInteractedRef.current = true;
-    if (isFromReference && onRateChanged) {
-      onRateChanged(checkIfRateChanged());
-    }
-  }, [isFromReference, onRateChanged, checkIfRateChanged]);
-
-  useEffect(() => {
-    if (!isFromReference || !onRateChanged || !hasUserInteractedRef.current) return;
-    const isChanged = checkIfRateChanged();
-    onRateChanged(isChanged);
-  }, [isFromReference, onRateChanged, checkIfRateChanged]);
 
   // Clean up timeouts and abort controllers on unmount
   useEffect(() => {
@@ -786,7 +507,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     if (onSelectCarrier) {
       onSelectCarrier(carrier);
     }
-    triggerRateChange();
   };
 
   const handleChangeCarrier = (val: string) => {
@@ -803,7 +523,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       }
       fetchCarriersList("");
     }
-    triggerRateChange();
   };
 
   const handleCarrierFocus = () => {
@@ -811,9 +530,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       fetchCarriersList(carrierName || "");
     }
   };
-
-  const numericMarkup = Math.max(0, Number(markup) || 0);
-  const numericNetSellRate = Math.max(0, Number(netSellRate) || 0);
 
   const isFreightCharge = (code?: string, description?: string) => {
     const c = (code || "").trim().toUpperCase();
@@ -920,89 +636,49 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       }
     });
 
-    const freightItems = rawItems.filter(
-      (i) => !isDiscountCharge(i.code) && isFreightCharge(i.code),
-    );
-    const fuelItems = rawItems.filter((i) => isFuelCharge(i.code));
-    const totalFreight = freightItems.reduce(
-      (acc, i) => acc + (i.buyAmount > 0 ? i.buyAmount : 0),
-      0,
-    );
-    const totalFuel = fuelItems.reduce(
-      (acc, i) => acc + (i.buyAmount > 0 ? i.buyAmount : 0),
-      0,
-    );
-    const totalFreightFuel = totalFreight + totalFuel;
+    const isMarkupActive =
+      appliedMarkupConfig.isMarkupEnabled &&
+      appliedMarkupConfig.numericMarkup > 0;
+    const isNetSellActive =
+      appliedMarkupConfig.isNetSellRateEnabled &&
+      appliedMarkupConfig.numericNetSellRate > 0;
+
+    const ppsFreight =
+      isMarkupActive || isNetSellActive
+        ? appliedMarkupConfig.ppsFreight || 0
+        : 0;
+    const ppsFuel =
+      isMarkupActive || isNetSellActive
+        ? appliedMarkupConfig.ppsFuel || 0
+        : 0;
 
     return rawItems.map((item) => {
       const isDiscount = isDiscountCharge(item.code);
       const isFreight = !isDiscount && isFreightCharge(item.code);
       const isFuel = isFuelCharge(item.code);
 
-      let markupAmt = 0;
-
-      if (
-        appliedMarkupConfig.isMarkupEnabled &&
-        appliedMarkupConfig.numericMarkup > 0
-      ) {
-        const option = appliedMarkupConfig.markupDropdownOption;
-        const P = appliedMarkupConfig.numericMarkup;
-        const isFlat = option === "Flat";
-        const markupValue = isFlat ? P : (totalFreight * P) / 100;
-
-        if (option === "% Freight") {
-          if (isFreight) {
-            if (totalFreightFuel > 0) {
-              markupAmt = (markupValue * item.buyAmount) / totalFreightFuel;
-            }
-          }
-        } else if (option === "% Freight + Fuel") {
-          if (isFreight || isFuel) {
-            if (totalFreightFuel > 0) {
-              markupAmt = (markupValue * item.buyAmount) / totalFreightFuel;
-            }
-          }
-        } else if (option === "% Freight + Fuel + Accessorial") {
-          if (isFreight || isFuel) {
-            if (totalFreightFuel > 0) {
-              markupAmt = (markupValue * item.buyAmount) / totalFreightFuel;
-            }
-          } else if (!isDiscount) {
-            const denom = totalFreight + item.buyAmount;
-            if (denom > 0) {
-              markupAmt = (markupValue * item.buyAmount) / denom;
-            }
-          }
-        } else if (option === "Flat") {
-          if (isFreight || isFuel) {
-            if (totalFreightFuel > 0) {
-              markupAmt = (markupValue * item.buyAmount) / totalFreightFuel;
-            }
-          }
-        }
-      }
-
       const overrideCust = editedAmounts[item.id]?.customerAmount;
-      const custAmt =
-        overrideCust !== undefined ? overrideCust : item.buyAmount + markupAmt;
-      const finalMarkup =
-        overrideCust !== undefined ? custAmt - item.buyAmount : markupAmt;
 
-      let isItemEligible = false;
-      if (appliedMarkupConfig.isMarkupEnabled) {
-        const option = appliedMarkupConfig.markupDropdownOption;
-        if (option === "% Freight") {
-          isItemEligible = isFreight;
-        } else if (option === "% Freight + Fuel") {
-          isItemEligible = isFreight || isFuel;
-        } else if (option === "% Freight + Fuel + Accessorial") {
-          isItemEligible = !isDiscount;
-        } else if (option === "Flat") {
-          isItemEligible = isFreight || isFuel;
-        }
-      } else {
-        isItemEligible = isFreight || isFuel;
+      let calculatedCust = item.buyAmount;
+      let calculatedMarkup = 0;
+      let isEligible = false;
+
+      if (isFreight) {
+        isEligible = true;
+        calculatedMarkup = ppsFreight;
+        calculatedCust = item.buyAmount + ppsFreight;
+      } else if (isFuel) {
+        isEligible = true;
+        calculatedMarkup = ppsFuel;
+        calculatedCust = item.buyAmount + ppsFuel;
       }
+
+      const custAmt =
+        overrideCust !== undefined ? overrideCust : calculatedCust;
+      const finalMarkup =
+        overrideCust !== undefined
+          ? custAmt - item.buyAmount
+          : calculatedMarkup;
 
       return {
         id: item.id,
@@ -1015,15 +691,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         markupSubtext: "",
         customerCalcSubtext: "",
         isCustom: item.isCustom,
-        isEligibleForMarkup: isItemEligible || finalMarkup > 0,
+        isEligibleForMarkup: isEligible || finalMarkup > 0,
       };
     });
   }, [
     activeCarrier,
-    appliedMarkupConfig,
     customCharges,
     removedLineIds,
     editedAmounts,
+    appliedMarkupConfig,
   ]);
 
   // Totals
@@ -1188,7 +864,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       const matchDesc = Boolean(
         item.description &&
         item.description.trim().toLowerCase() ===
-          description.trim().toLowerCase(),
+        description.trim().toLowerCase(),
       );
       return matchCode || matchDesc;
     });
@@ -1209,7 +885,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setChargeAmount("");
     setSelectedChargeType(undefined);
     message.success(`Added charge: ${description}`);
-    triggerRateChange();
   };
 
   // Remove charge handler
@@ -1249,7 +924,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     if (selectedRowId === targetId) setSelectedRowId(null);
     if (editingRowId === targetId) setEditingRowId(null);
     message.success("Charge removed.");
-    triggerRateChange();
   };
 
   // Edit charge handlers
@@ -1270,13 +944,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   };
 
   const handleBuyAmountChange = (val: string) => {
-    hasUserInteractedRef.current = true;
     const cleaned = val.replace(/[^0-9.]/g, "");
     setEditBuyAmount(cleaned);
   };
 
   const handleCustomerAmountChange = (val: string) => {
-    hasUserInteractedRef.current = true;
     const cleaned = val.replace(/[^0-9.]/g, "");
     setEditCustomerAmount(cleaned);
     setHasManuallyEditedCustomer(true);
@@ -1303,37 +975,22 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       ? -Math.abs(rawCustomer)
       : Math.max(0, rawCustomer);
 
+    const finalCustomer = hasManuallyEditedCustomer
+      ? newCustomer
+      : targetItem.customerAmount;
+
     setEditedAmounts((prev) => {
-      const baseBuy = baselineRef.current?.baseBuyAmounts[editingRowId];
-      const baseCustomer = baselineRef.current?.baseCustomerAmounts[editingRowId];
-      const baseDesc = baselineRef.current?.baseDescriptions[editingRowId] || targetItem.description;
-
-      const isSameAsBase =
-        baseBuy !== undefined &&
-        Math.abs(newBuy - baseBuy) < 0.001 &&
-        (!hasManuallyEditedCustomer || (baseCustomer !== undefined && Math.abs(newCustomer - baseCustomer) < 0.001)) &&
-        (!editDescription || editDescription.trim() === baseDesc.trim());
-
-      if (isSameAsBase) {
-        const next = { ...prev };
-        delete next[editingRowId];
-        return next;
-      }
-
       const existing = prev[editingRowId] || {};
       const updatedRow: {
         buyAmount: number;
-        customerAmount?: number;
+        customerAmount: number;
         description: string;
       } = {
         ...existing,
         buyAmount: newBuy,
+        customerAmount: finalCustomer,
         description: editDescription.trim() || targetItem.description,
       };
-
-      if (hasManuallyEditedCustomer) {
-        updatedRow.customerAmount = newCustomer;
-      }
 
       return {
         ...prev,
@@ -1346,10 +1003,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         prev.map((c) =>
           c.id === editingRowId
             ? {
-                ...c,
-                buyAmount: newBuy,
-                description: editDescription.trim() || c.description,
-              }
+              ...c,
+              buyAmount: newBuy,
+              description: editDescription.trim() || c.description,
+            }
             : c,
         ),
       );
@@ -1357,13 +1014,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
     setEditingRowId(null);
     message.success(`Updated ${targetItem.description}`);
-    triggerRateChange();
   };
 
   const handleCancelEdit = () => {
     setEditingRowId(null);
-    triggerRateChange();
   };
+
 
   const handleApplyMarkup = () => {
     // Clear any frozen customerAmount in editedAmounts so the new markup calculates fresh on current buy amounts
@@ -1378,23 +1034,76 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       return next;
     });
 
+    const numMarkup = Math.max(0, Number(markup) || 0);
+    const numNetSell = Math.max(0, Number(netSellRate) || 0);
+
+    const currentFreightBuy =
+      lineItems
+        .filter((i) => !isDiscountCharge(i.code) && isFreightCharge(i.code))
+        .reduce((acc, i) => acc + i.buyAmount, 0) +
+      lineItems
+        .filter((i) => isDiscountCharge(i.code))
+        .reduce((acc, i) => acc + i.buyAmount, 0);
+
+    const currentFuelBuy = lineItems
+      .filter((i) => isFuelCharge(i.code))
+      .reduce((acc, i) => acc + i.buyAmount, 0);
+
+    const currentTotalBuy = lineItems.reduce((acc, i) => acc + i.buyAmount, 0);
+
+    let markupRate = 0;
+    if (isMarkupEnabled && numMarkup > 0) {
+      if (markupDropdownOption === "Flat") {
+        markupRate = numMarkup;
+      } else if (markupDropdownOption === "% Freight") {
+        markupRate = currentFreightBuy * (numMarkup / 100);
+      } else if (markupDropdownOption === "% Freight + Fuel") {
+        markupRate = (currentFreightBuy + currentFuelBuy) * (numMarkup / 100);
+      } else if (markupDropdownOption === "% Freight + Fuel + Accessorial") {
+        markupRate = currentTotalBuy * (numMarkup / 100);
+      }
+    } else if (isNetSellRateEnabled && numNetSell > 0) {
+      markupRate = Math.max(0, numNetSell - currentTotalBuy);
+    }
+
+    let ppsFreight = 0;
+    let ppsFuel = 0;
+    const baseTotal = currentFreightBuy + currentFuelBuy;
+    if (markupRate > 0 && baseTotal > 0) {
+      const freightPercent =
+        Math.round((currentFreightBuy / baseTotal) * 10000) / 100;
+      const fuelPercent =
+        Math.round((currentFuelBuy / baseTotal) * 10000) / 100;
+
+      ppsFreight =
+        Math.round(((markupRate * freightPercent) / 100) * 100) / 100;
+      ppsFuel =
+        Math.round(((markupRate * fuelPercent) / 100) * 100) / 100;
+
+      if (Math.abs(ppsFreight + ppsFuel - markupRate) > 0.0001) {
+        ppsFuel = Math.round((markupRate - ppsFreight) * 100) / 100;
+      }
+    }
+
     setAppliedMarkupConfig({
       isMarkupEnabled,
       markupDropdownOption,
-      numericMarkup,
+      numericMarkup: numMarkup,
       isNetSellRateEnabled,
-      numericNetSellRate,
+      numericNetSellRate: numNetSell,
+      ppsFreight,
+      ppsFuel,
     });
-    if (isMarkupEnabled && numericMarkup > 0) {
+
+    if (isMarkupEnabled && numMarkup > 0) {
       message.success(`Applied ${markupDropdownOption} markup`);
-    } else if (isNetSellRateEnabled && numericNetSellRate > 0) {
+    } else if (isNetSellRateEnabled && numNetSell > 0) {
       message.success("Applied Net Sell Rate");
     } else if (!isMarkupEnabled && !isNetSellRateEnabled) {
       message.info("Markup removed");
     } else {
       message.info("Applied");
     }
-    triggerRateChange();
   };
 
   const handleRateClick = () => {
@@ -1422,37 +1131,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       )}
 
       <Form layout="vertical" className="compact-form">
-       
+        {/* Row 1: Carrier + Markup / Net Sell Rate */}
         <div className="mb-16 customer-rate-header-row">
-          <div className="cr-carrier-col">
-            <Form.Item noStyle>
-              <AutoComplete
-                value={carrierName}
-                options={carrierOptions}
-                onSearch={handleSearchCarriers}
-                onSelect={handleSelectCarrier}
-                onChange={handleChangeCarrier}
-                onFocus={handleCarrierFocus}
-                onClear={() => {
-                  setCarrierName("");
-                  setSelectedCarrier(null);
-                  if (onSelectCarrier) onSelectCarrier(null);
-                  fetchCarriersList("");
-                  triggerRateChange();
-                }}
-                placeholder="Carrier"
-                allowClear
-                className="w-100"
-                notFoundContent={
-                  loadingCarriers ? (
-                    <div className="carrier-select-loading">
-                      <Spin size="small" />
-                    </div>
-                  ) : undefined
-                }
-              />
-            </Form.Item>
-          </div>
+
           {isCorporate && (
             <div className="cr-markup-col">
               <div className="text-muted-13 markup-row-wrap">
@@ -1464,7 +1145,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     if (checked) {
                       setIsNetSellRateEnabled(false);
                     }
-                    triggerRateChange();
                   }}
                   className="markup-checkbox"
                 >
@@ -1477,21 +1157,21 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       value={markupDropdownOption}
                       onChange={(val) => {
                         setMarkupDropdownOption(val);
-                        triggerRateChange();
                       }}
                       style={{ minWidth: 230 }}
                       size="small"
                       options={[
+                        { value: "Flat", label: "Flat" },
+
                         { value: "% Freight", label: "% Freight" },
-                        {
-                          value: "% Freight + Fuel + Accessorial",
-                          label: "% Freight + Fuel + Accessorial",
-                        },
                         {
                           value: "% Freight + Fuel",
                           label: "% Freight + Fuel",
                         },
-                        { value: "Flat", label: "Flat" },
+                        {
+                          value: "% Freight + Fuel + Accessorial",
+                          label: "% Freight + Fuel + Accessorial",
+                        },
                       ]}
                     />
                     <div className="markup-input-wrap">
@@ -1503,7 +1183,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         onChange={(e) => {
                           const val = e.target.value.replace(/[^0-9.]/g, "");
                           setMarkup(val);
-                          triggerRateChange();
                         }}
                         onPressEnter={handleApplyMarkup}
                         className="input-sm-center"
@@ -1512,7 +1191,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         <span className="markup-unit-symbol">%</span>
                       )}
                     </div>
-
                   </>
                 )}
 
@@ -1524,7 +1202,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     if (checked) {
                       setIsMarkupEnabled(false);
                     }
-                    triggerRateChange();
                   }}
                   className="markup-checkbox"
                 >
@@ -1539,57 +1216,55 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       onChange={(e) => {
                         const val = e.target.value.replace(/[^0-9.]/g, "");
                         setNetSellRate(val);
-                        triggerRateChange();
                       }}
                       onPressEnter={handleApplyMarkup}
                       className="input-sm-center"
                     />
                   </div>
                 )}
+                {isCorporate && (
+                  <Col>
+                    <Button danger type="primary" onClick={handleApplyMarkup}>
+                      Apply
+                    </Button>
+                  </Col>
+                )}
               </div>
+
             </div>
           )}
-
         </div>
 
-        {/* Row 2: Get Top */}
-        <Row gutter={[12, 12]} className="mb-16 flex-align-center">
-          <Col>
-            <span className="text-muted-13">Get Top</span>
-          </Col>
-          <Col>
+        <Row className="mb-16">
+          <div className="cr-carrier-col">
             <Form.Item noStyle>
-              <Input
-                value={topCount}
-                onChange={(e) => {
-                  setTopCount(e.target.value.replace(/[^0-9]/g, ""));
-                  triggerRateChange();
+              <AutoComplete
+                value={carrierName}
+                options={carrierOptions}
+                onSearch={handleSearchCarriers}
+                onSelect={handleSelectCarrier}
+                onChange={handleChangeCarrier}
+                onFocus={handleCarrierFocus}
+                onClear={() => {
+                  setCarrierName("");
+                  setSelectedCarrier(null);
+                  if (onSelectCarrier) onSelectCarrier(null);
+                  fetchCarriersList("");
                 }}
-                className="input-sm-center"
+                placeholder="Carrier"
+                allowClear
+                className="w-100"
+                notFoundContent={
+                  loadingCarriers ? (
+                    <div className="carrier-select-loading">
+                      <Spin size="small" />
+                    </div>
+                  ) : undefined
+                }
               />
             </Form.Item>
-          </Col>
-          {isFromReference && hasRateChanged && (
-            <Col>
-              <span
-                style={{
-                  color: "#d4380d",
-                  backgroundColor: "#fff2e8",
-                  border: "1px solid #ffbb96",
-                  padding: "4px 12px",
-                  borderRadius: "4px",
-                  fontSize: "12.5px",
-                  fontWeight: 600,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <ExclamationCircleOutlined style={{ color: "#fa541c", fontSize: "14px" }} />
-                You have changed the value. Please re-check rate.
-              </span>
-            </Col>
-          )}
+          </div>
+
         </Row>
 
         {/* Row 3: Charge type + Amount + Add + Apply + Rate */}
@@ -1634,13 +1309,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               Add
             </Button>
           </Col>
-          {isCorporate && (
-            <Col>
-              <Button danger type="primary" onClick={handleApplyMarkup}>
-                Apply
-              </Button>
-            </Col>
-          )}
+
+
           <Col>
             <Button
               type="primary"
