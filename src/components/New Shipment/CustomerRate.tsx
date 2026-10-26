@@ -116,8 +116,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   onRateDetailsChange,
   clientMarkupConfig,
   isFromReference: _isFromReference = false,
-  hasRateChanged: _hasRateChanged = false,
-  onRateChanged: _onRateChanged,
+  hasRateChanged = false,
+  onRateChanged,
 }) => {
 
   const dispatch = useDispatch<AppDispatch>();
@@ -138,11 +138,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     ? clients.find((c) => c.clientCode === clientCode)
     : undefined;
 
+  const clientCorporateFlag = (
+    selectedClient as { isCorporate?: boolean } | undefined
+  )?.isCorporate;
+
   const isCorporate =
     propIsCorporate !== undefined
       ? propIsCorporate
-      : (typeof selectedClient?.isCorporate === "boolean"
-        ? selectedClient.isCorporate
+      : (typeof clientCorporateFlag === "boolean"
+        ? clientCorporateFlag
         : (storeIsCorporate ??
           (typeof localStorage !== "undefined" &&
             localStorage.getItem("isCorporate") === "true")));
@@ -158,11 +162,29 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const [markupDropdownOption, setMarkupDropdownOption] =
     useState<string>("Flat");
   const [markup, setMarkup] = useState<string>("0");
+  const [isMarkupDirty, setIsMarkupDirty] = useState<boolean>(false);
 
   // Net Sell Rate states
   const [isNetSellRateEnabled, setIsNetSellRateEnabled] =
     useState<boolean>(false);
   const [netSellRate, setNetSellRate] = useState<string>("0");
+  const [isNetSellDirty, setIsNetSellDirty] = useState<boolean>(false);
+
+  // Charge amount input dirty state
+  const [isChargeAmountDirty, setIsChargeAmountDirty] = useState<boolean>(false);
+
+  // Track which table cells have been edited to keep border-bottom applied
+  const [editedCellKeys, setEditedCellKeys] = useState<string[]>([]);
+
+  // Reset red borders when rate is refreshed or clean
+  useEffect(() => {
+    if (!hasRateChanged) {
+      setIsMarkupDirty(false);
+      setIsNetSellDirty(false);
+      setIsChargeAmountDirty(false);
+      setEditedCellKeys([]);
+    }
+  }, [hasRateChanged]);
 
   // Applied markup state (active and recalculated on table when applied)
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<{
@@ -367,6 +389,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const [editDescription, setEditDescription] = useState<string>("");
   const [hasManuallyEditedCustomer, setHasManuallyEditedCustomer] =
     useState<boolean>(false);
+  const [isBuyInputDirty, setIsBuyInputDirty] = useState<boolean>(false);
+  const [isCustomerInputDirty, setIsCustomerInputDirty] = useState<boolean>(false);
+  const [isDescInputDirty, setIsDescInputDirty] = useState<boolean>(false);
   const [editedAmounts, setEditedAmounts] = useState<
     Record<
       string,
@@ -399,6 +424,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       setRemovedLineIds([]);
       setEditedAmounts({});
       setEditingRowId(null);
+      setEditedCellKeys([]);
       if (activeCarrier) {
         setCarrierName(activeCarrier.carrierName || "");
         if (activeCarrier.carrierCode || activeCarrier.carrierName) {
@@ -884,6 +910,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setCustomCharges((prev) => [...prev, newCharge]);
     setChargeAmount("");
     setSelectedChargeType(undefined);
+    onRateChanged?.(true);
     message.success(`Added charge: ${description}`);
   };
 
@@ -923,6 +950,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
     if (selectedRowId === targetId) setSelectedRowId(null);
     if (editingRowId === targetId) setEditingRowId(null);
+    onRateChanged?.(true);
     message.success("Charge removed.");
   };
 
@@ -941,17 +969,27 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setEditCustomerAmount(custVal);
     setEditDescription(item.description);
     setHasManuallyEditedCustomer(false);
+    setIsBuyInputDirty(false);
+    setIsCustomerInputDirty(false);
+    setIsDescInputDirty(false);
   };
 
   const handleBuyAmountChange = (val: string) => {
     const cleaned = val.replace(/[^0-9.]/g, "");
     setEditBuyAmount(cleaned);
+    setIsBuyInputDirty(true);
+    setIsCustomerInputDirty(false);
+    setHasManuallyEditedCustomer(false);
+    onRateChanged?.(true);
   };
 
   const handleCustomerAmountChange = (val: string) => {
     const cleaned = val.replace(/[^0-9.]/g, "");
     setEditCustomerAmount(cleaned);
     setHasManuallyEditedCustomer(true);
+    setIsCustomerInputDirty(true);
+    setIsBuyInputDirty(false);
+    onRateChanged?.(true);
   };
 
   const handleSaveEdit = () => {
@@ -975,27 +1013,52 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       ? -Math.abs(rawCustomer)
       : Math.max(0, rawCustomer);
 
-    const finalCustomer = hasManuallyEditedCustomer
-      ? newCustomer
-      : targetItem.customerAmount;
+    const isBuyChanged = isBuyInputDirty && Math.abs(newBuy - targetItem.buyAmount) > 0.001;
+    const isCustomerChanged = isCustomerInputDirty && hasManuallyEditedCustomer && Math.abs(newCustomer - targetItem.customerAmount) > 0.001;
+    const isDescChanged = isDescInputDirty && editDescription.trim() !== targetItem.description;
 
     setEditedAmounts((prev) => {
       const existing = prev[editingRowId] || {};
       const updatedRow: {
-        buyAmount: number;
-        customerAmount: number;
-        description: string;
-      } = {
-        ...existing,
-        buyAmount: newBuy,
-        customerAmount: finalCustomer,
-        description: editDescription.trim() || targetItem.description,
-      };
+        buyAmount?: number;
+        customerAmount?: number;
+        description?: string;
+      } = { ...existing };
+
+      if (isBuyChanged) {
+        updatedRow.buyAmount = newBuy;
+        delete updatedRow.customerAmount;
+      } else if (isCustomerChanged) {
+        updatedRow.customerAmount = newCustomer;
+        delete updatedRow.buyAmount;
+      }
+
+      if (isDescChanged) {
+        updatedRow.description = editDescription.trim();
+      }
 
       return {
         ...prev,
         [editingRowId]: updatedRow,
       };
+    });
+
+    setEditedCellKeys((prev) => {
+      const next = prev.filter(
+        (key) =>
+          key !== `${editingRowId}-buy` &&
+          key !== `${editingRowId}-customer` &&
+          key !== `${editingRowId}-desc`
+      );
+      if (isBuyChanged) {
+        next.push(`${editingRowId}-buy`);
+      } else if (isCustomerChanged) {
+        next.push(`${editingRowId}-customer`);
+      }
+      if (isDescChanged) {
+        next.push(`${editingRowId}-desc`);
+      }
+      return next;
     });
 
     if (targetItem.isCustom) {
@@ -1004,8 +1067,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           c.id === editingRowId
             ? {
               ...c,
-              buyAmount: newBuy,
-              description: editDescription.trim() || c.description,
+              buyAmount: isBuyChanged ? newBuy : c.buyAmount,
+              description: isDescChanged ? editDescription.trim() : c.description,
             }
             : c,
         ),
@@ -1013,16 +1076,21 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     }
 
     setEditingRowId(null);
+    setIsBuyInputDirty(false);
+    setIsCustomerInputDirty(false);
+    setIsDescInputDirty(false);
     message.success(`Updated ${targetItem.description}`);
   };
 
   const handleCancelEdit = () => {
     setEditingRowId(null);
+    setIsBuyInputDirty(false);
+    setIsCustomerInputDirty(false);
+    setIsDescInputDirty(false);
   };
 
 
   const handleApplyMarkup = () => {
-    // Clear any frozen customerAmount in editedAmounts so the new markup calculates fresh on current buy amounts
     setEditedAmounts((prev) => {
       const next: typeof prev = {};
       Object.keys(prev).forEach((key) => {
@@ -1051,8 +1119,14 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
     const currentTotalBuy = lineItems.reduce((acc, i) => acc + i.buyAmount, 0);
 
-    let markupRate = 0;
-    if (isMarkupEnabled && numMarkup > 0) {
+    let ppsFreight = 0;
+    let ppsFuel = 0;
+
+    if (isNetSellRateEnabled && numNetSell > 0) {
+      ppsFreight = numNetSell;
+      ppsFuel = 0;
+    } else if (isMarkupEnabled && numMarkup > 0) {
+      let markupRate = 0;
       if (markupDropdownOption === "Flat") {
         markupRate = numMarkup;
       } else if (markupDropdownOption === "% Freight") {
@@ -1062,26 +1136,22 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       } else if (markupDropdownOption === "% Freight + Fuel + Accessorial") {
         markupRate = currentTotalBuy * (numMarkup / 100);
       }
-    } else if (isNetSellRateEnabled && numNetSell > 0) {
-      markupRate = Math.max(0, numNetSell - currentTotalBuy);
-    }
 
-    let ppsFreight = 0;
-    let ppsFuel = 0;
-    const baseTotal = currentFreightBuy + currentFuelBuy;
-    if (markupRate > 0 && baseTotal > 0) {
-      const freightPercent =
-        Math.round((currentFreightBuy / baseTotal) * 10000) / 100;
-      const fuelPercent =
-        Math.round((currentFuelBuy / baseTotal) * 10000) / 100;
+      const baseTotal = currentFreightBuy + currentFuelBuy;
+      if (markupRate > 0 && baseTotal > 0) {
+        const freightPercent =
+          Math.round((currentFreightBuy / baseTotal) * 10000) / 100;
+        const fuelPercent =
+          Math.round((currentFuelBuy / baseTotal) * 10000) / 100;
 
-      ppsFreight =
-        Math.round(((markupRate * freightPercent) / 100) * 100) / 100;
-      ppsFuel =
-        Math.round(((markupRate * fuelPercent) / 100) * 100) / 100;
+        ppsFreight =
+          Math.round(((markupRate * freightPercent) / 100) * 100) / 100;
+        ppsFuel =
+          Math.round(((markupRate * fuelPercent) / 100) * 100) / 100;
 
-      if (Math.abs(ppsFreight + ppsFuel - markupRate) > 0.0001) {
-        ppsFuel = Math.round((markupRate - ppsFreight) * 100) / 100;
+        if (Math.abs(ppsFreight + ppsFuel - markupRate) > 0.0001) {
+          ppsFuel = Math.round((markupRate - ppsFreight) * 100) / 100;
+        }
       }
     }
 
@@ -1107,6 +1177,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   };
 
   const handleRateClick = () => {
+    setIsMarkupDirty(false);
+    setIsNetSellDirty(false);
+    setIsChargeAmountDirty(false);
+    setEditedCellKeys([]);
+    onRateChanged?.(false);
     if (onRate) {
       onRate(selectedCarrier?.carrierId);
     } else {
@@ -1145,6 +1220,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     if (checked) {
                       setIsNetSellRateEnabled(false);
                     }
+                    onRateChanged?.(true);
                   }}
                   className="markup-checkbox"
                 >
@@ -1157,9 +1233,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       value={markupDropdownOption}
                       onChange={(val) => {
                         setMarkupDropdownOption(val);
+                        onRateChanged?.(true);
                       }}
                       style={{ minWidth: 230 }}
-                      size="small"
+                      size="medium"
                       options={[
                         { value: "Flat", label: "Flat" },
 
@@ -1180,12 +1257,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       )}
                       <Input
                         value={markup}
+                        status={isMarkupDirty ? "error" : undefined}
+                        className={`input-sm-center ${isMarkupDirty ? "border-red-highlight" : ""}`}
                         onChange={(e) => {
                           const val = e.target.value.replace(/[^0-9.]/g, "");
                           setMarkup(val);
+                          setIsMarkupDirty(true);
+                          onRateChanged?.(true);
                         }}
                         onPressEnter={handleApplyMarkup}
-                        className="input-sm-center"
                       />
                       {markupDropdownOption !== "Flat" && (
                         <span className="markup-unit-symbol">%</span>
@@ -1202,6 +1282,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     if (checked) {
                       setIsMarkupEnabled(false);
                     }
+                    onRateChanged?.(true);
                   }}
                   className="markup-checkbox"
                 >
@@ -1213,12 +1294,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     <span className="markup-unit-symbol">$</span>
                     <Input
                       value={netSellRate}
+                      status={isNetSellDirty ? "error" : undefined}
+                      className={`input-sm-center ${isNetSellDirty ? "border-red-highlight" : ""}`}
                       onChange={(e) => {
                         const val = e.target.value.replace(/[^0-9.]/g, "");
                         setNetSellRate(val);
+                        setIsNetSellDirty(true);
+                        onRateChanged?.(true);
                       }}
                       onPressEnter={handleApplyMarkup}
-                      className="input-sm-center"
                     />
                   </div>
                 )}
@@ -1292,9 +1376,13 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               <Input
                 placeholder="Amount"
                 value={chargeAmount}
+                status={isChargeAmountDirty ? "error" : undefined}
+                className={isChargeAmountDirty ? "border-red-highlight" : ""}
                 onChange={(e) => {
                   const val = e.target.value.replace(/[^0-9.]/g, "");
                   setChargeAmount(val);
+                  setIsChargeAmountDirty(true);
+                  onRateChanged?.(true);
                 }}
                 onPressEnter={handleAddCharge}
               />
@@ -1340,6 +1428,21 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           {lineItems.length > 0 ? (
             lineItems.map((item) => {
               const isEditing = editingRowId === item.id;
+              const isBuyEdited = editedCellKeys.includes(`${item.id}-buy`);
+              const isCustomerEdited = editedCellKeys.includes(`${item.id}-customer`);
+              const isDescEdited = editedCellKeys.includes(`${item.id}-desc`);
+
+              const buyInputClass =
+                isBuyInputDirty || (isBuyEdited && !isCustomerInputDirty)
+                  ? "table-input-edited"
+                  : "";
+              const custInputClass =
+                isCustomerInputDirty || (isCustomerEdited && !isBuyInputDirty)
+                  ? "table-input-edited"
+                  : "";
+              const descInputClass =
+                isDescInputDirty || isDescEdited ? "table-input-edited" : "";
+
               return (
                 <div
                   key={item.id}
@@ -1355,13 +1458,19 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       <Input
                         size="small"
                         value={editDescription}
-                        onChange={(e) => setEditDescription(e.target.value)}
+                        onChange={(e) => {
+                          setEditDescription(e.target.value);
+                          setIsDescInputDirty(true);
+                          onRateChanged?.(true);
+                        }}
                         onPressEnter={handleSaveEdit}
                         onClick={(e) => e.stopPropagation()}
-                        className="rate-desc-edit-input"
+                        className={`rate-desc-edit-input ${descInputClass}`}
                       />
                     ) : (
-                      <span>{item.description}</span>
+                      <span className={isDescEdited ? "table-cell-edited" : undefined}>
+                        {item.description}
+                      </span>
                     )}
                   </div>
                   {isCorporate && (
@@ -1379,11 +1488,13 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                             if (e.key === "Escape") handleCancelEdit();
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          className="rate-inline-edit-input"
+                          className={`rate-inline-edit-input ${buyInputClass}`}
                           autoFocus
                         />
                       ) : (
-                        formatCurrency(item.buyAmount)
+                        <span className={isBuyEdited ? "table-cell-edited" : undefined}>
+                          {formatCurrency(item.buyAmount)}
+                        </span>
                       )}
                     </div>
                   )}
@@ -1401,18 +1512,17 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                           if (e.key === "Escape") handleCancelEdit();
                         }}
                         onClick={(e) => e.stopPropagation()}
-                        className="rate-inline-edit-input"
+                        className={`rate-inline-edit-input ${custInputClass}`}
                       />
                     ) : (
-                      <div
-                        className={
-                          item.buyAmount > item.customerAmount
-                            ? "rate-cell-loss"
-                            : "rate-markup-val"
-                        }
+                      <span
+                        className={`
+                          ${item.buyAmount > item.customerAmount ? "rate-cell-loss" : "rate-markup-val"}
+                          ${isCustomerEdited ? "table-cell-edited" : ""}
+                        `}
                       >
                         {formatCurrency(item.customerAmount)}
-                      </div>
+                      </span>
                     )}
                   </div>
                   {isCorporate && (

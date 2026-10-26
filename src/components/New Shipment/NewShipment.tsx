@@ -450,28 +450,29 @@ const NewShipment: React.FC = () => {
             }
             if (Array.isArray(dataList) && dataList.length > 0) {
               setOriginLocationsList(dataList);
-              const matched = dataList.find(
-                (loc: any) => String(loc.zipCode || "").trim() === origZip
-              ) || dataList[0];
-
-              if (matched) {
-                setOriginData((prev: any) => {
-                  const updated = {
-                    ...prev,
-                    companyName: prev?.companyName || matched.locationName || "",
-                    address1: prev?.address1 || matched.address1 || "",
-                    address2: prev?.address2 || matched.address2 || "",
-                    city: prev?.city || matched.city || "",
-                    state: prev?.state || matched.stateCode || "",
-                    country: prev?.country || matched.countryCode || "USA",
-                    contactName: prev?.contactName || matched.contactName || "",
-                    phone: prev?.phone || formatPhoneNumber(matched.contactPhone || ""),
-                    email: prev?.email || matched.contactEmail || "",
-                  };
-                  originForm.setFieldsValue(updated);
-                  return updated;
-                });
-              }
+              // Only fallback city / state if not already set from quote
+              setOriginData((prev: any) => {
+                if (!prev?.city && !prev?.state) {
+                  const matched = dataList.find(
+                    (loc: any) => String(loc.zipCode || "").trim() === origZip
+                  ) || dataList[0];
+                  if (matched) {
+                    const fallback = {
+                      ...prev,
+                      city: matched.city || "",
+                      state: matched.stateCode || "",
+                      country: matched.countryCode || "USA",
+                    };
+                    originForm.setFieldsValue({
+                      city: fallback.city,
+                      state: fallback.state,
+                      country: fallback.country,
+                    });
+                    return fallback;
+                  }
+                }
+                return prev;
+              });
             }
           }
         } catch (error) {
@@ -509,28 +510,29 @@ const NewShipment: React.FC = () => {
             }
             if (Array.isArray(dataList) && dataList.length > 0) {
               setDestinationLocationsList(dataList);
-              const matched = dataList.find(
-                (loc: any) => String(loc.zipCode || "").trim() === destZip
-              ) || dataList[0];
-
-              if (matched) {
-                setDestinationData((prev: any) => {
-                  const updated = {
-                    ...prev,
-                    companyName: prev?.companyName || matched.locationName || "",
-                    address1: prev?.address1 || matched.address1 || "",
-                    address2: prev?.address2 || matched.address2 || "",
-                    city: prev?.city || matched.city || "",
-                    state: prev?.state || matched.stateCode || "",
-                    country: prev?.country || matched.countryCode || "USA",
-                    contactName: prev?.contactName || matched.contactName || "",
-                    phone: prev?.phone || formatPhoneNumber(matched.contactPhone || ""),
-                    email: prev?.email || matched.contactEmail || "",
-                  };
-                  destinationForm.setFieldsValue(updated);
-                  return updated;
-                });
-              }
+              // Only fallback city / state if not already set from quote
+              setDestinationData((prev: any) => {
+                if (!prev?.city && !prev?.state) {
+                  const matched = dataList.find(
+                    (loc: any) => String(loc.zipCode || "").trim() === destZip
+                  ) || dataList[0];
+                  if (matched) {
+                    const fallback = {
+                      ...prev,
+                      city: matched.city || "",
+                      state: matched.stateCode || "",
+                      country: matched.countryCode || "USA",
+                    };
+                    destinationForm.setFieldsValue({
+                      city: fallback.city,
+                      state: fallback.state,
+                      country: fallback.country,
+                    });
+                    return fallback;
+                  }
+                }
+                return prev;
+              });
             }
           }
         } catch (error) {
@@ -788,6 +790,7 @@ const NewShipment: React.FC = () => {
   }, [rawCarrier, quote]);
 
   const handleFetchRatesForShipment = async (scacParam?: string) => {
+    setHasRateChanged(false);
     const origZip = (originData?.postal || quote?.originZip || "").split(' - ')[0].trim();
     const destZip = (destinationData?.postal || quote?.destinationZip || "").split(' - ')[0].trim();
 
@@ -1471,7 +1474,7 @@ const NewShipment: React.FC = () => {
           <Button danger onClick={() => navigate('/shipments')}>Cancel</Button>
           <Button
             onClick={() => { if (!validateProductItems()) return; }}
-            disabled={isFromReference && hasRateChanged}
+            disabled={hasRateChanged}
           >
             Save Quote
           </Button>
@@ -1480,7 +1483,7 @@ const NewShipment: React.FC = () => {
             danger
             loading={isSavingShipment}
             onClick={handleSaveShipment}
-            disabled={isFromReference && hasRateChanged}
+            disabled={hasRateChanged || isSavingShipment}
           >
             Save Shipment
           </Button>
@@ -1957,7 +1960,7 @@ const NewShipment: React.FC = () => {
         <Button
           className="btn-outline"
           onClick={() => { if (!validateProductItems()) return; }}
-          disabled={isFromReference && hasRateChanged}
+          disabled={hasRateChanged}
         >
           Save Quote
         </Button>
@@ -1966,7 +1969,7 @@ const NewShipment: React.FC = () => {
           danger
           loading={isSavingShipment}
           onClick={handleSaveShipment}
-          disabled={isFromReference && hasRateChanged}
+          disabled={hasRateChanged || isSavingShipment}
         >
           Save Shipment
         </Button>

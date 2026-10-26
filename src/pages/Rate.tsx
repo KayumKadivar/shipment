@@ -381,9 +381,7 @@ export function CarrierCard({
               <dt>Gross Charge : {rate.grossCharge}</dt>
               <dt>Discount : {rate.discount}</dt>
               <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
-            </div>
-            <div className='rate-detail-accessorials'>
-              {rate.accessorialCharges?.map((charge, idx) => (
+               {rate.accessorialCharges?.map((charge, idx) => (
                 <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
               ))}
             </div>

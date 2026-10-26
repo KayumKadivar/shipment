@@ -4,7 +4,7 @@ import {
   SearchOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { Button, Checkbox, Empty, Input, Select, Spin, Result, message } from "antd";
+import { Button, Empty, Input, Select, Spin, Result, message } from "antd";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
@@ -640,30 +640,6 @@ function QuoteRateDetail() {
               <p className='rate-results-count'>
                 {`Showing ${visibleRates.length} of ${rates.length} carriers`}
               </p>
-              <div className='text-muted-13 markup-row-wrap quote-summary-markup'>
-                <span className='markup-label'>Mark Up</span>
-                <Checkbox
-                  checked={markupType === "netSellRate"}
-                  onChange={() => setMarkupType("netSellRate")}
-                  className='markup-checkbox'
-                >
-                  Net Sell Rate
-                </Checkbox>
-                <div className='markup-input-wrap'>
-                  <span className='markup-unit-symbol'>$</span>
-                  <Input
-                    value={markup}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.]/g, "");
-                      setMarkup(val);
-                    }}
-                    className='input-sm-center'
-                  />
-                </div>
-                <Button className='markup-apply-btn'>
-                  Apply
-                </Button>
-              </div>
             </div>
           )}
 

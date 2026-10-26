@@ -601,16 +601,16 @@
 .rate-save-btn {
   color: #52c41a;
   font-size: 14px;
-  padding: 2px 5px;
+  padding: 4px 5px;
 }
 .rate-save-btn:hover {
-  color: #389e0d;
+  color: #50e70f;
   background-color: rgba(82, 196, 26, 0.12);
 }
 .rate-cancel-btn {
-  color: #8c8c8c;
+  color: #ff4d4f;
   font-size: 14px;
-  padding: 2px 5px;
+  padding: 4px 5px;
 }
 .rate-cancel-btn:hover {
   color: #ff4d4f;
@@ -621,7 +621,7 @@
   border: none;
   cursor: pointer;
   color: #ff4d4f;
-  padding: 2px 4px;
+  padding: 4px 4px;
   font-size: 13px;
   line-height: 1;
   border-radius: 4px;
@@ -631,13 +631,65 @@
   color: #cf1322;
   background-color: rgba(255, 77, 79, 0.1);
 }
-.rate-inline-edit-input {
+.rate-inline-edit-input,
+.rate-inline-edit-input.ant-input-affix-wrapper,
+.rate-desc-edit-input,
+.rate-desc-edit-input.ant-input {
   max-width: 100px;
   font-size: 12px;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: 1.5px solid #d9d9d9 !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  padding: 2px 4px !important;
 }
-.rate-inline-edit-input input {
+
+.rate-desc-edit-input,
+.rate-desc-edit-input.ant-input {
+  max-width: 100% !important;
+}
+
+.rate-inline-edit-input:hover,
+.rate-inline-edit-input:focus,
+.rate-inline-edit-input.ant-input-affix-wrapper-focused,
+.rate-desc-edit-input:hover,
+.rate-desc-edit-input:focus {
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: 1.5px solid #1677ff !important;
+  box-shadow: none !important;
+}
+
+.rate-inline-edit-input input,
+.rate-inline-edit-input .ant-input {
   text-align: right;
   font-weight: 600;
+  background-color: transparent !important;
+}
+
+/* ONLY the input or saved cell that was actually edited gets RED border-bottom */
+.rate-inline-edit-input.table-input-edited,
+.rate-inline-edit-input.table-input-edited.ant-input-affix-wrapper,
+.rate-inline-edit-input.table-input-edited.ant-input-affix-wrapper:hover,
+.rate-inline-edit-input.table-input-edited.ant-input-affix-wrapper-focused,
+.rate-desc-edit-input.table-input-edited,
+.rate-desc-edit-input.table-input-edited:hover,
+.rate-desc-edit-input.table-input-edited:focus,
+.table-cell-edited {
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: 2px solid #ff4d4f !important;
+  box-shadow: none !important;
+}
+
+.table-cell-edited {
+  display: inline-block;
+  padding-bottom: 1px;
 }
 .rate-item-row.is-editing {
   background-color: #f0f7ff !important;
@@ -701,6 +753,15 @@
   min-width: 58px;
   /* text-align: center; */
   padding: 4px 6px;
+}
+
+/* Red border highlight for changed rate input */
+.border-red-highlight,
+.ant-input.border-red-highlight,
+.ant-input.border-red-highlight:hover,
+.ant-input.border-red-highlight:focus {
+  border-color: #ff4d4f !important;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2) !important;
 }
 
 
@@ -1176,5 +1237,44 @@
 .send-carrier-pickup-item {
   margin-top: 12px;
   margin-bottom: 0 !important;
+}
+
+/* ── From & To Time Selects ── */
+.location-time-select {
+  width: 100%;
+}
+
+.location-time-select.ant-select,
+.location-time-select .ant-select-selector {
+  height: 32px !important;
+  min-height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.location-time-select .ant-select-selector {
+  font-size: 11px !important;
+  padding: 0 8px !important;
+}
+
+.location-time-select .ant-select-selection-item,
+.location-time-select .ant-select-selection-placeholder {
+  font-size: 11px !important;
+  line-height: 30px !important;
+}
+
+.location-time-dropdown .ant-select-item {
+  font-size: 11px !important;
+  min-height: 26px !important;
+  padding: 3px 8px !important;
+}
+
+.location-time-dropdown .ant-select-item-option-content {
+  font-size: 11px !important;
+}
+
+/* ── Location Time Label (Smaller Font Size) ── */
+.location-time-label .ant-form-item-label > label {
+  font-size: 12px !important;
 }
 

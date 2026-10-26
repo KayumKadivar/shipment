@@ -620,41 +620,71 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
             </Form.Item>
           </Col>
         </Row>
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={12}>
-            <Form.Item label="Exp. Pickup Date" name="expPickupDate">
+        <Row gutter={[12, 12]} className="location-date-time-row">
+          <Col xs={24} md={10}>
+            <Form.Item label="Exp. Pickup Date" name="expPickupDate" className="location-time-label">
               <Input placeholder="mm/dd/yyyy" />
             </Form.Item>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={7}>
             <Form.Item 
               label="From" 
               name="openTime"
               rules={[{ required: true, message: "Pickup time is required" }]}
             >
-              <Select allowClear showSearch options={timeOptions} placeholder="From" />
+              <Select
+                className="location-time-select"
+                popupClassName="location-time-dropdown"
+                style={{ fontSize: 11 }}
+                allowClear
+                showSearch
+                options={timeOptions}
+                placeholder="From"
+              />
             </Form.Item>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={7}>
             <Form.Item label="To" name="closeTime">
-              <Select allowClear showSearch options={timeOptions} placeholder="To" />
+              <Select
+                className="location-time-select"
+                popupClassName="location-time-dropdown"
+                style={{ fontSize: 11 }}
+                allowClear
+                showSearch
+                options={timeOptions}
+                placeholder="To"
+              />
             </Form.Item>
           </Col>
         </Row>
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={12}>
-            <Form.Item label="Pickup Date" name="pickupDate">
-              <Input placeholder="mm/dd/yyyy"/>
+        <Row gutter={[12, 12]} className="location-date-time-row">
+          <Col xs={24} md={10}>
+            <Form.Item label="Pickup Date" name="pickupDate" className="location-time-label">
+              <Input placeholder="mm/dd/yyyy" />
             </Form.Item>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={7}>
             <Form.Item label="From" name="pickupOpenTime">
-              <Select allowClear showSearch options={timeOptions} />
+              <Select
+                className="location-time-select"
+                popupClassName="location-time-dropdown"
+                style={{ fontSize: 11 }}
+                allowClear
+                showSearch
+                options={timeOptions}
+              />
             </Form.Item>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={7}>
             <Form.Item label="To" name="pickupCloseTime">
-              <Select allowClear showSearch options={timeOptions} />
+              <Select
+                className="location-time-select"
+                popupClassName="location-time-dropdown"
+                style={{ fontSize: 11 }}
+                allowClear
+                showSearch
+                options={timeOptions}
+              />
             </Form.Item>
           </Col>
         </Row>
