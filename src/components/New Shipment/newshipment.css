@@ -749,10 +749,11 @@
 
 /* Mark Up input */
 .input-sm-center {
-  width: 58px;
-  min-width: 58px;
+  width: 40px;
+  min-width: 40px;
   /* text-align: center; */
   padding: 4px 6px;
+  margin-left: 3px;
 }
 
 /* Red border highlight for changed rate input */

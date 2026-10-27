@@ -103,6 +103,18 @@ const formatCurrency = (val: number): string => {
   return isNeg ? `($${abs})` : `$${abs}`;
 };
 
+const formatMarkup = (val: number, isPercent: boolean): string => {
+  if (val == null || isNaN(val)) return isPercent ? "0.00%" : "$0.00";
+  const isNeg = val < 0;
+  const abs = Math.abs(val).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  if (isPercent) {
+    return isNeg ? `(${abs}%)` : `${abs}%`;
+  }
+  return isNeg ? `($${abs})` : `$${abs}`;
+};
 
 const CustomerRate: React.FC<CustomerRateProps> = ({
   carrierData,
@@ -119,7 +131,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   hasRateChanged = false,
   onRateChanged,
 }) => {
-
   const dispatch = useDispatch<AppDispatch>();
   const customerRate = useSelector((state: RootState) => state.customerRate);
   const accessorialsList =
@@ -145,11 +156,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const isCorporate =
     propIsCorporate !== undefined
       ? propIsCorporate
-      : (typeof clientCorporateFlag === "boolean"
+      : typeof clientCorporateFlag === "boolean"
         ? clientCorporateFlag
         : (storeIsCorporate ??
           (typeof localStorage !== "undefined" &&
-            localStorage.getItem("isCorporate") === "true")));
+            localStorage.getItem("isCorporate") === "true"));
 
   useEffect(() => {
     if (!accessorialsList || accessorialsList.length === 0) {
@@ -161,6 +172,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const [isMarkupEnabled, setIsMarkupEnabled] = useState<boolean>(false);
   const [markupDropdownOption, setMarkupDropdownOption] =
     useState<string>("Flat");
+  const [markupRate, setMarkupRate] = useState<string>("0");
+  const [isMarkupRateDirty, setIsMarkupRateDirty] = useState<boolean>(false);
   const [markup, setMarkup] = useState<string>("0");
   const [isMarkupDirty, setIsMarkupDirty] = useState<boolean>(false);
 
@@ -171,7 +184,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const [isNetSellDirty, setIsNetSellDirty] = useState<boolean>(false);
 
   // Charge amount input dirty state
-  const [isChargeAmountDirty, setIsChargeAmountDirty] = useState<boolean>(false);
+  const [isChargeAmountDirty, setIsChargeAmountDirty] =
+    useState<boolean>(false);
 
   // Track which table cells have been edited to keep border-bottom applied
   const [editedCellKeys, setEditedCellKeys] = useState<string[]>([]);
@@ -179,6 +193,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   // Reset red borders when rate is refreshed or clean
   useEffect(() => {
     if (!hasRateChanged) {
+      setIsMarkupRateDirty(false);
       setIsMarkupDirty(false);
       setIsNetSellDirty(false);
       setIsChargeAmountDirty(false);
@@ -191,6 +206,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     isMarkupEnabled: boolean;
     markupDropdownOption: string;
     numericMarkup: number;
+    numericMarkupRate?: number;
     isNetSellRateEnabled: boolean;
     numericNetSellRate: number;
     ppsFreight: number;
@@ -199,6 +215,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     isMarkupEnabled: false,
     markupDropdownOption: "Flat",
     numericMarkup: 0,
+    numericMarkupRate: 0,
     isNetSellRateEnabled: false,
     numericNetSellRate: 0,
     ppsFreight: 0,
@@ -231,12 +248,17 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
             opt = "% Freight";
           }
           setMarkupDropdownOption(opt);
+          const rateVal =
+            clientMarkupConfig.rate != null
+              ? String(clientMarkupConfig.rate)
+              : "0";
+          setMarkupRate(rateVal);
           const val =
             clientMarkupConfig.minimum != null
               ? String(clientMarkupConfig.minimum)
               : clientMarkupConfig.rate != null
-              ? String(clientMarkupConfig.rate)
-              : "0";
+                ? String(clientMarkupConfig.rate)
+                : "0";
           setMarkup(val);
         }
       }
@@ -267,12 +289,17 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           opt = "% Freight";
         }
         setMarkupDropdownOption(opt);
+        const rateVal =
+          (carrierData as any).rate != null
+            ? String((carrierData as any).rate)
+            : "0";
+        setMarkupRate(rateVal);
         const val =
           (carrierData as any).minimum != null
             ? String((carrierData as any).minimum)
             : (carrierData as any).markup != null
-            ? String((carrierData as any).markup)
-            : "0";
+              ? String((carrierData as any).markup)
+              : "0";
         setMarkup(val);
       }
       return;
@@ -317,8 +344,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               if (raw.includes("netsell")) {
                 setIsNetSellRateEnabled(true);
                 setIsMarkupEnabled(false);
-                const rateVal =
-                  config.rate != null ? String(config.rate) : "0";
+                const rateVal = config.rate != null ? String(config.rate) : "0";
                 setNetSellRate(rateVal);
               } else {
                 setIsMarkupEnabled(true);
@@ -334,12 +360,14 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                   opt = "% Freight";
                 }
                 setMarkupDropdownOption(opt);
+                const rateVal = config.rate != null ? String(config.rate) : "0";
+                setMarkupRate(rateVal);
                 const val =
                   config.minimum != null
                     ? String(config.minimum)
                     : config.rate != null
-                    ? String(config.rate)
-                    : "0";
+                      ? String(config.rate)
+                      : "0";
                 setMarkup(val);
               }
             }
@@ -390,7 +418,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const [hasManuallyEditedCustomer, setHasManuallyEditedCustomer] =
     useState<boolean>(false);
   const [isBuyInputDirty, setIsBuyInputDirty] = useState<boolean>(false);
-  const [isCustomerInputDirty, setIsCustomerInputDirty] = useState<boolean>(false);
+  const [isCustomerInputDirty, setIsCustomerInputDirty] =
+    useState<boolean>(false);
   const [isDescInputDirty, setIsDescInputDirty] = useState<boolean>(false);
   const [editedAmounts, setEditedAmounts] = useState<
     Record<
@@ -398,7 +427,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       { buyAmount?: number; customerAmount?: number; description?: string }
     >
   >({});
-
 
   const activeCarrier = useMemo(() => {
     if (
@@ -425,6 +453,17 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       setEditedAmounts({});
       setEditingRowId(null);
       setEditedCellKeys([]);
+      setIsMarkupRateDirty(false);
+      setAppliedMarkupConfig({
+        isMarkupEnabled: false,
+        markupDropdownOption: "Flat",
+        numericMarkup: 0,
+        numericMarkupRate: 0,
+        isNetSellRateEnabled: false,
+        numericNetSellRate: 0,
+        ppsFreight: 0,
+        ppsFuel: 0,
+      });
       if (activeCarrier) {
         setCarrierName(activeCarrier.carrierName || "");
         if (activeCarrier.carrierCode || activeCarrier.carrierName) {
@@ -572,7 +611,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     return c === "DSC" || c === "DISC";
   };
 
-
   // Line items
   const lineItems = useMemo<RateLineItem[]>(() => {
     const rawItems: {
@@ -664,7 +702,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
     const isMarkupActive =
       appliedMarkupConfig.isMarkupEnabled &&
-      appliedMarkupConfig.numericMarkup > 0;
+      (appliedMarkupConfig.numericMarkup > 0 ||
+        (appliedMarkupConfig.numericMarkupRate ?? 0) > 0);
     const isNetSellActive =
       appliedMarkupConfig.isNetSellRateEnabled &&
       appliedMarkupConfig.numericNetSellRate > 0;
@@ -674,9 +713,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         ? appliedMarkupConfig.ppsFreight || 0
         : 0;
     const ppsFuel =
-      isMarkupActive || isNetSellActive
-        ? appliedMarkupConfig.ppsFuel || 0
-        : 0;
+      isMarkupActive || isNetSellActive ? appliedMarkupConfig.ppsFuel || 0 : 0;
 
     return rawItems.map((item) => {
       const isDiscount = isDiscountCharge(item.code);
@@ -685,32 +722,49 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
       const overrideCust = editedAmounts[item.id]?.customerAmount;
 
+      let currentBuy = item.buyAmount;
       let calculatedCust = item.buyAmount;
       let calculatedMarkup = 0;
       let isEligible = false;
 
-      if (isFreight) {
-        isEligible = true;
-        calculatedMarkup = ppsFreight;
-        calculatedCust = item.buyAmount + ppsFreight;
-      } else if (isFuel) {
-        isEligible = true;
-        calculatedMarkup = ppsFuel;
-        calculatedCust = item.buyAmount + ppsFuel;
+      if (isNetSellActive) {
+        if (isFreight) {
+          isEligible = true;
+          currentBuy = item.buyAmount;
+          calculatedCust = appliedMarkupConfig.numericNetSellRate;
+          calculatedMarkup = appliedMarkupConfig.numericNetSellRate;
+        } else if (isFuel) {
+          isEligible = true;
+          currentBuy = 0;
+          calculatedCust = 0;
+          calculatedMarkup = 0;
+        } else {
+          isEligible = false;
+          currentBuy = 0;
+          calculatedCust = 0;
+          calculatedMarkup = 0;
+        }
+      } else {
+        if (isFreight) {
+          isEligible = true;
+          calculatedMarkup = ppsFreight;
+          calculatedCust = item.buyAmount + ppsFreight;
+        } else if (isFuel) {
+          isEligible = true;
+          calculatedMarkup = ppsFuel;
+          calculatedCust = item.buyAmount + ppsFuel;
+        }
       }
 
       const custAmt =
         overrideCust !== undefined ? overrideCust : calculatedCust;
-      const finalMarkup =
-        overrideCust !== undefined
-          ? custAmt - item.buyAmount
-          : calculatedMarkup;
+      const finalMarkup = calculatedMarkup;
 
       return {
         id: item.id,
         code: item.code,
         description: item.description,
-        buyAmount: item.buyAmount,
+        buyAmount: currentBuy,
         customerAmount: custAmt,
         markupAmount: finalMarkup,
         markupCalculation: "",
@@ -735,15 +789,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const discountLines = lineItems.filter((i) => isDiscountCharge(i.code));
   // const fuelLines = lineItems.filter((i) => isFuelCharge(i.code, i.description));
 
-  const netFreightBuy =
-    freightLines.reduce((acc, item) => acc + item.buyAmount, 0) +
-    discountLines.reduce((acc, item) => acc + item.buyAmount, 0);
-  const netFreightCustomer =
-    freightLines.reduce((acc, item) => acc + item.customerAmount, 0) +
-    discountLines.reduce((acc, item) => acc + item.customerAmount, 0);
-  const netFreightMarkup =
-    freightLines.reduce((acc, item) => acc + item.markupAmount, 0) +
-    discountLines.reduce((acc, item) => acc + item.markupAmount, 0);
+  // const netFreightBuy =
+  //   freightLines.reduce((acc, item) => acc + item.buyAmount, 0) +
+  //   discountLines.reduce((acc, item) => acc + item.buyAmount, 0);
+  // const netFreightCustomer =
+  //   freightLines.reduce((acc, item) => acc + item.customerAmount, 0) +
+  //   discountLines.reduce((acc, item) => acc + item.customerAmount, 0);
+  // const netFreightMarkup =
+  //   freightLines.reduce((acc, item) => acc + item.markupAmount, 0) +
+  //   discountLines.reduce((acc, item) => acc + item.markupAmount, 0);
 
   const totalBuy = lineItems.reduce((acc, item) => acc + item.buyAmount, 0);
   const totalCustomer = lineItems.reduce(
@@ -754,6 +808,22 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     (acc, item) => acc + item.markupAmount,
     0,
   );
+
+  const isPercentMarkup = useMemo(() => {
+    if (appliedMarkupConfig.isNetSellRateEnabled || isNetSellRateEnabled) {
+      return false;
+    }
+    const activeOption = appliedMarkupConfig.isMarkupEnabled
+      ? appliedMarkupConfig.markupDropdownOption
+      : markupDropdownOption;
+    return Boolean(activeOption && activeOption.includes("%"));
+  }, [
+    appliedMarkupConfig.isNetSellRateEnabled,
+    appliedMarkupConfig.isMarkupEnabled,
+    appliedMarkupConfig.markupDropdownOption,
+    isNetSellRateEnabled,
+    markupDropdownOption,
+  ]);
 
   const prevRatesRef = useRef<string>("");
 
@@ -890,7 +960,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       const matchDesc = Boolean(
         item.description &&
         item.description.trim().toLowerCase() ===
-        description.trim().toLowerCase(),
+          description.trim().toLowerCase(),
       );
       return matchCode || matchDesc;
     });
@@ -1013,9 +1083,14 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       ? -Math.abs(rawCustomer)
       : Math.max(0, rawCustomer);
 
-    const isBuyChanged = isBuyInputDirty && Math.abs(newBuy - targetItem.buyAmount) > 0.001;
-    const isCustomerChanged = isCustomerInputDirty && hasManuallyEditedCustomer && Math.abs(newCustomer - targetItem.customerAmount) > 0.001;
-    const isDescChanged = isDescInputDirty && editDescription.trim() !== targetItem.description;
+    const isBuyChanged =
+      isBuyInputDirty && Math.abs(newBuy - targetItem.buyAmount) > 0.001;
+    const isCustomerChanged =
+      isCustomerInputDirty &&
+      hasManuallyEditedCustomer &&
+      Math.abs(newCustomer - targetItem.customerAmount) > 0.001;
+    const isDescChanged =
+      isDescInputDirty && editDescription.trim() !== targetItem.description;
 
     setEditedAmounts((prev) => {
       const existing = prev[editingRowId] || {};
@@ -1025,12 +1100,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         description?: string;
       } = { ...existing };
 
-      if (isBuyChanged) {
+      if (isBuyChanged && !isCustomerChanged) {
         updatedRow.buyAmount = newBuy;
-        delete updatedRow.customerAmount;
-      } else if (isCustomerChanged) {
+        updatedRow.customerAmount = targetItem.customerAmount;
+      } else if (isCustomerChanged && !isBuyChanged) {
         updatedRow.customerAmount = newCustomer;
         delete updatedRow.buyAmount;
+      } else if (isBuyChanged && isCustomerChanged) {
+        updatedRow.buyAmount = newBuy;
+        updatedRow.customerAmount = newCustomer;
       }
 
       if (isDescChanged) {
@@ -1048,7 +1126,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         (key) =>
           key !== `${editingRowId}-buy` &&
           key !== `${editingRowId}-customer` &&
-          key !== `${editingRowId}-desc`
+          key !== `${editingRowId}-desc`,
       );
       if (isBuyChanged) {
         next.push(`${editingRowId}-buy`);
@@ -1066,10 +1144,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         prev.map((c) =>
           c.id === editingRowId
             ? {
-              ...c,
-              buyAmount: isBuyChanged ? newBuy : c.buyAmount,
-              description: isDescChanged ? editDescription.trim() : c.description,
-            }
+                ...c,
+                buyAmount: isBuyChanged ? newBuy : c.buyAmount,
+                description: isDescChanged
+                  ? editDescription.trim()
+                  : c.description,
+              }
             : c,
         ),
       );
@@ -1089,7 +1169,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setIsDescInputDirty(false);
   };
 
-
   const handleApplyMarkup = () => {
     setEditedAmounts((prev) => {
       const next: typeof prev = {};
@@ -1102,7 +1181,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       return next;
     });
 
-    const numMarkup = Math.max(0, Number(markup) || 0);
+    const numRate = Math.max(0, Number(markupRate) || 0);
+    const numMin = Math.max(0, Number(markup) || 0);
+    const numMarkup = numRate > 0 ? numRate : numMin;
     const numNetSell = Math.max(0, Number(netSellRate) || 0);
 
     const currentFreightBuy =
@@ -1125,32 +1206,49 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     if (isNetSellRateEnabled && numNetSell > 0) {
       ppsFreight = numNetSell;
       ppsFuel = 0;
-    } else if (isMarkupEnabled && numMarkup > 0) {
-      let markupRate = 0;
+    } else if (isMarkupEnabled && (numRate > 0 || numMin > 0)) {
+      const rateToUse = numRate > 0 ? numRate : numMin;
+      let calculatedMarkup = 0;
+
       if (markupDropdownOption === "Flat") {
-        markupRate = numMarkup;
+        calculatedMarkup = rateToUse;
       } else if (markupDropdownOption === "% Freight") {
-        markupRate = currentFreightBuy * (numMarkup / 100);
+        calculatedMarkup = currentFreightBuy * (rateToUse / 100);
+        if (calculatedMarkup < numMin) {
+          calculatedMarkup = numMin;
+        }
       } else if (markupDropdownOption === "% Freight + Fuel") {
-        markupRate = (currentFreightBuy + currentFuelBuy) * (numMarkup / 100);
+        calculatedMarkup =
+          (currentFreightBuy + currentFuelBuy) * (rateToUse / 100);
+        if (calculatedMarkup < numMin) {
+          calculatedMarkup = numMin;
+        }
       } else if (markupDropdownOption === "% Freight + Fuel + Accessorial") {
-        markupRate = currentTotalBuy * (numMarkup / 100);
+        calculatedMarkup = currentTotalBuy * (rateToUse / 100);
+        if (calculatedMarkup < numMin) {
+          calculatedMarkup = numMin;
+        }
       }
 
+      const totalMarkupToDistribute = calculatedMarkup;
+
       const baseTotal = currentFreightBuy + currentFuelBuy;
-      if (markupRate > 0 && baseTotal > 0) {
+      if (totalMarkupToDistribute > 0 && baseTotal > 0) {
         const freightPercent =
           Math.round((currentFreightBuy / baseTotal) * 10000) / 100;
         const fuelPercent =
           Math.round((currentFuelBuy / baseTotal) * 10000) / 100;
 
         ppsFreight =
-          Math.round(((markupRate * freightPercent) / 100) * 100) / 100;
+          Math.round(((totalMarkupToDistribute * freightPercent) / 100) * 100) /
+          100;
         ppsFuel =
-          Math.round(((markupRate * fuelPercent) / 100) * 100) / 100;
+          Math.round(((totalMarkupToDistribute * fuelPercent) / 100) * 100) /
+          100;
 
-        if (Math.abs(ppsFreight + ppsFuel - markupRate) > 0.0001) {
-          ppsFuel = Math.round((markupRate - ppsFreight) * 100) / 100;
+        if (Math.abs(ppsFreight + ppsFuel - totalMarkupToDistribute) > 0.0001) {
+          ppsFuel =
+            Math.round((totalMarkupToDistribute - ppsFreight) * 100) / 100;
         }
       }
     }
@@ -1158,7 +1256,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setAppliedMarkupConfig({
       isMarkupEnabled,
       markupDropdownOption,
-      numericMarkup: numMarkup,
+      numericMarkup: numMin,
+      numericMarkupRate: numRate,
       isNetSellRateEnabled,
       numericNetSellRate: numNetSell,
       ppsFreight,
@@ -1177,6 +1276,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   };
 
   const handleRateClick = () => {
+    setIsMarkupRateDirty(false);
     setIsMarkupDirty(false);
     setIsNetSellDirty(false);
     setIsChargeAmountDirty(false);
@@ -1208,7 +1308,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       <Form layout="vertical" className="compact-form">
         {/* Row 1: Carrier + Markup / Net Sell Rate */}
         <div className="mb-16 customer-rate-header-row">
-
           {isCorporate && (
             <div className="cr-markup-col">
               <div className="text-muted-13 markup-row-wrap">
@@ -1252,20 +1351,33 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       ]}
                     />
                     <div className="markup-input-wrap">
+                      <Input
+                        value={markupRate}
+                        status={isMarkupRateDirty ? "error" : undefined}
+                        className={`input-sm-center ${isMarkupRateDirty ? "border-red-highlight" : ""}`}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9.]/g, "");
+                          setMarkupRate(val);
+                          setIsMarkupRateDirty(true);
+                          onRateChanged?.(true);
+                        }}
+                        onPressEnter={handleApplyMarkup}
+                      />
+                    </div>
+                    <div className="markup-input-wrap">
+                      <span
+                        className="markup-min-label"
+                        style={{ fontWeight: 500, fontSize: 13, color: "#555" }}
+                      >
+                        Min. 
+                      </span>
                       {markupDropdownOption === "Flat" && (
                         <span className="markup-unit-symbol">$</span>
                       )}
                       <Input
                         value={markup}
-                        status={isMarkupDirty ? "error" : undefined}
-                        className={`input-sm-center ${isMarkupDirty ? "border-red-highlight" : ""}`}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/[^0-9.]/g, "");
-                          setMarkup(val);
-                          setIsMarkupDirty(true);
-                          onRateChanged?.(true);
-                        }}
-                        onPressEnter={handleApplyMarkup}
+                        disabled
+                        className="input-sm-center"
                       />
                       {markupDropdownOption !== "Flat" && (
                         <span className="markup-unit-symbol">%</span>
@@ -1314,7 +1426,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                   </Col>
                 )}
               </div>
-
             </div>
           )}
         </div>
@@ -1348,7 +1459,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               />
             </Form.Item>
           </div>
-
         </Row>
 
         {/* Row 3: Charge type + Amount + Add + Apply + Rate */}
@@ -1398,7 +1508,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
             </Button>
           </Col>
 
-
           <Col>
             <Button
               type="primary"
@@ -1429,7 +1538,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
             lineItems.map((item) => {
               const isEditing = editingRowId === item.id;
               const isBuyEdited = editedCellKeys.includes(`${item.id}-buy`);
-              const isCustomerEdited = editedCellKeys.includes(`${item.id}-customer`);
+              const isCustomerEdited = editedCellKeys.includes(
+                `${item.id}-customer`,
+              );
               const isDescEdited = editedCellKeys.includes(`${item.id}-desc`);
 
               const buyInputClass =
@@ -1468,7 +1579,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         className={`rate-desc-edit-input ${descInputClass}`}
                       />
                     ) : (
-                      <span className={isDescEdited ? "table-cell-edited" : undefined}>
+                      <span
+                        className={
+                          isDescEdited ? "table-cell-edited" : undefined
+                        }
+                      >
                         {item.description}
                       </span>
                     )}
@@ -1492,7 +1607,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                           autoFocus
                         />
                       ) : (
-                        <span className={isBuyEdited ? "table-cell-edited" : undefined}>
+                        <span
+                          className={
+                            isBuyEdited ? "table-cell-edited" : undefined
+                          }
+                        >
                           {formatCurrency(item.buyAmount)}
                         </span>
                       )}
@@ -1531,7 +1650,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         <span
                           className={`rate-markup-val ${item.markupAmount > 0 ? "has-markup" : ""}`}
                         >
-                          {formatCurrency(item.markupAmount)}
+                          {formatMarkup(item.markupAmount, isPercentMarkup)}
                         </span>
                       ) : (
                         <span className="rate-markup-dash">-</span>
@@ -1615,7 +1734,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
           {/* Totals inside rate-table-content for 100% synchronized horizontal alignment */}
           <div className="rate-totals-section">
-            <div className="rate-total-summary-row mb-12 text-muted-13">
+            {/* <div className="rate-total-summary-row mb-12 text-muted-13">
               <div className="col-code"></div>
               <div className="col-desc">Net Freight</div>
               {isCorporate && (
@@ -1640,7 +1759,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                 </div>
               )}
               {isCorporate && <div className="col-actions" />}
-            </div>
+            </div> */}
             <div className="rate-total-summary-row mb-16 rate-total-row">
               <div className="col-code"></div>
               <div className="col-desc">Total</div>
@@ -1658,7 +1777,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               </div>
               {isCorporate && (
                 <div className="col-markup text-right">
-                  <span>{formatCurrency(totalMarkup)}</span>
+                  <span>{formatMarkup(totalMarkup, isPercentMarkup)}</span>
                 </div>
               )}
               {isCorporate && <div className="col-actions" />}
@@ -1666,7 +1785,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           </div>
         </div>
       </div>
-
     </Card>
   );
 };

@@ -142,6 +142,11 @@ function QuoteRateDetail() {
     if (apiQuote && apiQuote.quoteResults && apiQuote.quoteResults.length > 0) {
       return apiQuote.quoteResults.map((result, index) => {
         let grossCharge = Number(result.grossCharge) || 0;
+        let grossSellAmount = (result as any).grossSellAmount != null
+          ? Number((result as any).grossSellAmount)
+          : (result as any).sellAmount != null
+          ? Number((result as any).sellAmount)
+          : undefined;
         let discount = Number(result.discount) || 0;
         let fuelSurcharge = Number(result.fuelSurcharge) || 0;
         const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[] = [];
@@ -163,6 +168,9 @@ function QuoteRateDetail() {
               name.includes("gross")
             ) {
               grossCharge = amount;
+              if (cd.sellAmount != null) {
+                grossSellAmount = Number(cd.sellAmount);
+              }
             } else if (
               code === COST_CODE_DISC ||
               code === "DSC" ||
@@ -204,12 +212,13 @@ function QuoteRateDetail() {
           logoKind: "image" as const,
           price: calculatedPrice > 0 ? calculatedPrice : 0,
           transitDays: parseInt(result.transitDays || "0") || 0,
-          estimatedDelivery: result.estimatedDeliveryDate || "0001-01-01T00:00:00",
+          estimatedDelivery: result.estimatedDeliveryDate || "",
           warning: result.errorMessage?.trim() || result.warning?.trim() || (calculatedPrice <= 0 ? "Rate unavailable or carrier error." : ""),
           quoteExpiry: apiQuote.requestedDate || "N/A",
           liabilityNew: "",
           liabilityUsed: "",
           grossCharge,
+          grossSellAmount,
           discount,
           fuelSurcharge,
           accessorialCharges: otherAccessorials,

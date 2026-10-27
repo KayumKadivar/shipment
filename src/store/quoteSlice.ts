@@ -56,6 +56,8 @@ export interface QuoteCostDetailResult {
   accCode?: string;
   accName?: string;
   amount?: number;
+  sellAmount?: number | null;
+  sellCharge?: number | null;
 }
 
 export interface QuoteCarrierResult {
@@ -80,6 +82,7 @@ export interface QuoteCarrierResult {
   destinationTerminalPhone?: string;
   quoteCostDetails?: QuoteCostDetailResult[] | null;
   grossCharge?: number;
+  grossSellAmount?: number;
   discount?: number;
   fuelSurcharge?: number;
   totalShipmentCost?: number;

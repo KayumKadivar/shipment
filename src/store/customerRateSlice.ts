@@ -578,6 +578,11 @@ const customerRateSlice = createSlice({
 
         state.rates = action.payload.map((rate: any, index: number) => {
           let grossCharge = Number(rate.grossCharge) || 0;
+          let grossSellAmount = (rate as any).grossSellAmount != null
+            ? Number((rate as any).grossSellAmount)
+            : (rate as any).sellAmount != null
+            ? Number((rate as any).sellAmount)
+            : undefined;
           let discount = Number(rate.discount) || 0;
           let fuelSurcharge = Number(rate.fuelSurcharge) || 0;
           const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[] = [];
@@ -599,6 +604,9 @@ const customerRateSlice = createSlice({
                 name.includes("freight")
               ) {
                 grossCharge = amount;
+                if (cd.sellAmount != null) {
+                  grossSellAmount = Number(cd.sellAmount);
+                }
               } else if (
                 code === COST_CODE_DISC ||
                 code === "DSC" ||
@@ -651,6 +659,7 @@ const customerRateSlice = createSlice({
             liabilityNew: "",
             liabilityUsed: "",
             grossCharge,
+            grossSellAmount,
             discount,
             fuelSurcharge,
             accessorialCharges: otherAccessorials,

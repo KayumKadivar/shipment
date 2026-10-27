@@ -37,6 +37,7 @@ export type CarrierRate = SendRateItem & {
   liabilityNew: string;
   liabilityUsed: string;
   grossCharge?: number;
+  grossSellAmount?: number;
   discount?: number;
   fuelSurcharge?: number;
   accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[];
@@ -289,12 +290,46 @@ export function CarrierLogo({ rate }: { rate: CarrierRate }) {
 }
 
 export const formatDateTimeDisplay = (val?: string | null): string => {
-  if (!val || val === "N/A") return val || "";
+  if (!val || val === "N/A") return "";
   let str = String(val).trim();
+  if (str.startsWith("0001-01-01")) return "";
   str = str.replace(/\.\d+(Z|[+-]\d{2}:\d{2})?$/i, "");
   str = str.replace(/(Z|[+-]\d{2}:\d{2})$/i, "");
   str = str.replace(/(\d)T(\d)/i, "$1 $2");
+  if (str.startsWith("0001-01-01")) return "";
   return str;
+};
+
+export const getGrossSellAmount = (rate: CarrierRate): string | number | undefined => {
+  if (rate.grossSellAmount !== undefined && rate.grossSellAmount !== null) {
+    return rate.grossSellAmount;
+  }
+  const details =
+    rate.quoteCostDetails ||
+    rate.rawQuoteResult?.quoteCostDetails ||
+    rate.rawQuoteResult?.costDetails;
+  if (Array.isArray(details)) {
+    const grossItem = details.find((cd: any) => {
+      const code = (cd.accCode || cd.code || "").trim().toUpperCase();
+      const name = (cd.accName || cd.name || cd.description || "").trim().toLowerCase();
+      return (
+        code === "FRT" ||
+        code === "GROSS" ||
+        code === "FREIGHT" ||
+        code === "BASE" ||
+        name === "grosscharge" ||
+        name.includes("gross") ||
+        name.includes("freight")
+      );
+    });
+    if (grossItem) {
+      const val = grossItem.sellAmount ?? grossItem.sellCharge;
+      if (val !== undefined && val !== null && val !== "") {
+        return val;
+      }
+    }
+  }
+  return undefined;
 };
 
 export function CarrierCard({
@@ -378,7 +413,7 @@ export function CarrierCard({
               <dd>{formatDateTimeDisplay(rate.estimatedDelivery)}</dd>
             </div>
             <div className='rate-detail-charges'>
-              <dt>Gross Charge : {rate.grossCharge}</dt>
+              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {rate.grossCharge}{getGrossSellAmount(rate) !== undefined ? `  |  Sell : ${getGrossSellAmount(rate)}` : ""}</dt>
               <dt>Discount : {rate.discount}</dt>
               <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
                {rate.accessorialCharges?.map((charge, idx) => (
