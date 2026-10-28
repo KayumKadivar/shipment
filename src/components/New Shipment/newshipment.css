@@ -749,8 +749,8 @@
 
 /* Mark Up input */
 .input-sm-center {
-  width: 40px;
-  min-width: 40px;
+  width: 50px;
+  min-width: 50px;
   /* text-align: center; */
   padding: 4px 6px;
   margin-left: 3px;

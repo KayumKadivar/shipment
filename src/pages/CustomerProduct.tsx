@@ -199,7 +199,6 @@ function CustomerProductPage({
     ? selectedClientCode
     : clients[0]?.clientCode || "";
 
-  // Update session storage when user changes client manually
   const handleClientChange = (value: string) => {
     setSelectedClientCode(value);
     sessionStorage.setItem("customerProduct_selectedClientCode", value);
@@ -207,7 +206,7 @@ function CustomerProductPage({
     if (selectedClient?.clientName) {
       sessionStorage.setItem("customerProduct_selectedClientName", selectedClient.clientName);
     }
-    setCurrentPage(1); // Reset page on client change
+    setCurrentPage(1); 
   };
 
   useEffect(() => {
@@ -215,14 +214,14 @@ function CustomerProductPage({
       const trimmedQuery = query.trim();
       if (trimmedQuery.length >= 3 || trimmedQuery.length === 0) {
         setDebouncedQuery(trimmedQuery);
-        setCurrentPage(1); // Reset to page 1 on new search
+        setCurrentPage(1);
       }
     }, 600);
     return () => clearTimeout(handler);
   }, [query]);
 
   useEffect(() => {
-    if (!activeClientCode) return; // wait until client is selected
+    if (!activeClientCode) return;
     sessionStorage.setItem("customerProduct_selectedClientCode", activeClientCode);
     const selectedClient = clients.find(c => c.clientCode === activeClientCode);
     if (selectedClient?.clientName) {

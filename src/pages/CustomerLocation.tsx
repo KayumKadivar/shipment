@@ -221,7 +221,6 @@ function CustomerLocationPage({
     }
   }, [dispatch, activeClientCode, debouncedQuery, currentPage, pageSize]);
 
-  // Locations are filtered and paginated from the backend
   const filteredLocations = locations;
   const visibleLocations = locations;
 

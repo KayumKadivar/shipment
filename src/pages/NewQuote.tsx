@@ -645,7 +645,6 @@ function NewQuote() {
       clients[0]?.clientCode ||
       "";
 
-  // Automatically select the default client once clients are loaded
   useEffect(() => {
     if (!selectedClientCode && clients.length > 0) {
       const defaultClient =
@@ -878,7 +877,6 @@ function NewQuote() {
     }
   }, [quoteFormData, form]);
 
-  // Initial population of form values
   useEffect(() => {
     const itemsMap: Record<string, any> = {};
     packages.forEach((pkg) => {

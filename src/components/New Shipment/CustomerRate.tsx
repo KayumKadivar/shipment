@@ -165,7 +165,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     useState<string>("Flat");
   const [markupRate, setMarkupRate] = useState<string>("0");
   const [isMarkupRateDirty, setIsMarkupRateDirty] = useState<boolean>(false);
-  const [markup, setMarkup] = useState<string>("0");
+  const [markup, setMarkup] = useState<string>("");
   const [, setIsMarkupDirty] = useState<boolean>(false);
 
   // Net Sell Rate states
@@ -712,23 +712,18 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       const isFuel = isFuelCharge(item.code);
 
       const overrideCust = editedAmounts[item.id]?.customerAmount;
+      const overrideBuy = editedAmounts[item.id]?.buyAmount;
 
-      let currentBuy = item.buyAmount;
-      let calculatedCust = item.buyAmount;
+      let currentBuy = overrideBuy !== undefined ? overrideBuy : item.buyAmount;
+      let calculatedCust = currentBuy;
       let calculatedMarkup = 0;
       let isEligible = false;
 
       if (isNetSellActive) {
         if (isFreight) {
           isEligible = true;
-          currentBuy = item.buyAmount;
           calculatedCust = appliedMarkupConfig.numericNetSellRate;
-          calculatedMarkup = appliedMarkupConfig.numericNetSellRate;
-        } else if (isFuel) {
-          isEligible = true;
-          currentBuy = 0;
-          calculatedCust = 0;
-          calculatedMarkup = 0;
+          calculatedMarkup = calculatedCust - currentBuy;
         } else {
           isEligible = false;
           currentBuy = 0;
@@ -739,30 +734,40 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         if (isFreight) {
           isEligible = true;
           calculatedMarkup = ppsFreight;
-          calculatedCust = item.buyAmount + ppsFreight;
+          calculatedCust = currentBuy + ppsFreight;
         } else if (isFuel) {
           isEligible = true;
           calculatedMarkup = ppsFuel;
-          calculatedCust = item.buyAmount + ppsFuel;
+          calculatedCust = currentBuy + ppsFuel;
         }
       }
 
+      const isManuallyEdited = overrideCust !== undefined || overrideBuy !== undefined;
       const custAmt =
-        overrideCust !== undefined ? overrideCust : calculatedCust;
-      const finalMarkup = calculatedMarkup;
+        isNetSellActive && !isFreight
+          ? 0
+          : (overrideCust !== undefined ? overrideCust : calculatedCust);
+      const buyAmt =
+        isNetSellActive && !isFreight
+          ? 0
+          : (overrideBuy !== undefined ? overrideBuy : currentBuy);
+      const finalMarkup =
+        isNetSellActive
+          ? (isFreight ? custAmt - buyAmt : 0)
+          : (isManuallyEdited ? custAmt - buyAmt : calculatedMarkup);
 
       return {
         id: item.id,
         code: item.code,
         description: item.description,
-        buyAmount: currentBuy,
+        buyAmount: buyAmt,
         customerAmount: custAmt,
         markupAmount: finalMarkup,
         markupCalculation: "",
         markupSubtext: "",
         customerCalcSubtext: "",
         isCustom: item.isCustom,
-        isEligibleForMarkup: isEligible || finalMarkup > 0,
+        isEligibleForMarkup: isNetSellActive ? isFreight : (isManuallyEdited ? true : (isEligible || finalMarkup !== 0)),
       };
     });
   }, [
@@ -1017,6 +1022,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
   // Edit charge handlers
   const handleStartEdit = (item: RateLineItem) => {
+    if (editingRowId === item.id) return;
     setEditingRowId(item.id);
     const buyVal =
       item.buyAmount < 0
@@ -1039,8 +1045,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     const cleaned = val.replace(/[^0-9.]/g, "");
     setEditBuyAmount(cleaned);
     setIsBuyInputDirty(true);
-    setIsCustomerInputDirty(false);
-    setHasManuallyEditedCustomer(false);
     onRateChanged?.(true);
   };
 
@@ -1049,7 +1053,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setEditCustomerAmount(cleaned);
     setHasManuallyEditedCustomer(true);
     setIsCustomerInputDirty(true);
-    setIsBuyInputDirty(false);
     onRateChanged?.(true);
   };
 
@@ -1091,14 +1094,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         description?: string;
       } = { ...existing };
 
-      if (isBuyChanged && !isCustomerChanged) {
+      if (isBuyChanged) {
         updatedRow.buyAmount = newBuy;
-        updatedRow.customerAmount = targetItem.customerAmount;
-      } else if (isCustomerChanged && !isBuyChanged) {
-        updatedRow.customerAmount = newCustomer;
-        delete updatedRow.buyAmount;
-      } else if (isBuyChanged && isCustomerChanged) {
-        updatedRow.buyAmount = newBuy;
+      }
+      if (isCustomerChanged) {
         updatedRow.customerAmount = newCustomer;
       }
 
@@ -1121,7 +1120,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       );
       if (isBuyChanged) {
         next.push(`${editingRowId}-buy`);
-      } else if (isCustomerChanged) {
+      }
+      if (isCustomerChanged) {
         next.push(`${editingRowId}-customer`);
       }
       if (isDescChanged) {
@@ -1161,16 +1161,21 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   };
 
   const handleApplyMarkup = () => {
-    setEditedAmounts((prev) => {
-      const next: typeof prev = {};
-      Object.keys(prev).forEach((key) => {
-        next[key] = {
-          buyAmount: prev[key].buyAmount,
-          description: prev[key].description,
-        };
+    if (isNetSellRateEnabled) {
+      setEditedAmounts({});
+      setEditedCellKeys([]);
+    } else {
+      setEditedAmounts((prev) => {
+        const next: typeof prev = {};
+        Object.keys(prev).forEach((key) => {
+          next[key] = {
+            buyAmount: prev[key].buyAmount,
+            description: prev[key].description,
+          };
+        });
+        return next;
       });
-      return next;
-    });
+    }
 
     const numRate = Math.max(0, Number(markupRate) || 0);
     const numMin = Math.max(0, Number(markup) || 0);
@@ -1342,9 +1347,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       ]}
                     />
                     <div className="markup-input-wrap">
-                        {markupDropdownOption !== "Flat" && (
-                        <span className="markup-unit-symbol">$</span>
-                      )}
+                      <span className="markup-unit-symbol">$</span>
                       <Input
                         value={markupRate}
                         status={isMarkupRateDirty ? "error" : undefined}
@@ -1357,7 +1360,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         }}
                         onPressEnter={handleApplyMarkup}
                       />
-                      
                     </div>
                     <div className="markup-input-wrap">
                       <span
@@ -1366,13 +1368,20 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       >
                         Min. 
                       </span>
-                      <span className="markup-unit-symbol">$</span>
+                      {markupDropdownOption === "Flat" ? (
+                        <span className="markup-unit-symbol">$</span>
+                      ) : (
+                        <span className="markup-unit-symbol">%</span>
+                      )}
                       <Input
                         value={markup}
-                        disabled
                         className="input-sm-center"
+                        disabled={markupDropdownOption === "Flat"}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9.]/g, "");
+                          setMarkup(val);
+                        }}
                       />
-
                     </div>
                   </>
                 )}
@@ -1553,7 +1562,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                   onClick={() =>
                     setSelectedRowId(selectedRowId === item.id ? null : item.id)
                   }
-                  onDoubleClick={() => handleStartEdit(item)}
+                  onDoubleClick={() => {
+                    if (!isEditing) handleStartEdit(item);
+                  }}
                 >
                   <div className="col-code">{item.code}</div>
                   <div className="col-desc">
@@ -1568,6 +1579,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         }}
                         onPressEnter={handleSaveEdit}
                         onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => e.stopPropagation()}
                         className={`rate-desc-edit-input ${descInputClass}`}
                       />
                     ) : (
@@ -1581,7 +1593,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     )}
                   </div>
                   {isCorporate && (
-                    <div className="col-buy text-right">
+                    <div
+                      className="col-buy text-right"
+                      onDoubleClick={(e) => {
+                        if (isEditing) e.stopPropagation();
+                      }}
+                    >
                       {isEditing ? (
                         <Input
                           size="small"
@@ -1595,6 +1612,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                             if (e.key === "Escape") handleCancelEdit();
                           }}
                           onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
                           className={`rate-inline-edit-input ${buyInputClass}`}
                           autoFocus
                         />
@@ -1609,7 +1627,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       )}
                     </div>
                   )}
-                  <div className="col-customer text-right">
+                  <div
+                    className="col-customer text-right"
+                    onDoubleClick={(e) => {
+                      if (isEditing) e.stopPropagation();
+                    }}
+                  >
                     {isEditing ? (
                       <Input
                         size="small"
@@ -1623,6 +1646,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                           if (e.key === "Escape") handleCancelEdit();
                         }}
                         onClick={(e) => e.stopPropagation()}
+                        onDoubleClick={(e) => e.stopPropagation()}
                         className={`rate-inline-edit-input ${custInputClass}`}
                       />
                     ) : (
@@ -1640,7 +1664,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     <div className="col-markup text-right">
                       {item.isEligibleForMarkup ? (
                         <span
-                          className={`rate-markup-val ${item.markupAmount > 0 ? "has-markup" : ""}`}
+                          className={`rate-markup-val ${item.markupAmount > 0 ? "has-markup" : item.markupAmount < 0 ? "rate-cell-loss" : ""}`}
                         >
                           {formatMarkup(item.markupAmount, isPercentMarkup)}
                         </span>
@@ -1769,7 +1793,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               </div>
               {isCorporate && (
                 <div className="col-markup text-right">
-                  <span>{formatMarkup(totalMarkup, isPercentMarkup)}</span>
+                  <span className={totalMarkup < 0 ? "rate-cell-loss" : undefined}>{formatMarkup(totalMarkup, isPercentMarkup)}</span>
                 </div>
               )}
               {isCorporate && <div className="col-actions" />}
