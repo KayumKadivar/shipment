@@ -5688,6 +5688,11 @@ body {
   grid-row: 1;
 }
 
+.rate-detail-charges-sell {
+  grid-column: 3;
+  grid-row: 1;
+}
+
 
 .rate-card__details dt,
 .rate-card__details dd {
@@ -5732,6 +5737,11 @@ body {
 .rate-carrier-list--grid .rate-detail-liability-used {
   grid-column: 1;
   grid-row: 3;
+}
+
+.rate-carrier-list--grid .rate-detail-charges-sell {
+  grid-column: 2;
+  grid-row: 2;
 }
 
 .rate-empty-state {
@@ -5796,6 +5806,11 @@ body {
   .rate-detail-liability-used {
     grid-column: 1;
     grid-row: 3;
+  }
+
+  .rate-detail-charges-sell {
+    grid-column: 2;
+    grid-row: 2;
   }
 }
 

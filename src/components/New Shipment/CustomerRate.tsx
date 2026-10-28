@@ -695,9 +695,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       appliedMarkupConfig.isMarkupEnabled &&
       (appliedMarkupConfig.numericMarkup > 0 ||
         (appliedMarkupConfig.numericMarkupRate ?? 0) > 0);
-    const isNetSellActive =
-      appliedMarkupConfig.isNetSellRateEnabled &&
-      appliedMarkupConfig.numericNetSellRate > 0;
+    const isNetSellActive = appliedMarkupConfig.isNetSellRateEnabled;
 
     const ppsFreight =
       isMarkupActive || isNetSellActive
@@ -1199,7 +1197,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     let ppsFreight = 0;
     let ppsFuel = 0;
 
-    if (isNetSellRateEnabled && numNetSell > 0) {
+    if (isNetSellRateEnabled) {
       ppsFreight = numNetSell;
       ppsFuel = 0;
     } else if (isMarkupEnabled && (numRate > 0 || numMin > 0)) {
@@ -1260,9 +1258,13 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       ppsFuel,
     });
 
+    setIsNetSellDirty(false);
+    setIsMarkupRateDirty(false);
+    setIsMarkupDirty(false);
+
     if (isMarkupEnabled && numMarkup > 0) {
       message.success(`Applied ${markupDropdownOption} markup`);
-    } else if (isNetSellRateEnabled && numNetSell > 0) {
+    } else if (isNetSellRateEnabled) {
       message.success("Applied Net Sell Rate");
     } else if (!isMarkupEnabled && !isNetSellRateEnabled) {
       message.info("Markup removed");

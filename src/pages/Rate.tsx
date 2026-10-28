@@ -332,6 +332,78 @@ export const getGrossSellAmount = (rate: CarrierRate): string | number | undefin
   return undefined;
 };
 
+export const getChargeSellDetails = (rate: CarrierRate) => {
+  const details =
+    rate.quoteCostDetails ||
+    rate.rawQuoteResult?.quoteCostDetails ||
+    rate.rawQuoteResult?.costDetails;
+
+  let grossSell: number | string | undefined = rate.grossSellAmount;
+  let discountSell: number | string | undefined = undefined;
+  let fuelSell: number | string | undefined = undefined;
+  const accessorialsSell: { accessorialDescription: string; accessorialCharge: number | string }[] = [];
+
+  if (Array.isArray(details) && details.length > 0) {
+    details.forEach((cd: any) => {
+      const code = (cd.accCode || cd.code || "").trim().toUpperCase();
+      const name = (cd.accName || cd.name || cd.description || "").trim().toLowerCase();
+      const sell = cd.sellAmount != null ? cd.sellAmount : cd.amount;
+
+      if (
+        code === "GROSS" ||
+        code === "FRT" ||
+        code === "FREIGHT" ||
+        code === "BASE" ||
+        name === "grosscharge" ||
+        name.includes("gross") ||
+        name.includes("freight")
+      ) {
+        if (grossSell === undefined) grossSell = sell;
+      } else if (
+        code === "DISC" ||
+        code === "DSC" ||
+        code === "DISCOUNT" ||
+        name.includes("discount")
+      ) {
+        discountSell = Math.abs(Number(sell)) || 0;
+      } else if (
+        code === "FUEL" ||
+        code === "FSC" ||
+        code === "FUEL SURCHARGE" ||
+        name.includes("fuel")
+      ) {
+        fuelSell = sell;
+      } else {
+        const desc = cd.accName || cd.accessorialDescription || cd.name || cd.description || code || "Accessorial";
+        accessorialsSell.push({
+          accessorialDescription: desc,
+          accessorialCharge: sell ?? 0,
+        });
+      }
+    });
+  }
+
+  if (grossSell === undefined) grossSell = rate.grossCharge ?? 0;
+  if (discountSell === undefined) discountSell = rate.discount ?? 0;
+  if (fuelSell === undefined) fuelSell = rate.fuelSurcharge ?? 0;
+
+  if (accessorialsSell.length === 0 && Array.isArray(rate.accessorialCharges)) {
+    rate.accessorialCharges.forEach((ac) => {
+      accessorialsSell.push({
+        accessorialDescription: ac.accessorialDescription || "Accessorial",
+        accessorialCharge: ac.accessorialCharge ?? 0,
+      });
+    });
+  }
+
+  return {
+    grossSell,
+    discountSell,
+    fuelSell,
+    accessorialsSell,
+  };
+};
+
 export function CarrierCard({
   rate,
   checked,
@@ -345,6 +417,8 @@ export function CarrierCard({
   onShipIt: () => void;
   onSend?: () => void;
 }) {
+  const sellDetails = getChargeSellDetails(rate);
+
   return (
     <article
       className={`rate-card ${checked ? "rate-card--selected" : ""}`}
@@ -413,10 +487,18 @@ export function CarrierCard({
               <dd>{formatDateTimeDisplay(rate.estimatedDelivery)}</dd>
             </div>
             <div className='rate-detail-charges'>
-              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {rate.grossCharge}{getGrossSellAmount(rate) !== undefined ? `  |  Sell : ${getGrossSellAmount(rate)}` : ""}</dt>
+              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {rate.grossCharge}</dt>
               <dt>Discount : {rate.discount}</dt>
               <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
-               {rate.accessorialCharges?.map((charge, idx) => (
+              {rate.accessorialCharges?.map((charge, idx) => (
+                <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
+              ))}
+            </div>
+            <div className='rate-detail-charges rate-detail-charges-sell'>
+              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {sellDetails.grossSell}</dt>
+              <dt>Discount : {sellDetails.discountSell}</dt>
+              <dt>Fuel Surcharge : {sellDetails.fuelSell}</dt>
+              {sellDetails.accessorialsSell?.map((charge, idx) => (
                 <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
               ))}
             </div>
