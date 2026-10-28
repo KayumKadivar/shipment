@@ -267,6 +267,62 @@ const NewShipment: React.FC = () => {
   const searchProductTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortControllerRef = useRef<AbortController | null>(null);
 
+  // Refactor confirmation modal state & snapshot refs
+  const [isRefactorModalOpen, setIsRefactorModalOpen] = useState(false);
+  const initialProductsSnapshotRef = useRef<any[] | null>(null);
+  const initialAccessorialsSnapshotRef = useRef<number[] | null>(null);
+
+  const normalizeValue = (val: any) => {
+    if (val === null || val === undefined) return "";
+    const s = String(val).trim();
+    const n = Number(s);
+    if (!isNaN(n) && s !== "") {
+      return String(n);
+    }
+    return s;
+  };
+
+  const hasRefactorChanges = (): boolean => {
+    // 1. Check Accessorials
+    if (initialAccessorialsSnapshotRef.current !== null) {
+      const initAcc = initialAccessorialsSnapshotRef.current;
+      const curAcc = [...selectedAccessorialIds].sort((a, b) => a - b);
+      if (initAcc.length !== curAcc.length) {
+        return true;
+      }
+      for (let i = 0; i < initAcc.length; i++) {
+        if (initAcc[i] !== curAcc[i]) {
+          return true;
+        }
+      }
+    }
+
+    // 2. Check Products (Units, Pieces, Class, Weight, Length, Width, Height, NMFC, Hazmat, Add/Delete line)
+    if (initialProductsSnapshotRef.current !== null) {
+      const initProds = initialProductsSnapshotRef.current;
+      if (items.length !== initProds.length) {
+        return true;
+      }
+      for (let i = 0; i < items.length; i++) {
+        const cur = items[i];
+        const init = initProds[i];
+        if (!init) return true;
+
+        if (normalizeValue(cur.pallets) !== normalizeValue(init.pallets)) return true;
+        if (normalizeValue(cur.pieces) !== normalizeValue(init.pieces)) return true;
+        if (normalizeValue(cur.class) !== normalizeValue(init.class)) return true;
+        if (normalizeValue(cur.weight) !== normalizeValue(init.weight)) return true;
+        if (normalizeValue(cur.length) !== normalizeValue(init.length)) return true;
+        if (normalizeValue(cur.width) !== normalizeValue(init.width)) return true;
+        if (normalizeValue(cur.height) !== normalizeValue(init.height)) return true;
+        if (String(cur.nmfc ?? "").trim() !== String(init.nmfc ?? "").trim()) return true;
+        if (Boolean(cur.hazmat) !== Boolean(init.hazmat)) return true;
+      }
+    }
+
+    return false;
+  };
+
   // Hazmat modal state
   const [isHazmatModalOpen, setIsHazmatModalOpen] = useState(false);
   const [activeHazmatItem, setActiveHazmatItem] = useState<ProductItem | null>(null);
@@ -348,8 +404,36 @@ const NewShipment: React.FC = () => {
         };
       });
       dispatch(setProductItems(mapped));
+      if (initialProductsSnapshotRef.current === null) {
+        initialProductsSnapshotRef.current = mapped.map((p) => ({
+          id: String(p.id ?? ""),
+          pallets: p.pallets,
+          pieces: p.pieces,
+          class: p.class,
+          weight: p.weight,
+          length: p.length,
+          width: p.width,
+          height: p.height,
+          nmfc: p.nmfc,
+          hazmat: p.hazmat,
+        }));
+      }
     } else {
       dispatch(resetProductItems());
+      if (initialProductsSnapshotRef.current === null) {
+        initialProductsSnapshotRef.current = [{
+          id: "1",
+          pallets: "",
+          pieces: "",
+          class: "",
+          weight: "",
+          length: "",
+          width: "",
+          height: "",
+          nmfc: "",
+          hazmat: false,
+        }];
+      }
     }
   }, [quote, dispatch]);
 
@@ -367,6 +451,14 @@ const NewShipment: React.FC = () => {
         dispatch(setSelectedAccessorials(matched));
       } else {
         dispatch(clearSelectedAccessorials());
+      }
+      if (initialAccessorialsSnapshotRef.current === null) {
+        initialAccessorialsSnapshotRef.current = [...matched].sort((a, b) => a - b);
+      }
+    } else if (accessorialsList.length > 0 && (!quote?.quoteAccessorials || quote.quoteAccessorials.length === 0)) {
+      dispatch(clearSelectedAccessorials());
+      if (initialAccessorialsSnapshotRef.current === null) {
+        initialAccessorialsSnapshotRef.current = [];
       }
     } else {
       dispatch(clearSelectedAccessorials());
@@ -1080,7 +1172,7 @@ const NewShipment: React.FC = () => {
     return new Date().toISOString();
   };
 
-  const handleSaveShipment = async () => {
+  const executeSaveShipment = async () => {
     if (!validateProductItems()) return;
 
     const originVals = {
@@ -1429,6 +1521,87 @@ const NewShipment: React.FC = () => {
     }
   };
 
+  const handleSaveShipmentClick = async () => {
+    if (!validateProductItems()) return;
+
+    const originVals = {
+      ...(originData || {}),
+      ...(originFormValuesRef.current || {}),
+      ...(originForm?.getFieldsValue?.(true) || {}),
+    };
+    const destinationVals = {
+      ...(destinationData || {}),
+      ...(destinationFormValuesRef.current || {}),
+      ...(destinationForm?.getFieldsValue?.(true) || {}),
+    };
+
+    const origName = (originVals.companyName || "").trim();
+    const origAddress = (originVals.address1 || "").trim();
+    const origZip = (originVals.postal || quote?.originZip || "").split(' - ')[0].trim();
+    const destName = (destinationVals.companyName || "").trim();
+    const destAddress = (destinationVals.address1 || "").trim();
+    const destZip = (destinationVals.postal || quote?.destinationZip || "").split(' - ')[0].trim();
+
+    if (!origName) {
+      message.error("Origin Company Name is required.");
+      originForm.validateFields(['companyName']).catch(() => {});
+      return;
+    }
+    if (!origAddress) {
+      message.error("Origin Address Line 1 is required.");
+      originForm.validateFields(['address1']).catch(() => {});
+      return;
+    }
+    if (!origZip) {
+      message.error("Origin postal/ZIP code is required.");
+      originForm.validateFields(['postal']).catch(() => {});
+      return;
+    }
+    if (!destName) {
+      message.error("Destination Company Name is required.");
+      destinationForm.validateFields(['companyName']).catch(() => {});
+      return;
+    }
+    if (!destAddress) {
+      message.error("Destination Address Line 1 is required.");
+      destinationForm.validateFields(['address1']).catch(() => {});
+      return;
+    }
+    if (!destZip) {
+      message.error("Destination postal/ZIP code is required.");
+      destinationForm.validateFields(['postal']).catch(() => {});
+      return;
+    }
+
+    const readyTime = (
+      originVals.openTime ||
+      originVals.pickupOpenTime ||
+      originForm?.getFieldValue?.("openTime") ||
+      originForm?.getFieldValue?.("pickupOpenTime") || ""
+    ).trim();
+
+    if (!readyTime) {
+      message.error("Pickup time is required.");
+      originForm.validateFields(['openTime']).catch(() => {});
+      return;
+    }
+
+    if (hasRefactorChanges()) {
+      setIsRefactorModalOpen(true);
+    } else {
+      executeSaveShipment();
+    }
+  };
+
+  const handleRefactorModalOk = () => {
+    setIsRefactorModalOpen(false);
+    executeSaveShipment();
+  };
+
+  const handleRefactorModalCancel = () => {
+    setIsRefactorModalOpen(false);
+  };
+
   const isPageLoading = Boolean(loadingOrigin || loadingDestination || isSavingShipment);
 
   return (
@@ -1482,7 +1655,7 @@ const NewShipment: React.FC = () => {
             type="primary"
             danger
             loading={isSavingShipment}
-            onClick={handleSaveShipment}
+            onClick={handleSaveShipmentClick}
             disabled={hasRateChanged || isSavingShipment}
           >
             Save Shipment
@@ -1954,6 +2127,23 @@ const NewShipment: React.FC = () => {
         </div>
       </Modal>
 
+      {/* ══ REFACTOR CONFIRMATION MODAL ══ */}
+      <Modal
+        title="Confirmation"
+        open={isRefactorModalOpen}
+        onOk={handleRefactorModalOk}
+        onCancel={handleRefactorModalCancel}
+        okText="OK"
+        cancelText="Cancel"
+        confirmLoading={isSavingShipment}
+        centered
+        okButtonProps={{ danger: true }}
+      >
+        <p style={{ fontSize: "14px", margin: "16px 0", color: "#1f2937" }}>
+          Re factor is applied. do you want to save shipment?
+        </p>
+      </Modal>
+
       {/* ══ FOOTER BUTTONS ══ */}
       <Flex justify="flex-end" gap={12} wrap="wrap">
         <Button onClick={() => navigate('/shipments')} className="btn-outline">✕ Close</Button>
@@ -1968,7 +2158,7 @@ const NewShipment: React.FC = () => {
           type="primary"
           danger
           loading={isSavingShipment}
-          onClick={handleSaveShipment}
+          onClick={handleSaveShipmentClick}
           disabled={hasRateChanged || isSavingShipment}
         >
           Save Shipment
