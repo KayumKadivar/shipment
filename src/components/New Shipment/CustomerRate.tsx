@@ -72,6 +72,10 @@ export interface CustomerRateProps {
       discount: number;
       accesorialCostDetails: any[];
     };
+    totalMarkup?: number;
+    minimumMarkup?: number;
+    markupDropdownOption?: string;
+    isMarkupEnabled?: boolean;
   }) => void;
   clientMarkupConfig?: any;
   isFromReference?: boolean;
@@ -160,6 +164,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   }, [accessorialsList, dispatch]);
 
   // Markup & Net Sell Rate states
+  const [minimumRate, setMinimumRate] = useState<number>(0);
   const [isMarkupEnabled, setIsMarkupEnabled] = useState<boolean>(false);
   const [markupDropdownOption, setMarkupDropdownOption] =
     useState<string>("Flat");
@@ -244,6 +249,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               ? String(clientMarkupConfig.rate)
               : "0";
           setMarkupRate(rateVal);
+          if (clientMarkupConfig.minimum != null) {
+            setMinimumRate(Number(clientMarkupConfig.minimum) || 0);
+          }
           const val =
             clientMarkupConfig.minimum != null
               ? String(clientMarkupConfig.minimum)
@@ -285,6 +293,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
             ? String((carrierData as any).rate)
             : "0";
         setMarkupRate(rateVal);
+        if ((carrierData as any).minimum != null) {
+          setMinimumRate(Number((carrierData as any).minimum) || 0);
+        }
         const val =
           (carrierData as any).minimum != null
             ? String((carrierData as any).minimum)
@@ -353,6 +364,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                 setMarkupDropdownOption(opt);
                 const rateVal = config.rate != null ? String(config.rate) : "0";
                 setMarkupRate(rateVal);
+                if (config.minimum != null) {
+                  setMinimumRate(Number(config.minimum) || 0);
+                }
                 const val =
                   config.minimum != null
                     ? String(config.minimum)
@@ -740,19 +754,27 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         }
       }
 
-      const isManuallyEdited = overrideCust !== undefined || overrideBuy !== undefined;
+      const isManuallyEdited =
+        overrideCust !== undefined || overrideBuy !== undefined;
       const custAmt =
         isNetSellActive && !isFreight
           ? 0
-          : (overrideCust !== undefined ? overrideCust : calculatedCust);
+          : overrideCust !== undefined
+            ? overrideCust
+            : calculatedCust;
       const buyAmt =
         isNetSellActive && !isFreight
           ? 0
-          : (overrideBuy !== undefined ? overrideBuy : currentBuy);
-      const finalMarkup =
-        isNetSellActive
-          ? (isFreight ? custAmt - buyAmt : 0)
-          : (isManuallyEdited ? custAmt - buyAmt : calculatedMarkup);
+          : overrideBuy !== undefined
+            ? overrideBuy
+            : currentBuy;
+      const finalMarkup = isNetSellActive
+        ? isFreight
+          ? custAmt - buyAmt
+          : 0
+        : isManuallyEdited
+          ? custAmt - buyAmt
+          : calculatedMarkup;
 
       return {
         id: item.id,
@@ -765,7 +787,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         markupSubtext: "",
         customerCalcSubtext: "",
         isCustom: item.isCustom,
-        isEligibleForMarkup: isNetSellActive ? isFreight : (isManuallyEdited ? true : (isEligible || finalMarkup !== 0)),
+        isEligibleForMarkup: isNetSellActive
+          ? isFreight
+          : isManuallyEdited
+            ? true
+            : isEligible || finalMarkup !== 0,
       };
     });
   }, [
@@ -867,6 +893,13 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       billedCost: Number(i.customerAmount) || 0,
     }));
 
+    const effectiveMinimum =
+      minimumRate > 0 ? minimumRate : Number(markup) || 0;
+
+    const activeOption = appliedMarkupConfig.isMarkupEnabled
+      ? appliedMarkupConfig.markupDropdownOption
+      : (isMarkupEnabled ? markupDropdownOption : "Flat");
+
     const ratesObj = {
       buyRate: {
         freight: buyFreight,
@@ -880,6 +913,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         discount: sellDiscount,
         accesorialCostDetails: sellAccesorials,
       },
+      totalMarkup,
+      minimumMarkup: effectiveMinimum,
+      markupDropdownOption: activeOption,
+      isMarkupEnabled: appliedMarkupConfig.isMarkupEnabled || isMarkupEnabled,
     };
 
     const serialized = JSON.stringify(ratesObj);
@@ -887,7 +924,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       prevRatesRef.current = serialized;
       onRateDetailsChange(ratesObj);
     }
-  }, [lineItems, onRateDetailsChange]);
+  }, [lineItems, markup, minimumRate, totalMarkup, markupDropdownOption, isMarkupEnabled, appliedMarkupConfig, onRateDetailsChange]);
 
   // Options for Charge type Select dropdown from Accessorials API list
   const chargeTypeOptions = useMemo(() => {
@@ -1349,7 +1386,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       ]}
                     />
                     <div className="markup-input-wrap">
-                      <span className="markup-unit-symbol">$</span>
+                      {markupDropdownOption === "Flat" ? (
+                        <span className="markup-unit-symbol"></span>
+                      ) : (
+                        <span className="markup-unit-symbol">%</span>
+                      )}
                       <Input
                         value={markupRate}
                         status={isMarkupRateDirty ? "error" : undefined}
@@ -1368,13 +1409,14 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         className="markup-min-label"
                         style={{ fontWeight: 500, fontSize: 13, color: "#555" }}
                       >
-                        Min. 
+                        Min.
                       </span>
-                      {markupDropdownOption === "Flat" ? (
+                      {/* {markupDropdownOption === "Flat" ? (
                         <span className="markup-unit-symbol">$</span>
                       ) : (
                         <span className="markup-unit-symbol">%</span>
-                      )}
+                      )} */}
+                      <span className="markup-unit-symbol">$</span>
                       <Input
                         value={markup}
                         className="input-sm-center"
@@ -1558,7 +1600,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
               return (
                 <div
-                
                   key={item.id}
                   className={`rate-item-row ${selectedRowId === item.id ? "is-selected" : ""} ${isEditing ? "is-editing" : ""}`}
                   onClick={() =>
@@ -1795,7 +1836,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               </div>
               {isCorporate && (
                 <div className="col-markup text-right">
-                  <span className={totalMarkup < 0 ? "rate-cell-loss" : undefined}>{formatMarkup(totalMarkup, isPercentMarkup)}</span>
+                  <span
+                    className={totalMarkup < 0 ? "rate-cell-loss" : undefined}
+                  >
+                    {formatMarkup(totalMarkup, isPercentMarkup)}
+                  </span>
                 </div>
               )}
               {isCorporate && <div className="col-actions" />}

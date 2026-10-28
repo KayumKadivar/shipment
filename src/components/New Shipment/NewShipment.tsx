@@ -5,7 +5,7 @@ import { setSelectedAccessorials, fetchAccessorials, clearSelectedAccessorials }
 import { fetchCarrierRates, clearRateError } from '../../store/customerRateSlice';
 import {
   Button, Card, Input, Segmented, Checkbox, Select,
-  Row, Col, Flex, message, Spin, AutoComplete, Tooltip, Modal, Form,
+  Row, Col, Flex, message, Spin, AutoComplete, Tooltip, Modal, Form, Typography,
 } from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined } from '@ant-design/icons';
@@ -267,8 +267,9 @@ const NewShipment: React.FC = () => {
   const searchProductTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortControllerRef = useRef<AbortController | null>(null);
 
-  // Refactor confirmation modal state & snapshot refs
+  // Refactor & Minimum Markup confirmation modal state & snapshot refs
   const [isRefactorModalOpen, setIsRefactorModalOpen] = useState(false);
+  const [isMinMarkupModalOpen, setIsMinMarkupModalOpen] = useState(false);
   const initialProductsSnapshotRef = useRef<any[] | null>(null);
   const initialAccessorialsSnapshotRef = useRef<number[] | null>(null);
 
@@ -1157,9 +1158,17 @@ const NewShipment: React.FC = () => {
   const rateDetailsRef = useRef<{
     buyRate: { freight: number; fuel: number; discount: number; accesorialCostDetails: any[] };
     sellRate: { freight: number; fuel: number; discount: number; accesorialCostDetails: any[] };
+    totalMarkup?: number;
+    minimumMarkup?: number;
+    markupDropdownOption?: string;
+    isMarkupEnabled?: boolean;
   }>({
     buyRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
     sellRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
+    totalMarkup: 0,
+    minimumMarkup: 0,
+    markupDropdownOption: "Flat",
+    isMarkupEnabled: false,
   });
   const [isSavingShipment, setIsSavingShipment] = useState<boolean>(false);
 
@@ -1589,17 +1598,46 @@ const NewShipment: React.FC = () => {
     if (hasRefactorChanges()) {
       setIsRefactorModalOpen(true);
     } else {
+      checkMarkupAndSave();
+    }
+  };
+
+  const isMarkupLessThanMinimum = (): boolean => {
+    const markupOption = rateDetailsRef.current?.markupDropdownOption;
+    // Flat me lagu nahi padega - only the other 3 (% options):
+    if (!markupOption || markupOption === "Flat") {
+      return false;
+    }
+
+    const totalMarkup = Number(rateDetailsRef.current?.totalMarkup) || 0;
+    const minMarkup = Number(rateDetailsRef.current?.minimumMarkup) || 0;
+    return minMarkup > 0 && totalMarkup < minMarkup;
+  };
+
+  const checkMarkupAndSave = () => {
+    if (isMarkupLessThanMinimum()) {
+      setIsMinMarkupModalOpen(true);
+    } else {
       executeSaveShipment();
     }
   };
 
   const handleRefactorModalOk = () => {
     setIsRefactorModalOpen(false);
-    executeSaveShipment();
+    checkMarkupAndSave();
   };
 
   const handleRefactorModalCancel = () => {
     setIsRefactorModalOpen(false);
+  };
+
+  const handleMinMarkupModalOk = () => {
+    setIsMinMarkupModalOpen(false);
+    executeSaveShipment();
+  };
+
+  const handleMinMarkupModalCancel = () => {
+    setIsMinMarkupModalOpen(false);
   };
 
   const isPageLoading = Boolean(loadingOrigin || loadingDestination || isSavingShipment);
@@ -1647,7 +1685,7 @@ const NewShipment: React.FC = () => {
           <Button danger onClick={() => navigate('/shipments')}>Cancel</Button>
           <Button
             onClick={() => { if (!validateProductItems()) return; }}
-            disabled={hasRateChanged}
+            disabled={isSavingShipment}
           >
             Save Quote
           </Button>
@@ -1656,7 +1694,7 @@ const NewShipment: React.FC = () => {
             danger
             loading={isSavingShipment}
             onClick={handleSaveShipmentClick}
-            disabled={hasRateChanged || isSavingShipment}
+            disabled={isSavingShipment}
           >
             Save Shipment
           </Button>
@@ -2139,9 +2177,26 @@ const NewShipment: React.FC = () => {
         centered
         okButtonProps={{ danger: true }}
       >
-        <p style={{ fontSize: "14px", margin: "16px 0", color: "#1f2937" }}>
-          Re factor is applied. do you want to save shipment?
-        </p>
+        <Typography.Paragraph className="confirmation-modal-text">
+          Rate factor is applied. do you want to save shipment?
+        </Typography.Paragraph>
+      </Modal>
+
+      {/* ══ MINIMUM MARKUP CONFIRMATION MODAL ══ */}
+      <Modal
+        title="Confirmation"
+        open={isMinMarkupModalOpen}
+        onOk={handleMinMarkupModalOk}
+        onCancel={handleMinMarkupModalCancel}
+        okText="OK"
+        cancelText="Cancel"
+        confirmLoading={isSavingShipment}
+        centered
+        okButtonProps={{ danger: true }}
+      >
+        <Typography.Paragraph className="confirmation-modal-text">
+          your markup is less than minimum rate. do you want to save shipment?
+        </Typography.Paragraph>
       </Modal>
 
       {/* ══ FOOTER BUTTONS ══ */}
@@ -2150,7 +2205,7 @@ const NewShipment: React.FC = () => {
         <Button
           className="btn-outline"
           onClick={() => { if (!validateProductItems()) return; }}
-          disabled={hasRateChanged}
+          disabled={isSavingShipment}
         >
           Save Quote
         </Button>
@@ -2159,7 +2214,7 @@ const NewShipment: React.FC = () => {
           danger
           loading={isSavingShipment}
           onClick={handleSaveShipmentClick}
-          disabled={hasRateChanged || isSavingShipment}
+          disabled={isSavingShipment}
         >
           Save Shipment
         </Button>

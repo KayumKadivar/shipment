@@ -1279,3 +1279,10 @@
   font-size: 12px !important;
 }
 
+
+.confirmation-modal-text {
+  font-size: 14px;
+  margin: 16px 0;
+  color: #1f2937;
+  display: block;
+}
