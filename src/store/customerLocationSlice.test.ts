@@ -55,8 +55,48 @@ describe("customer location API behavior", () => {
       "customerLocation/fetchClientsAndSubclients/fulfilled",
     );
     expect(action.payload).toEqual([
-      { clientName: "Main Client", clientCode: "MAIN" },
-      { clientName: "PROFILE-1", clientCode: "PROFILE-1" },
+      expect.objectContaining({ clientName: "Main Client", clientCode: "MAIN" }),
+      expect.objectContaining({ clientName: "PROFILE-1", clientCode: "PROFILE-1" }),
+    ]);
+  });
+
+  it("fetchClientsAndSubclients_whenApiReturnsClientAndProfileDetails_mapsAllClients", async () => {
+    vi.spyOn(axios, "get").mockResolvedValue(
+      createAxiosResponse({
+        isSuccess: true,
+        data: {
+          isCorporate: true,
+          clientAndProfileDetails: [
+            {
+              clientCode: "DEVTS",
+              clientName: "DEV TESTING",
+              profileCode: "DEVTS",
+              isLoggedClient: true,
+            },
+            {
+              clientCode: "TS158",
+              clientName: "TESTING SUBCLIENT",
+              profileCode: "TS158",
+              isLoggedClient: false,
+            },
+          ],
+        },
+      }),
+    );
+
+    const action = await fetchClientsAndSubclients()(
+      vi.fn(),
+      vi.fn(),
+      undefined,
+    );
+
+    expect(action.type).toBe(
+      "customerLocation/fetchClientsAndSubclients/fulfilled",
+    );
+    expect(action.payload).toHaveLength(2);
+    expect(action.payload).toEqual([
+      expect.objectContaining({ clientCode: "DEVTS", clientName: "DEV TESTING", isLoggedClient: true }),
+      expect.objectContaining({ clientCode: "TS158", clientName: "TESTING SUBCLIENT", isLoggedClient: false }),
     ]);
   });
 });

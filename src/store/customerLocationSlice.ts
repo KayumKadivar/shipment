@@ -142,26 +142,26 @@ export const fetchClientsAndSubclients = createAsyncThunk<
       
       const resData = response.data;
       if (Array.isArray(resData)) {
-        return resData.map((c) => ({
-          clientCode: c.clientCode || c.profileCode || "",
-          clientName: c.clientName || c.profileCode || c.clientCode || "",
-          profileCode: c.profileCode || "",
-          ratingClientCode: c.ratingClientCode ?? null,
-          ratingProfileCode: c.ratingProfileCode ?? null,
-          isCorporate: c.isCorporate,
-          isLoggedClient: c.isLoggedClient,
+        return resData.map((c: any) => ({
+          clientCode: c.clientCode || c.ClientCode || c.profileCode || c.ProfileCode || "",
+          clientName: c.clientName || c.ClientName || c.clientCode || c.ClientCode || c.profileCode || c.ProfileCode || "",
+          profileCode: c.profileCode || c.ProfileCode || "",
+          ratingClientCode: c.ratingClientCode ?? c.RatingClientCode ?? null,
+          ratingProfileCode: c.ratingProfileCode ?? c.RatingProfileCode ?? null,
+          isCorporate: c.isCorporate ?? c.IsCorporate,
+          isLoggedClient: c.isLoggedClient ?? c.IsLoggedClient,
         }));
       }
 
       if (resData && typeof resData === "object" && "data" in resData && Array.isArray(resData.data)) {
-        return resData.data.map((c) => ({
-          clientCode: c.clientCode || c.profileCode || "",
-          clientName: c.clientName || c.profileCode || c.clientCode || "",
-          profileCode: c.profileCode || "",
-          ratingClientCode: c.ratingClientCode ?? null,
-          ratingProfileCode: c.ratingProfileCode ?? null,
-          isCorporate: c.isCorporate,
-          isLoggedClient: c.isLoggedClient,
+        return resData.data.map((c: any) => ({
+          clientCode: c.clientCode || c.ClientCode || c.profileCode || c.ProfileCode || "",
+          clientName: c.clientName || c.ClientName || c.clientCode || c.ClientCode || c.profileCode || c.ProfileCode || "",
+          profileCode: c.profileCode || c.ProfileCode || "",
+          ratingClientCode: c.ratingClientCode ?? c.RatingClientCode ?? null,
+          ratingProfileCode: c.ratingProfileCode ?? c.RatingProfileCode ?? null,
+          isCorporate: c.isCorporate ?? c.IsCorporate,
+          isLoggedClient: c.isLoggedClient ?? c.IsLoggedClient,
         }));
       }
 
@@ -171,18 +171,37 @@ export const fetchClientsAndSubclients = createAsyncThunk<
 
       if (resData && typeof resData === "object" && "data" in resData && resData.data) {
         const d = resData.data as any;
+
+        // The API returns clientAndProfileDetails array inside data object
+        const detailsList = d.clientAndProfileDetails || d.ClientAndProfileDetails;
+        if (Array.isArray(detailsList) && detailsList.length > 0) {
+          return detailsList.map((c: any) => ({
+            clientCode: c.clientCode || c.ClientCode || c.profileCode || c.ProfileCode || "",
+            clientName: c.clientName || c.ClientName || c.clientCode || c.ClientCode || c.profileCode || c.ProfileCode || "",
+            profileCode: c.profileCode || c.ProfileCode || "",
+            ratingClientCode: c.ratingClientCode ?? c.RatingClientCode ?? null,
+            ratingProfileCode: c.ratingProfileCode ?? c.RatingProfileCode ?? null,
+            isCorporate: c.isCorporate ?? c.IsCorporate ?? d.isCorporate ?? d.IsCorporate,
+            isLoggedClient: c.isLoggedClient ?? c.IsLoggedClient,
+          }));
+        }
+
         const mainClient: ClientOption = {
-          clientCode: d.clientCode || d.profileCode || "",
-          clientName: d.clientName || d.profileCode || "",
-          profileCode: d.profileCode || "",
-          isCorporate: d.isCorporate,
+          clientCode: d.clientCode || d.ClientCode || d.profileCode || d.ProfileCode || codeToUse || "",
+          clientName: d.clientName || d.ClientName || d.clientCode || d.ClientCode || d.profileCode || d.ProfileCode || codeToUse || "",
+          profileCode: d.profileCode || d.ProfileCode || "",
+          ratingClientCode: d.ratingClientCode ?? d.RatingClientCode ?? null,
+          ratingProfileCode: d.ratingProfileCode ?? d.RatingProfileCode ?? null,
+          isCorporate: d.isCorporate ?? d.IsCorporate,
           isLoggedClient: true,
         };
-        const subClients: ClientOption[] = (d.subClients || d.profiles || []).map((s: any) => ({
-          clientCode: s.clientCode || s.profileCode || "",
-          clientName: s.clientName || s.profileCode || "",
-          profileCode: s.profileCode || "",
-          isCorporate: s.isCorporate,
+        const subClients: ClientOption[] = (d.subClients || d.SubClients || d.profiles || d.Profiles || []).map((s: any) => ({
+          clientCode: s.clientCode || s.ClientCode || s.profileCode || s.ProfileCode || "",
+          clientName: s.clientName || s.ClientName || s.clientCode || s.ClientCode || s.profileCode || s.ProfileCode || "",
+          profileCode: s.profileCode || s.ProfileCode || "",
+          ratingClientCode: s.ratingClientCode ?? s.RatingClientCode ?? null,
+          ratingProfileCode: s.ratingProfileCode ?? s.RatingProfileCode ?? null,
+          isCorporate: s.isCorporate ?? s.IsCorporate,
           isLoggedClient: false,
         }));
         return [mainClient, ...subClients];

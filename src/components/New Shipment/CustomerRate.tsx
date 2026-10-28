@@ -103,17 +103,8 @@ const formatCurrency = (val: number): string => {
   return isNeg ? `($${abs})` : `$${abs}`;
 };
 
-const formatMarkup = (val: number, isPercent: boolean): string => {
-  if (val == null || isNaN(val)) return isPercent ? "0.00%" : "$0.00";
-  const isNeg = val < 0;
-  const abs = Math.abs(val).toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  if (isPercent) {
-    return isNeg ? `(${abs}%)` : `${abs}%`;
-  }
-  return isNeg ? `($${abs})` : `$${abs}`;
+const formatMarkup = (val: number, _isPercent?: boolean): string => {
+  return formatCurrency(val);
 };
 
 const CustomerRate: React.FC<CustomerRateProps> = ({
@@ -175,7 +166,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const [markupRate, setMarkupRate] = useState<string>("0");
   const [isMarkupRateDirty, setIsMarkupRateDirty] = useState<boolean>(false);
   const [markup, setMarkup] = useState<string>("0");
-  const [isMarkupDirty, setIsMarkupDirty] = useState<boolean>(false);
+  const [, setIsMarkupDirty] = useState<boolean>(false);
 
   // Net Sell Rate states
   const [isNetSellRateEnabled, setIsNetSellRateEnabled] =
@@ -1351,6 +1342,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       ]}
                     />
                     <div className="markup-input-wrap">
+                        {markupDropdownOption !== "Flat" && (
+                        <span className="markup-unit-symbol">$</span>
+                      )}
                       <Input
                         value={markupRate}
                         status={isMarkupRateDirty ? "error" : undefined}
@@ -1363,6 +1357,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         }}
                         onPressEnter={handleApplyMarkup}
                       />
+                      
                     </div>
                     <div className="markup-input-wrap">
                       <span
@@ -1371,17 +1366,13 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       >
                         Min. 
                       </span>
-                      {markupDropdownOption === "Flat" && (
-                        <span className="markup-unit-symbol">$</span>
-                      )}
+                      <span className="markup-unit-symbol">$</span>
                       <Input
                         value={markup}
                         disabled
                         className="input-sm-center"
                       />
-                      {markupDropdownOption !== "Flat" && (
-                        <span className="markup-unit-symbol">%</span>
-                      )}
+
                     </div>
                   </>
                 )}
@@ -1556,6 +1547,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
               return (
                 <div
+                
                   key={item.id}
                   className={`rate-item-row ${selectedRowId === item.id ? "is-selected" : ""} ${isEditing ? "is-editing" : ""}`}
                   onClick={() =>

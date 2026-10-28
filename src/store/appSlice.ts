@@ -156,8 +156,16 @@ export const loginUser = createAsyncThunk<
           }
         );
         if (clientRes.data?.data) {
-          if (Array.isArray(clientRes.data.data)) {
-            const list = clientRes.data.data;
+          const rawData = clientRes.data.data;
+          const list = Array.isArray(rawData)
+            ? rawData
+            : Array.isArray(rawData.clientAndProfileDetails)
+              ? rawData.clientAndProfileDetails
+              : Array.isArray(rawData.ClientAndProfileDetails)
+                ? rawData.ClientAndProfileDetails
+                : null;
+
+          if (Array.isArray(list)) {
             const logged = list.find((c: any) => c.isLoggedClient) || list[0];
             if (logged) {
               profileCode = logged.profileCode || null;

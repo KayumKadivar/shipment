@@ -781,16 +781,19 @@ function CustomerLocationPage({
                 .toLowerCase()
                 .includes(input.toLowerCase())
             }
-            options={clients.map(client => ({
-              label: (
-                <span>
-                  <UserOutlined style={{ marginRight: 8 }} />
-                  {client.clientName}
-                </span>
-              ),
-              value: client.clientCode,
-              searchValue: `${client.clientName} ${client.clientCode}`,
-            }))}
+            options={clients.map(client => {
+              const displayName = client.clientName || client.clientCode || "Client";
+              return {
+                label: (
+                  <span>
+                    <UserOutlined style={{ marginRight: 8 }} />
+                    {displayName}
+                  </span>
+                ),
+                value: client.clientCode,
+                searchValue: `${displayName} ${client.clientCode}`.trim(),
+              };
+            })}
             loading={clients.length === 0}
           />
         </div>

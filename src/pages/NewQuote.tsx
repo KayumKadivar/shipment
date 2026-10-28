@@ -645,6 +645,52 @@ function NewQuote() {
       clients[0]?.clientCode ||
       "";
 
+  // Automatically select the default client once clients are loaded
+  useEffect(() => {
+    if (!selectedClientCode && clients.length > 0) {
+      const defaultClient =
+        clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE) || clients[0];
+      if (defaultClient?.clientCode) {
+        setSelectedClientCode(defaultClient.clientCode);
+        sessionStorage.setItem("quotes_selectedClientCode", defaultClient.clientCode);
+        sessionStorage.setItem("customerLocation_selectedClientCode", defaultClient.clientCode);
+      }
+    }
+  }, [clients, selectedClientCode]);
+
+  const clientOptions = useMemo(() => {
+    const list = [...clients];
+
+    const fallbackCode =
+      (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+      DEFAULT_CLIENT_CODE ||
+      "DEVTS";
+    const fallbackName =
+      (typeof localStorage !== "undefined" ? localStorage.getItem("clientName") : null) ||
+      fallbackCode;
+
+    if (list.length === 0) {
+      list.push({
+        clientCode: fallbackCode,
+        clientName: fallbackName,
+      });
+    }
+
+    return list.map((client) => {
+      const displayName = client.clientName || client.clientCode || "Client";
+      return {
+        label: (
+          <span>
+            <UserOutlined style={{ marginRight: 8 }} />
+            {displayName}
+          </span>
+        ),
+        value: client.clientCode || displayName,
+        searchValue: `${displayName} ${client.clientCode || ""}`.trim(),
+      };
+    });
+  }, [clients]);
+
   const handleClientChange = (value: string) => {
     setSelectedClientCode(value);
     sessionStorage.setItem("quotes_selectedClientCode", value);
@@ -671,6 +717,7 @@ function NewQuote() {
 
       const clientCodeToUse =
         selectedClientCode ||
+        activeClientCode ||
         sessionStorage.getItem("quotes_selectedClientCode") ||
         sessionStorage.getItem("customerLocation_selectedClientCode") ||
         DEFAULT_CLIENT_CODE ||
@@ -752,7 +799,7 @@ function NewQuote() {
 
   useEffect(() => {
     fetchProducts("");
-  }, [selectedClientCode]);
+  }, [selectedClientCode, activeClientCode]);
 
   const handleSearchProducts = (searchText: string) => {
     if (searchProductTimeoutRef.current) {
@@ -1164,6 +1211,8 @@ function NewQuote() {
       clientCode: activeClientCode || "",
       clientName:
         clients.find((c) => c.clientCode === activeClientCode)?.clientName ||
+        clients.find((c) => c.clientCode === activeClientCode)?.clientCode ||
+        activeClientCode ||
         "",
       ratingClientCode:
         clients.find((c) => c.clientCode === activeClientCode)?.ratingClientCode ||
@@ -1331,7 +1380,7 @@ function NewQuote() {
                   showSearch
                   allowClear
                   placeholder="Search or select client..."
-                  value={selectedClientCode || undefined}
+                  value={selectedClientCode || activeClientCode || undefined}
                   onChange={handleClientChange}
                   style={{ minWidth: 260 }}
                   filterOption={(input, option) =>
@@ -1339,16 +1388,7 @@ function NewQuote() {
                       .toLowerCase()
                       .includes(input.toLowerCase())
                   }
-                  options={clients.map((client) => ({
-                    label: (
-                      <span>
-                        <UserOutlined style={{ marginRight: 8 }} />
-                        {client.clientName}
-                      </span>
-                    ),
-                    value: client.clientCode,
-                    searchValue: `${client.clientName} ${client.clientCode}`,
-                  }))}
+                  options={clientOptions}
                   loading={clients.length === 0}
                 />
               </div>
