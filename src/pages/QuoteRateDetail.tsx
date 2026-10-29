@@ -149,7 +149,10 @@ function QuoteRateDetail() {
     if (reference) {
       dispatch(fetchQuoteById(reference));
     }
-    dispatch(fetchAccessorials());
+    const clientCodeForAccessorials =
+      (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+      DEFAULT_CLIENT_CODE;
+    dispatch(fetchAccessorials(clientCodeForAccessorials));
     dispatch(fetchClientsAndSubclients());
   }, [dispatch, reference]);
 

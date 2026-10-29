@@ -48,7 +48,11 @@ const initialState: ChargeAccessorialsState = {
 };
 
 function resolveClientCode(clientCode: string | null | undefined) {
-  return clientCode?.trim() || DEFAULT_CLIENT_CODE;
+  return (
+    clientCode?.trim() ||
+    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+    DEFAULT_CLIENT_CODE
+  );
 }
 
 export const fetchChargeAccessorials = createAsyncThunk<

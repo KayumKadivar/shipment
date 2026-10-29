@@ -196,8 +196,8 @@ const NewShipment: React.FC = () => {
   const defaultLoggedClient = useMemo(() => {
     return (
       quote?.clientCode ||
-      clients.find((client) => client.isLoggedClient)?.clientCode ||
       clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
+      clients.find((client) => client.isLoggedClient)?.clientCode ||
       loggedInClientCode ||
       DEFAULT_CLIENT_CODE ||
       clients[0]?.clientCode ||
@@ -220,8 +220,10 @@ const NewShipment: React.FC = () => {
   }, [quote?.clientCode]);
 
   useEffect(() => {
-    if (!selectedClientCode && defaultLoggedClient) {
-      setSelectedClientCode(defaultLoggedClient);
+    if (defaultLoggedClient) {
+      if (!selectedClientCode || !clients.some((client) => client.clientCode === selectedClientCode)) {
+        setSelectedClientCode(defaultLoggedClient);
+      }
     }
   }, [clients, selectedClientCode, defaultLoggedClient]);
 

@@ -633,14 +633,14 @@ function NewQuote() {
   );
 
   useEffect(() => {
-    dispatch(fetchAccessorials());
     dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
 
+
   const defaultLoggedClient = useMemo(() => {
     return (
-      clients.find((client) => client.isLoggedClient)?.clientCode ||
       clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
+      clients.find((client) => client.isLoggedClient)?.clientCode ||
       loggedInClientCode ||
       DEFAULT_CLIENT_CODE ||
       clients[0]?.clientCode ||
@@ -656,6 +656,13 @@ function NewQuote() {
   }, [clients, selectedClientCode, defaultLoggedClient]);
 
   useEffect(() => {
+    const codeToUse = activeClientCode || loggedInClientCode;
+    if (codeToUse) {
+      dispatch(fetchAccessorials(codeToUse));
+    }
+  }, [dispatch, activeClientCode, loggedInClientCode]);
+
+  useEffect(() => {
     try {
       sessionStorage.removeItem("quotes_selectedClientCode");
     } catch {
@@ -664,8 +671,10 @@ function NewQuote() {
   }, []);
 
   useEffect(() => {
-    if (!selectedClientCode && defaultLoggedClient) {
-      setSelectedClientCode(defaultLoggedClient);
+    if (defaultLoggedClient) {
+      if (!selectedClientCode || !clients.some((client) => client.clientCode === selectedClientCode)) {
+        setSelectedClientCode(defaultLoggedClient);
+      }
     }
   }, [clients, selectedClientCode, defaultLoggedClient]);
 

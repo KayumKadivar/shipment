@@ -33,14 +33,21 @@ export const fetchAccessorials = createAsyncThunk<
   LocationAccessorial[],
   string | void,
   {
-    state: { accessorials: AccessorialsState };
+    state: { accessorials: AccessorialsState; app?: { clientCode?: string | null; profileCode?: string | null } };
     rejectValue: string;
   }
 >(
   "accessorials/fetchAccessorials",
-  async (clientCode: string | void, { rejectWithValue }) => {
+  async (clientCode: string | void, { getState, rejectWithValue }) => {
     try {
-      const code = clientCode || DEFAULT_CLIENT_CODE;
+      const state = getState() as any;
+      const code =
+        (typeof clientCode === "string" && clientCode.trim()) ||
+        state.app?.clientCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+        state.app?.profileCode ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) ||
+        DEFAULT_CLIENT_CODE;
       const token = localStorage.getItem("authToken");
 
       const response = await axios.get<AccessorialApiResponse>(

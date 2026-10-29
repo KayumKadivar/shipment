@@ -166,7 +166,31 @@ export const loginUser = createAsyncThunk<
                 : null;
 
           if (Array.isArray(list)) {
-            const logged = list.find((c: any) => c.isLoggedClient) || list[0];
+            const isItemLogged = (c: any) =>
+              c.isLoggedClient === true ||
+              c.IsLoggedClient === true ||
+              c.isLoggedClient === 1 ||
+              c.IsLoggedClient === 1 ||
+              String(c.isLoggedClient).toLowerCase() === "true" ||
+              String(c.IsLoggedClient).toLowerCase() === "true";
+
+            const userLower = username.trim().toLowerCase();
+            const matchByUser = list.find(
+              (c: any) =>
+                c.clientCode?.toLowerCase() === userLower ||
+                c.profileCode?.toLowerCase() === userLower ||
+                c.clientName?.toLowerCase() === userLower
+            );
+
+            const matchByDev = userLower.includes("dev")
+              ? list.find(
+                  (c: any) =>
+                    c.clientCode?.toUpperCase() === "DEVTS" ||
+                    c.profileCode?.toUpperCase() === "DEVTS"
+                )
+              : null;
+
+            const logged = matchByUser || matchByDev || list.find(isItemLogged) || list[0];
             if (logged) {
               profileCode = logged.profileCode || null;
               isCorporate = typeof logged.isCorporate === "boolean" ? logged.isCorporate : null;
@@ -289,14 +313,12 @@ const appSlice = createSlice({
       state.ratingClientCode = null;
       state.ratingProfileCode = null;
       state.error = null;
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("username");
-      localStorage.removeItem("profileCode");
-      localStorage.removeItem("isCorporate");
-      localStorage.removeItem("clientCode");
-      localStorage.removeItem("clientName");
-      localStorage.removeItem("ratingClientCode");
-      localStorage.removeItem("ratingProfileCode");
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        console.error("Storage clear error in logout reducer:", e);
+      }
     },
     clearLoginError(state) {
       state.error = null;

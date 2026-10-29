@@ -149,7 +149,14 @@ export const fetchClientsAndSubclients = createAsyncThunk<
           ratingClientCode: c.ratingClientCode ?? c.RatingClientCode ?? null,
           ratingProfileCode: c.ratingProfileCode ?? c.RatingProfileCode ?? null,
           isCorporate: c.isCorporate ?? c.IsCorporate,
-          isLoggedClient: c.isLoggedClient ?? c.IsLoggedClient,
+          isLoggedClient: Boolean(
+            c.isLoggedClient === true ||
+            c.IsLoggedClient === true ||
+            c.isLoggedClient === 1 ||
+            c.IsLoggedClient === 1 ||
+            String(c.isLoggedClient).toLowerCase() === "true" ||
+            String(c.IsLoggedClient).toLowerCase() === "true"
+          ),
         }));
       }
 
@@ -161,7 +168,14 @@ export const fetchClientsAndSubclients = createAsyncThunk<
           ratingClientCode: c.ratingClientCode ?? c.RatingClientCode ?? null,
           ratingProfileCode: c.ratingProfileCode ?? c.RatingProfileCode ?? null,
           isCorporate: c.isCorporate ?? c.IsCorporate,
-          isLoggedClient: c.isLoggedClient ?? c.IsLoggedClient,
+          isLoggedClient: Boolean(
+            c.isLoggedClient === true ||
+            c.IsLoggedClient === true ||
+            c.isLoggedClient === 1 ||
+            c.IsLoggedClient === 1 ||
+            String(c.isLoggedClient).toLowerCase() === "true" ||
+            String(c.IsLoggedClient).toLowerCase() === "true"
+          ),
         }));
       }
 
@@ -182,7 +196,14 @@ export const fetchClientsAndSubclients = createAsyncThunk<
             ratingClientCode: c.ratingClientCode ?? c.RatingClientCode ?? null,
             ratingProfileCode: c.ratingProfileCode ?? c.RatingProfileCode ?? null,
             isCorporate: c.isCorporate ?? c.IsCorporate ?? d.isCorporate ?? d.IsCorporate,
-            isLoggedClient: c.isLoggedClient ?? c.IsLoggedClient,
+            isLoggedClient: Boolean(
+            c.isLoggedClient === true ||
+            c.IsLoggedClient === true ||
+            c.isLoggedClient === 1 ||
+            c.IsLoggedClient === 1 ||
+            String(c.isLoggedClient).toLowerCase() === "true" ||
+            String(c.IsLoggedClient).toLowerCase() === "true"
+          ),
           }));
         }
 

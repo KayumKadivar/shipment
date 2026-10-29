@@ -1,4 +1,4 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { combineReducers, configureStore, type UnknownAction } from "@reduxjs/toolkit";
 import appReducer from "../store/appSlice.ts";
 import productReducer from "../store/productSlice.ts";
 import accessorialsReducer from "../store/accessorialsSlice.ts";
@@ -14,24 +14,36 @@ import equipmentReducer from "../store/equipmentSlice.ts";
 import serviceLevelReducer from "../store/serviceLevelSlice.ts";
 import paymentTermReducer from "../store/paymentTermSlice.ts";
 
-export const store = configureStore({
-  reducer: {
-    app: appReducer,
-    product: productReducer,
-    accessorials: accessorialsReducer,
-    chargeAccessorials: chargeAccessorialsReducer,
-    customerRate: customerRateReducer,
-    customerLocation: customerLocationReducer,
-    customerProduct: customerProductReducer,
-    carrierTracking: carrierTrackingReducer,
-    shipment: shipmentReducer,
-    quote: quoteReducer,
-    packageTypes: packageTypesReducer,
-    equipment: equipmentReducer,
-    serviceLevel: serviceLevelReducer,
-    paymentTerm: paymentTermReducer,
-  },
+const appCombinedReducer = combineReducers({
+  app: appReducer,
+  product: productReducer,
+  accessorials: accessorialsReducer,
+  chargeAccessorials: chargeAccessorialsReducer,
+  customerRate: customerRateReducer,
+  customerLocation: customerLocationReducer,
+  customerProduct: customerProductReducer,
+  carrierTracking: carrierTrackingReducer,
+  shipment: shipmentReducer,
+  quote: quoteReducer,
+  packageTypes: packageTypesReducer,
+  equipment: equipmentReducer,
+  serviceLevel: serviceLevelReducer,
+  paymentTerm: paymentTermReducer,
 });
 
-export type RootState = ReturnType<typeof store.getState>;
+const rootReducer = (
+  state: ReturnType<typeof appCombinedReducer> | undefined,
+  action: UnknownAction
+) => {
+  if (action.type === "app/logout") {
+    state = undefined;
+  }
+  return appCombinedReducer(state, action);
+};
+
+export const store = configureStore({
+  reducer: rootReducer,
+});
+
+export type RootState = ReturnType<typeof appCombinedReducer>;
 export type AppDispatch = typeof store.dispatch;

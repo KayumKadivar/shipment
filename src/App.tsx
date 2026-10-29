@@ -16,6 +16,7 @@ import type { CustomerProduct } from "./types/customerProduct.types.ts";
 import Login from "./pages/Login.tsx";
 import AppRouter from "./router/index.tsx";
 import { login, logout, fetchCountries } from "./store/appSlice.ts";
+import { clearQuoteFormData, clearRates } from "./store/customerRateSlice";
 import { fetchAccessorials } from "./store/accessorialsSlice";
 import { fetchEquipment } from "./store/equipmentSlice";
 import { fetchServiceLevel } from "./store/serviceLevelSlice";
@@ -91,24 +92,41 @@ function App() {
     [customerProducts, dispatch],
   );
 
+  const loggedInClientCode =
+    useAppSelector((state) => state.app.clientCode) ||
+    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null);
+
   useEffect(() => {
     if (isAuthenticated) {
-      dispatch(fetchAccessorials());
+      if (loggedInClientCode) {
+        dispatch(fetchAccessorials(loggedInClientCode));
+      }
+      
       dispatch(fetchCountries());
       dispatch(fetchEquipment());
       dispatch(fetchServiceLevel());
       dispatch(fetchPaymentTerm());
     }
-  }, [isAuthenticated, dispatch]);
+  }, [isAuthenticated, loggedInClientCode, dispatch]);
 
   const handleLogout = () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {
+      console.error("Storage clear error on logout:", e);
+    }
     dispatch(logout());
+    dispatch(clearQuoteFormData());
+    dispatch(clearRates());
     setCollapsed(false);
-    navigate("/", { replace: true });
+    window.location.href = "/";
   };
 
   const handleLogin = () => {
     dispatch(login());
+    dispatch(clearQuoteFormData());
+    dispatch(clearRates());
     navigate("/shipments", { replace: true });
   };
 
