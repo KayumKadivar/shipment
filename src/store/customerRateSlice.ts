@@ -196,6 +196,7 @@ export interface CustomerRateState {
   quoteFormData: QuoteFormData | null;
   carrierSearchResults: CarrierSearchResult[];
   carrierSearchLoading: boolean;
+  rawQuote: any | null;
 }
 
 // Initial state for customer rate
@@ -207,6 +208,7 @@ const initialState: CustomerRateState = {
   quoteFormData: null,
   carrierSearchResults: [],
   carrierSearchLoading: false,
+  rawQuote: null,
 };
 
 type RateApiResponse = {
@@ -258,7 +260,7 @@ export const fetchCarrierRates = createAsyncThunk<
       };
 
       const response = await axios.post<RateApiResponse>(
-        `${API_BASE_URL}/Rating/GetRates`,
+        `${API_BASE_URL}/Rating/GetQuote`,
         requestPayload,
         {
           headers: {
@@ -283,13 +285,24 @@ export const fetchCarrierRates = createAsyncThunk<
       }
 
       let apiRates: ApiRate[] = [];
-      const responseData = response.data.data;
+      const responseData = response.data?.data as any;
       if (responseData) {
         if (Array.isArray(responseData)) {
           apiRates = responseData;
-        } else if (responseData.leastCostCarriers) {
+        } else if (Array.isArray(responseData.leastCostCarriers)) {
           apiRates = responseData.leastCostCarriers;
+        } else if (Array.isArray(responseData.quoteResults)) {
+          apiRates = responseData.quoteResults;
+        } else if (Array.isArray(responseData.rates)) {
+          apiRates = responseData.rates;
+        } else if (Array.isArray(responseData.carrierRates)) {
+          apiRates = responseData.carrierRates;
+        } else if (Array.isArray(responseData.carriers)) {
+          apiRates = responseData.carriers;
         }
+      }
+      if (responseData && typeof responseData === "object" && !Array.isArray(responseData)) {
+        (apiRates as any).rawQuote = responseData;
       }
       console.log("Extracted apiRates:", apiRates);
       return apiRates;
@@ -397,78 +410,179 @@ export const searchCarriers = createAsyncThunk<
 
 export const saveCustomerQuote = createAsyncThunk<
   QuoteSaveApiResponse,
-  void,
+  {
+    marginType?: string;
+    marginPercent?: number | string;
+    isNetSellRate?: boolean;
+    calculatedRates?: any[];
+    rawQuote?: any;
+  } | void,
   {
     state: { customerRate: CustomerRateState };
     rejectValue: string;
   }
 >(
   "customerRate/saveCustomerQuote",
-  async (_, { getState, rejectWithValue }) => {
+  async (args, { getState, rejectWithValue }) => {
     try {
-      const { quoteRequest, rates } = getState().customerRate;
+      const { rates, rawQuote } = getState().customerRate;
+      const token = localStorage.getItem("authToken");
 
-      if (!quoteRequest) {
-        return rejectWithValue("No quote request found to save.");
+      const baseQuote = args?.rawQuote || rawQuote || {};
+      const calculatedRates = args?.calculatedRates || rates || [];
+      const isNetSell = Boolean(args?.isNetSellRate);
+
+      let marginType = args?.marginType || baseQuote.marginType || "Flat";
+      if (isNetSell) {
+        marginType = "NetSell";
       }
+      const marginPercent = Number(args?.marginPercent ?? baseQuote.marginPercent) || 0;
 
-      const payload = {
-        quoteRequestId: 0,
-        pickupDate: quoteRequest.shipmentDate || new Date().toISOString(),
-        requestedDate: new Date().toISOString(),
-        originCity: quoteRequest.origCity || "",
-        originStateCode: quoteRequest.origState || "",
-        originZip: quoteRequest.origZip || "",
-        destinationCity: quoteRequest.destCity || "",
-        destinationStateCode: quoteRequest.destState || "",
-        destinationZip: quoteRequest.destZip || "",
-        clientName: quoteRequest.clientName || "",
-        clientCode: quoteRequest.clientCode || (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) || "",
-        profileCode:
-          quoteRequest.profileCode ||
-          (quoteRequest as any).ratingProfileCode ||
-          (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) ||
-          (typeof localStorage !== "undefined" ? localStorage.getItem("ratingProfileCode") : null) ||
-          quoteRequest.clientCode ||
-          "",
-        isAgentQuote: true,
-        marginType: quoteRequest.shipments?.[0]?.weightUnit || "",
-        marginPercent: 0,
-        quoteProducts: (quoteRequest.shipments || []).map((s) => ({
-          quoteProductId: 0,
-          quoteRequestId: 0,
-          productClass: s.class || "",
-          productNMFC: s.nmfc || "",
-          description: s.description || "",
-          weight: Number(s.weight) || 0,
-          pallets: Number(s.pallets) || Number(s.units) || 1,
-          pieces: Number(s.pieces) || 1,
-          length: Number(s.length) || 0,
-          width: Number(s.width) || 0,
-          height: Number(s.height) || 0,
-          packagingGroup: s.packageType || s.packagingGroup || "",
-          isHazmat: s.hazMat || s.isHazmat || false,
-          hazmatClass: s.hazmatClass || s.hazMatClass || "",
-          hazmatUN: s.hazmatUN || s.hazMatUN || "",
-          hazmatProperShippingName: s.hazmatProperShippingName || s.hazMatProperShippingName || "",
-          hazmatPhone: s.hazmatPhone || s.hazMatPhone || "",
-          hazmatContactName: s.hazmatContactName || s.hazmatContact || s.hazMatContact || "",
-          hazmatGroup: s.hazmatGroup || s.hazmatPackingGroup || s.hazMatPackingGroup || "",
-          isStackable: s.stackable ?? true,
-        })),
-        quoteAccessorials: (quoteRequest.accessorialCodes || []).map((acc: string) => ({
-          quoteAccessorialId: 0,
-          quoteRequestId: 0,
-          accCode: acc
-        })),
-        quoteResults: (rates || []).map((rate) => {
-          const existingAccessorials = (rate.accessorialCharges || []).filter((charge) => {
+      const fallbackBrokerCode =
+        (baseQuote.clientCode && String(baseQuote.clientCode).trim()) ||
+        (baseQuote.profileCode && String(baseQuote.profileCode).trim()) ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode")?.trim() : null) ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode")?.trim() : null) ||
+        "NICO";
+
+      const fallbackBrokerName =
+        (baseQuote.clientName && String(baseQuote.clientName).trim()) ||
+        (typeof localStorage !== "undefined" ? localStorage.getItem("clientName")?.trim() : null) ||
+        "NICO Logistics";
+
+      let quoteResults = baseQuote.quoteResults;
+      if (Array.isArray(quoteResults) && quoteResults.length > 0) {
+        quoteResults = quoteResults.map((resultItem: any, idx: number) => {
+          const matchingRate = calculatedRates.find(
+            (r: any) =>
+              (r.code && resultItem.scac && r.code.toUpperCase() === resultItem.scac.toUpperCase()) ||
+              (r.name && resultItem.carrierName && r.name.toLowerCase() === resultItem.carrierName.toLowerCase()) ||
+              (r.id && resultItem.saasQuoteId && String(r.id) === String(resultItem.saasQuoteId))
+          );
+
+          const buyGross = Number(matchingRate?.grossCharge ?? resultItem.grossCharge) || 0;
+          const sellGross = Number(matchingRate?.grossSell ?? matchingRate?.grossSellAmount ?? matchingRate?.sellPrice ?? buyGross) || buyGross;
+
+          let costDetails = resultItem.quoteCostDetails;
+          if (Array.isArray(costDetails) && costDetails.length > 0) {
+            costDetails = costDetails.map((cd: any) => {
+              const accCode = (cd.accCode || "").trim().toUpperCase();
+              let cdSellAmount = Number(cd.sellAmount ?? cd.amount) || 0;
+
+              if (isNetSell) {
+                if (accCode === COST_CODE_GROSS || accCode === "GROSS" || accCode === "FRT") {
+                  cdSellAmount = sellGross;
+                } else {
+                  cdSellAmount = 0;
+                }
+              } else {
+                if (accCode === COST_CODE_GROSS || accCode === "GROSS" || accCode === "FRT") {
+                  cdSellAmount = sellGross;
+                } else if (accCode === COST_CODE_FUEL || accCode === "FUEL") {
+                  cdSellAmount = Number(matchingRate?.fuelSell ?? cd.amount) || 0;
+                } else if (accCode === COST_CODE_DISC || accCode === "DISC" || accCode === "DISCOUNT") {
+                  cdSellAmount = Number(matchingRate?.discountSell ?? cd.amount) || 0;
+                } else {
+                  cdSellAmount = Number(cd.sellAmount ?? cd.amount) || 0;
+                }
+              }
+
+              return {
+                ...cd,
+                accCode: cd.accCode || COST_CODE_GROSS,
+                accName: cd.accName || COST_NAME_GROSS,
+                amount: Number(cd.amount) || 0,
+                sellAmount: cdSellAmount,
+              };
+            });
+          } else {
+            costDetails = [
+              {
+                quoteCostDetailsId: 0,
+                quoteResultId: resultItem.quoteResultId ?? 0,
+                accCode: COST_CODE_GROSS,
+                accName: COST_NAME_GROSS,
+                amount: buyGross,
+                sellAmount: sellGross,
+              },
+              {
+                quoteCostDetailsId: 0,
+                quoteResultId: resultItem.quoteResultId ?? 0,
+                accCode: COST_CODE_DISC,
+                accName: COST_NAME_DISC,
+                amount: Number(matchingRate?.discount) || 0,
+                sellAmount: isNetSell ? 0 : Number(matchingRate?.discount) || 0,
+              },
+              {
+                quoteCostDetailsId: 0,
+                quoteResultId: resultItem.quoteResultId ?? 0,
+                accCode: COST_CODE_FUEL,
+                accName: COST_NAME_FUEL,
+                amount: Number(matchingRate?.fuelSurcharge) || 0,
+                sellAmount: isNetSell ? 0 : Number(matchingRate?.fuelSurcharge) || 0,
+              },
+            ];
+          }
+
+          const brokerCode =
+            (resultItem.brokerCode && String(resultItem.brokerCode).trim()) ||
+            (matchingRate?.brokerCode && String(matchingRate.brokerCode).trim()) ||
+            fallbackBrokerCode;
+
+          const brokerName =
+            (resultItem.brokerName && String(resultItem.brokerName).trim()) ||
+            (matchingRate?.brokerName && String(matchingRate.brokerName).trim()) ||
+            fallbackBrokerName;
+
+          const serviceLevel =
+            (resultItem.serviceLevel && String(resultItem.serviceLevel).trim()) ||
+            (matchingRate?.serviceLevel && String(matchingRate.serviceLevel).trim()) ||
+            (matchingRate?.service && String(matchingRate.service).trim()) ||
+            "Standard";
+
+          const serviceType =
+            (resultItem.serviceType && String(resultItem.serviceType).trim()) ||
+            (matchingRate?.serviceType && String(matchingRate.serviceType).trim()) ||
+            (matchingRate?.service && String(matchingRate.service).trim()) ||
+            "Standard";
+
+          const carrierQuoteNo =
+            (resultItem.carrierQuoteNo && String(resultItem.carrierQuoteNo).trim()) ||
+            (matchingRate?.carrierQuoteNo && String(matchingRate.carrierQuoteNo).trim()) ||
+            (matchingRate?.saasQuoteNumber && String(matchingRate.saasQuoteNumber).trim()) ||
+            (matchingRate?.id ? String(matchingRate.id) : "") ||
+            String(resultItem.quoteResultId || `${baseQuote.quoteRequestId || "Q"}-${idx + 1}`);
+
+          return {
+            ...resultItem,
+            brokerCode,
+            brokerName,
+            serviceLevel,
+            serviceType,
+            carrierQuoteNo,
+            scac: (resultItem.scac && String(resultItem.scac).trim()) || (matchingRate?.code && String(matchingRate.code).trim()) || "SCAC",
+            carrierName: (resultItem.carrierName && String(resultItem.carrierName).trim()) || (matchingRate?.name && String(matchingRate.name).trim()) || "Carrier",
+            transitDays: String(resultItem.transitDays ?? matchingRate?.transitDays ?? "0"),
+            saasQuoteId: String(resultItem.saasQuoteId ?? matchingRate?.id ?? ""),
+            originTerminalCode: resultItem.originTerminalCode || "",
+            originTerminalName: resultItem.originTerminalName || "",
+            originTerminalZip: resultItem.originTerminalZip || "",
+            originTerminalPhone: resultItem.originTerminalPhone || "",
+            destinationTerminalCode: resultItem.destinationTerminalCode || "",
+            destinationTerminalName: resultItem.destinationTerminalName || "",
+            destinationTerminalZip: resultItem.destinationTerminalZip || "",
+            destinationTerminalPhone: resultItem.destinationTerminalPhone || "",
+            quoteCostDetails: costDetails,
+          };
+        });
+      } else {
+        quoteResults = (calculatedRates || []).map((rate: any, idx: number) => {
+          const buyGross = Number(rate.grossCharge) || 0;
+          const sellGross = Number(rate.grossSell ?? rate.grossSellAmount ?? rate.sellPrice ?? buyGross) || buyGross;
+
+          const existingAccessorials = (rate.accessorialCharges || []).filter((charge: any) => {
             const code = (charge.accessorialCode || charge.accCode || "").trim().toUpperCase();
-            return (
-              code !== COST_CODE_GROSS &&
-              code !== COST_CODE_DISC &&
-              code !== COST_CODE_FUEL
-            );
+            return code !== COST_CODE_GROSS && code !== COST_CODE_DISC && code !== COST_CODE_FUEL;
           });
 
           const quoteCostDetails = [
@@ -477,7 +591,8 @@ export const saveCustomerQuote = createAsyncThunk<
               quoteResultId: 0,
               accCode: COST_CODE_GROSS,
               accName: COST_NAME_GROSS,
-              amount: Number(rate.grossCharge) || 0,
+              amount: buyGross,
+              sellAmount: sellGross,
             },
             {
               quoteCostDetailsId: 0,
@@ -485,6 +600,7 @@ export const saveCustomerQuote = createAsyncThunk<
               accCode: COST_CODE_DISC,
               accName: COST_NAME_DISC,
               amount: Number(rate.discount) || 0,
+              sellAmount: isNetSell ? 0 : Number(rate.discount) || 0,
             },
             {
               quoteCostDetailsId: 0,
@@ -492,28 +608,30 @@ export const saveCustomerQuote = createAsyncThunk<
               accCode: COST_CODE_FUEL,
               accName: COST_NAME_FUEL,
               amount: Number(rate.fuelSurcharge) || 0,
+              sellAmount: isNetSell ? 0 : Number(rate.fuelSurcharge) || 0,
             },
-            ...existingAccessorials.map((charge) => ({
+            ...existingAccessorials.map((charge: any) => ({
               quoteCostDetailsId: 0,
               quoteResultId: 0,
-              accCode: charge.accessorialCode || charge.accCode || "",
-              accName: charge.accessorialDescription || charge.accName || "",
+              accCode: charge.accessorialCode || charge.accCode || "ACC",
+              accName: charge.accessorialDescription || charge.accName || "ACCESSORIAL",
               amount: Number(charge.accessorialCharge ?? charge.amount) || 0,
+              sellAmount: isNetSell ? 0 : Number(charge.accessorialCharge ?? charge.amount) || 0,
             })),
           ];
 
           return {
             quoteResultId: 0,
-            quoteRequestId: 0,
-            scac: rate.code || "",
-            carrierName: rate.name || "",
-            serviceLevel: rate.service || "",
-            carrierQuoteNo: "",
-            brokerCode: "",
-            brokerName: "",
-            transitDays: String(rate.transitDays || ""),
-            serviceType: rate.service || "",
-            saasQuoteId: rate.id || "",
+            quoteRequestId: baseQuote.quoteRequestId ?? 0,
+            scac: rate.code || "SCAC",
+            carrierName: rate.name || "Carrier",
+            serviceLevel: rate.serviceLevel || rate.service || "Standard",
+            carrierQuoteNo: rate.carrierQuoteNo || rate.saasQuoteNumber || (rate.id ? String(rate.id) : `Q-${idx + 1}`),
+            brokerCode: fallbackBrokerCode,
+            brokerName: fallbackBrokerName,
+            transitDays: String(rate.transitDays || "0"),
+            serviceType: rate.serviceType || rate.service || "Standard",
+            saasQuoteId: String(rate.id || ""),
             originTerminalCode: "",
             originTerminalName: "",
             originTerminalZip: "",
@@ -524,13 +642,30 @@ export const saveCustomerQuote = createAsyncThunk<
             destinationTerminalPhone: "",
             quoteCostDetails,
           };
-        }),
+        });
+      }
+
+      const payload = {
+        ...baseQuote,
+        clientCode: baseQuote.clientCode || fallbackBrokerCode,
+        clientName: baseQuote.clientName || fallbackBrokerName,
+        marginType,
+        marginPercent,
+        quoteResults,
       };
 
-      const response = await axios.post<QuoteSaveApiResponse>(
+      const response = await axios.put<QuoteSaveApiResponse>(
         `${API_BASE_URL}/Quote`,
         payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            accept: "*/*",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
       );
+
       if (response.data && response.data.isSuccess) {
         return response.data;
       }
@@ -574,6 +709,7 @@ const customerRateSlice = createSlice({
       })
       // fetchCarrierRates.fulfilled: when request is successful
       .addCase(fetchCarrierRates.fulfilled, (state, action) => {
+        state.rawQuote = (action.payload as any)?.rawQuote || null;
         state.loading = false;
 
         state.rates = action.payload.map((rate: any, index: number) => {

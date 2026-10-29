@@ -17,7 +17,7 @@ import {
   COST_NAME_GROSS,
   COST_NAME_DISC,
   COST_NAME_FUEL,
-  setQuoteFormData,
+  saveCustomerQuote,
 } from "../store/customerRateSlice";
 import { fetchQuoteById } from "../store/quoteSlice";
 import { fetchAccessorials } from "../store/accessorialsSlice";
@@ -109,6 +109,7 @@ function QuoteRateDetail() {
     const numRate = Math.max(0, Number(markupRate) || 0);
     const numMin = Math.max(0, Number(markup) || 0);
     const numNetSell = Math.max(0, Number(netSellRate) || 0);
+    const currentSearch = search.trim().toLowerCase();
 
     setAppliedMarkupConfig({
       isMarkupEnabled,
@@ -117,6 +118,7 @@ function QuoteRateDetail() {
       numericMarkupRate: numRate,
       isNetSellRateEnabled,
       numericNetSellRate: numNetSell,
+      targetCarrierFilter: currentSearch,
     });
 
     setIsMarkupRateDirty(false);
@@ -191,14 +193,6 @@ function QuoteRateDetail() {
               setIsMarkupEnabled(false);
               const rateVal = config.rate != null ? String(config.rate) : "0";
               setNetSellRate(rateVal);
-              setAppliedMarkupConfig({
-                isMarkupEnabled: false,
-                markupDropdownOption: "Flat",
-                numericMarkup: 0,
-                numericMarkupRate: 0,
-                isNetSellRateEnabled: true,
-                numericNetSellRate: Number(rateVal) || 0,
-              });
             } else {
               setIsMarkupEnabled(true);
               setIsNetSellRateEnabled(false);
@@ -222,14 +216,6 @@ function QuoteRateDetail() {
                     ? String(config.rate)
                     : "0";
               setMarkup(minVal);
-              setAppliedMarkupConfig({
-                isMarkupEnabled: true,
-                markupDropdownOption: opt,
-                numericMarkup: Number(minVal) || 0,
-                numericMarkupRate: Number(rateVal) || 0,
-                isNetSellRateEnabled: false,
-                numericNetSellRate: 0,
-              });
             }
           }
         }
@@ -414,55 +400,90 @@ function QuoteRateDetail() {
     }
   };
 
-  const handleEditQuote = () => {
-    if (apiQuote) {
-      dispatch(
-        setQuoteFormData({
-          origPostal: apiQuote.originZip || "",
-          origCity: apiQuote.originCity || "",
-          origState: apiQuote.originStateCode || "",
-          origCountry: originCountry,
-          pickupDate: apiQuote.pickupDate || null,
-          destPostal: apiQuote.destinationZip || "",
-          destCity: apiQuote.destinationCity || "",
-          destState: apiQuote.destinationStateCode || "",
-          destCountry: destCountry,
-          packages: [{
-            id: "package-1",
-            items: (apiQuote.quoteProducts || []).map((p, idx) => ({
-              id: `item-${idx + 1}`,
-              units: String(p.pallets ?? p.units ?? ""),
-              handlingUnit: p.packagingGroup || p.packageType || "Pallet",
-              pieces: String(p.pieces ?? ""),
-              weight: String(p.weight ?? ""),
-              weightUnit: "lbs",
-              freightClass: String(p.productClass ?? p.class ?? "50"),
-              length: String(p.length ?? ""),
-              width: String(p.width ?? ""),
-              height: String(p.height ?? ""),
-              dimensionUnit: "in.",
-              nmfc: String(p.productNMFC ?? p.nmfc ?? ""),
-              description: p.description ?? "",
-              stackable: Boolean(p.isStackable ?? p.stackable),
-              hazMat: Boolean(p.isHazmat ?? p.hazMat),
-              hazMatClass: p.hazmatClass ?? "",
-              hazMatUN: p.hazmatUN ?? "",
-            })),
-          }],
-          selectedAccessorials: (apiQuote.quoteAccessorials || []).map(
-            (a) =>
-              a.accCode ||
-              a.description ||
-              a.accessorialName ||
-              a.accesorialCode ||
-              "",
-          ),
-          selectedClientCode: apiQuote.clientCode || undefined,
+  const [isSavingQuote, setIsSavingQuote] = useState(false);
+
+  const handleSaveQuote = async () => {
+    setIsSavingQuote(true);
+    try {
+      const marginTypeToPass = isNetSellRateEnabled
+        ? "NetSell"
+        : markupDropdownOption === "Flat"
+          ? "Flat"
+          : markupDropdownOption;
+
+      const marginValToPass = isNetSellRateEnabled
+        ? Number(netSellRate) || 0
+        : markupDropdownOption === "Flat"
+          ? Number(markupRate) || Number(markup) || 0
+          : Number(markupRate) || 0;
+
+      await dispatch(
+        saveCustomerQuote({
+          marginType: marginTypeToPass,
+          marginPercent: marginValToPass,
+          isNetSellRate: isNetSellRateEnabled,
+          calculatedRates: rates.map((r) => applyMarkupToRate(r, appliedMarkupConfig)),
+          rawQuote: apiQuote,
         })
-      );
+      ).unwrap();
+
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
+      const clientCodeToUse =
+        apiQuote?.clientCode ||
+        sessionStorage.getItem("quotes_selectedClientCode") ||
+        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        DEFAULT_CLIENT_CODE ||
+        "DEVTS";
+
+      const token = localStorage.getItem("authToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) headers["Authorization"] = "Bearer " + token;
+
+      // 1. Hit GetClientMarkup
+      if (clientCodeToUse) {
+        try {
+          await axios.get(
+            API_BASE_URL + "/ClientMarkupConfig/GetClientMarkup/" + encodeURIComponent(clientCodeToUse),
+            { headers },
+          );
+        } catch (err) {
+          console.error("Error fetching client markup on save quote:", err);
+        }
+      }
+
+      // 2. Hit Quote by id to update quote data
+      if (reference) {
+        await dispatch(fetchQuoteById(reference)).unwrap();
+
+      setAppliedMarkupConfig({
+        isMarkupEnabled: false,
+        markupDropdownOption: "% Freight + Fuel",
+        numericMarkup: 0,
+        numericMarkupRate: 0,
+        isNetSellRateEnabled: false,
+        numericNetSellRate: 0,
+        targetCarrierFilter: "",
+      });
+      }
+
+      messageApi.success("Quote saved successfully!");
+
+      
+
+    } catch (error: unknown) {
+      const errorMsg =
+        (error as any)?.message ||
+        (typeof error === "string" ? error : "Failed to save quote.");
+      messageApi.error(errorMsg);
+    } finally {
+      setIsSavingQuote(false);
     }
-    navigate("/quotes");
   };
+
 
   const handleShipIt = (rate: CarrierRate) => {
     const quoteToSend = apiQuote ? { ...apiQuote } : undefined;
@@ -617,8 +638,8 @@ function QuoteRateDetail() {
       <header className='rate-page__header'>
         <h1>Quote Results</h1>
         <div className='rate-page__header-actions'>
-          <Button onClick={handleEditQuote}>
-            Edit Quote
+          <Button type="primary" loading={isSavingQuote} onClick={handleSaveQuote}>
+            Save Quote
           </Button>
         
           <Button
