@@ -45,7 +45,123 @@ export type CarrierRate = SendRateItem & {
   accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[];
   quoteCostDetails?: any[] | null;
   rawQuoteResult?: any;
+  sellPrice?: number;
+  grossSell?: number;
+  fuelSell?: number;
+  discountSell?: number;
+  markupAmount?: number;
+  ppsFreight?: number;
+  ppsFuel?: number;
+  isNetSellActive?: boolean;
 };
+
+export interface AppliedMarkupConfig {
+  isMarkupEnabled: boolean;
+  markupDropdownOption: string;
+  numericMarkup: number;
+  numericMarkupRate: number;
+  isNetSellRateEnabled: boolean;
+  numericNetSellRate: number;
+}
+
+export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig): CarrierRate {
+  const numRate = Math.max(0, config.numericMarkupRate || 0);
+  const numMin = Math.max(0, config.numericMarkup || 0);
+  const numNetSell = Math.max(0, config.numericNetSellRate || 0);
+
+  const grossBuy = Number(rate.grossCharge) || 0;
+  const fuelBuy = Number(rate.fuelSurcharge) || 0;
+  const discountBuy = Number(rate.discount) || 0;
+  const totalBuy = Number(rate.price) || 0;
+
+  if (config.isNetSellRateEnabled) {
+    const ppsFreight = numNetSell;
+    const ppsFuel = 0;
+    const finalPrice = numNetSell;
+    return {
+      ...rate,
+      sellPrice: finalPrice,
+      grossSell: ppsFreight,
+      fuelSell: 0,
+      discountSell: 0,
+      markupAmount: finalPrice - totalBuy,
+      ppsFreight,
+      ppsFuel,
+      isNetSellActive: true,
+    };
+  }
+
+  if (config.isMarkupEnabled && (numRate > 0 || numMin > 0)) {
+    const rateToUse = numRate > 0 ? numRate : numMin;
+    let calculatedMarkup = 0;
+
+    if (config.markupDropdownOption === "Flat") {
+      calculatedMarkup = rateToUse;
+    } else if (config.markupDropdownOption === "% Freight") {
+      calculatedMarkup = grossBuy * (rateToUse / 100);
+      if (calculatedMarkup < numMin) {
+        calculatedMarkup = numMin;
+      }
+    } else if (config.markupDropdownOption === "% Freight + Fuel") {
+      calculatedMarkup = (grossBuy + fuelBuy) * (rateToUse / 100);
+      if (calculatedMarkup < numMin) {
+        calculatedMarkup = numMin;
+      }
+    } else if (config.markupDropdownOption === "% Freight + Fuel + Accessorial") {
+      calculatedMarkup = totalBuy * (rateToUse / 100);
+      if (calculatedMarkup < numMin) {
+        calculatedMarkup = numMin;
+      }
+    }
+
+    const totalMarkupToDistribute = Math.round(calculatedMarkup * 100) / 100;
+    const baseTotal = grossBuy + fuelBuy;
+
+    let ppsFreight = 0;
+    let ppsFuel = 0;
+
+    if (totalMarkupToDistribute > 0 && baseTotal > 0) {
+      const freightPercent = Math.round((grossBuy / baseTotal) * 10000) / 100;
+      const fuelPercent = Math.round((fuelBuy / baseTotal) * 10000) / 100;
+
+      ppsFreight = Math.round(((totalMarkupToDistribute * freightPercent) / 100) * 100) / 100;
+      ppsFuel = Math.round(((totalMarkupToDistribute * fuelPercent) / 100) * 100) / 100;
+
+      if (Math.abs(ppsFreight + ppsFuel - totalMarkupToDistribute) > 0.0001) {
+        ppsFuel = Math.round((totalMarkupToDistribute - ppsFreight) * 100) / 100;
+      }
+    } else {
+      ppsFreight = totalMarkupToDistribute;
+      ppsFuel = 0;
+    }
+
+    const grossSell = Math.round((grossBuy + ppsFreight) * 100) / 100;
+    const fuelSell = Math.round((fuelBuy + ppsFuel) * 100) / 100;
+    const sellPrice = Math.round((totalBuy + totalMarkupToDistribute) * 100) / 100;
+
+    return {
+      ...rate,
+      sellPrice,
+      grossSell,
+      fuelSell,
+      discountSell: discountBuy,
+      markupAmount: totalMarkupToDistribute,
+      ppsFreight,
+      ppsFuel,
+    };
+  }
+
+  return {
+    ...rate,
+    sellPrice: rate.price,
+    grossSell: rate.grossCharge,
+    fuelSell: rate.fuelSurcharge,
+    discountSell: rate.discount,
+    markupAmount: 0,
+    ppsFreight: 0,
+    ppsFuel: 0,
+  };
+}
 
 export type SortOption = "rate-asc" | "rate-desc" | "transit";
 export type QuoteMode = "ltl" | "volume";
@@ -335,6 +451,18 @@ export const getGrossSellAmount = (rate: CarrierRate): string | number | undefin
 };
 
 export const getChargeSellDetails = (rate: CarrierRate) => {
+  if (rate.grossSell !== undefined || rate.fuelSell !== undefined) {
+    return {
+      grossSell: rate.grossSell ?? rate.grossCharge ?? 0,
+      discountSell: rate.discountSell ?? (rate.isNetSellActive ? 0 : (rate.discount ?? 0)),
+      fuelSell: rate.fuelSell ?? (rate.isNetSellActive ? 0 : (rate.fuelSurcharge ?? 0)),
+      accessorialsSell: (rate.accessorialCharges || []).map((ac) => ({
+        accessorialDescription: ac.accessorialDescription || "Accessorial",
+        accessorialCharge: rate.isNetSellActive ? 0 : (ac.accessorialCharge ?? 0),
+      })),
+    };
+  }
+
   const details =
     rate.quoteCostDetails ||
     rate.rawQuoteResult?.quoteCostDetails ||
@@ -450,7 +578,7 @@ export function CarrierCard({
             <CarrierLogo rate={rate} />
           </div>
           <strong className='rate-card__price'>
-            {rate.price.toLocaleString("en-US", {
+            {(rate.sellPrice !== undefined ? rate.sellPrice : rate.price).toLocaleString("en-US", {
               style: "currency",
               currency: "USD",
             })}
@@ -500,10 +628,12 @@ export function CarrierCard({
             {showBuyCharges && (
               <div className='rate-detail-charges'>
                 <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {rate.grossCharge}</dt>
-                <dt>Discount : {rate.discount}</dt>
-                <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
+                <dt>Discount : {rate.isNetSellActive ? 0 : rate.discount}</dt>
+                <dt>Fuel Surcharge : {rate.isNetSellActive ? 0 : rate.fuelSurcharge}</dt>
                 {rate.accessorialCharges?.map((charge, idx) => (
-                  <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
+                  <dt key={idx}>
+                    {charge.accessorialDescription} : {rate.isNetSellActive ? 0 : charge.accessorialCharge}
+                  </dt>
                 ))}
               </div>
             )}
@@ -574,18 +704,51 @@ function Rate() {
         (typeof localStorage !== "undefined" &&
           localStorage.getItem("isCorporate") === "true"));
 
-  // Markup UI State (matching QuoteRateDetail.tsx)
-  const [isMarkupEnabled, setIsMarkupEnabled] = useState(true);
+  // Markup UI State
+  const [isMarkupEnabled, setIsMarkupEnabled] = useState(false);
   const [markupDropdownOption, setMarkupDropdownOption] = useState("% Freight + Fuel");
-  const [markupRate, setMarkupRate] = useState("25");
+  const [markupRate, setMarkupRate] = useState("0");
   const [isMarkupRateDirty, setIsMarkupRateDirty] = useState(false);
-  const [markup, setMarkup] = useState("50");
+  const [markup, setMarkup] = useState("0");
   const [isNetSellRateEnabled, setIsNetSellRateEnabled] = useState(false);
   const [netSellRate, setNetSellRate] = useState("");
   const [isNetSellDirty, setIsNetSellDirty] = useState(false);
 
+  const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<AppliedMarkupConfig>({
+    isMarkupEnabled: false,
+    markupDropdownOption: "% Freight + Fuel",
+    numericMarkup: 0,
+    numericMarkupRate: 0,
+    isNetSellRateEnabled: false,
+    numericNetSellRate: 0,
+  });
+
   const handleApplyMarkup = () => {
-    // UI only for now - no backend logic
+    const numRate = Math.max(0, Number(markupRate) || 0);
+    const numMin = Math.max(0, Number(markup) || 0);
+    const numNetSell = Math.max(0, Number(netSellRate) || 0);
+
+    setAppliedMarkupConfig({
+      isMarkupEnabled,
+      markupDropdownOption,
+      numericMarkup: numMin,
+      numericMarkupRate: numRate,
+      isNetSellRateEnabled,
+      numericNetSellRate: numNetSell,
+    });
+
+    setIsMarkupRateDirty(false);
+    setIsNetSellDirty(false);
+
+    if (isMarkupEnabled && (numRate > 0 || numMin > 0)) {
+      messageApi.success("Applied " + markupDropdownOption + " markup");
+    } else if (isNetSellRateEnabled) {
+      messageApi.success("Applied Net Sell Rate");
+    } else if (!isMarkupEnabled && !isNetSellRateEnabled) {
+      messageApi.info("Markup removed");
+    } else {
+      messageApi.info("Applied");
+    }
   };
 
   // Legacy markup state
@@ -632,22 +795,64 @@ function Rate() {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",
       };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (token) headers["Authorization"] = "Bearer " + token;
 
       try {
         const response = await axios.get(
-          `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCodeToUse)}`,
+          API_BASE_URL + "/ClientMarkupConfig/GetClientMarkup/" + encodeURIComponent(clientCodeToUse),
           { headers },
         );
         if (response.data?.isSuccess && response.data?.data) {
           const rawData = response.data.data;
           const config = Array.isArray(rawData) ? rawData[0] : rawData;
-          if (config) {
-            if (config.markupType) {
-              setMarkupType(normalizeMarkupType(config.markupType));
-            }
-            if (config.rate != null) {
-              setMarkup(String(config.rate));
+          if (config && config.markupType) {
+            setMarkupType(normalizeMarkupType(config.markupType));
+            const raw = String(config.markupType).toLowerCase();
+            const isNetSell = raw.includes("netsell");
+            if (isNetSell) {
+              setIsNetSellRateEnabled(true);
+              setIsMarkupEnabled(false);
+              const rateVal = config.rate != null ? String(config.rate) : "0";
+              setNetSellRate(rateVal);
+              setAppliedMarkupConfig({
+                isMarkupEnabled: false,
+                markupDropdownOption: "Flat",
+                numericMarkup: 0,
+                numericMarkupRate: 0,
+                isNetSellRateEnabled: true,
+                numericNetSellRate: Number(rateVal) || 0,
+              });
+            } else {
+              setIsMarkupEnabled(true);
+              setIsNetSellRateEnabled(false);
+              let opt = "Flat";
+              if (raw.includes("flat")) {
+                opt = "Flat";
+              } else if (raw.includes("acc")) {
+                opt = "% Freight + Fuel + Accessorial";
+              } else if (raw.includes("fuel")) {
+                opt = "% Freight + Fuel";
+              } else {
+                opt = "% Freight";
+              }
+              setMarkupDropdownOption(opt);
+              const rateVal = config.rate != null ? String(config.rate) : "0";
+              setMarkupRate(rateVal);
+              const minVal =
+                config.minimum != null
+                  ? String(config.minimum)
+                  : config.rate != null
+                    ? String(config.rate)
+                    : "0";
+              setMarkup(minVal);
+              setAppliedMarkupConfig({
+                isMarkupEnabled: true,
+                markupDropdownOption: opt,
+                numericMarkup: Number(minVal) || 0,
+                numericMarkupRate: Number(rateVal) || 0,
+                isNetSellRateEnabled: false,
+                numericNetSellRate: 0,
+              });
             }
           }
         }
@@ -661,23 +866,28 @@ function Rate() {
 
   const visibleRates = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const matches = (ratesFromStore || []).filter((rate) =>
+    const ratesWithMarkup = (ratesFromStore || []).map((rate) =>
+      applyMarkupToRate(rate, appliedMarkupConfig)
+    );
+    const matches = ratesWithMarkup.filter((rate) =>
       [rate.name, rate.code, rate.service].some((value) =>
         (value || "").toLowerCase().includes(query),
       ),
     );
 
     return [...matches].sort((first, second) => {
-      if (sortBy === "rate-desc") return second.price - first.price;
+      const p1 = first.sellPrice !== undefined ? first.sellPrice : first.price;
+      const p2 = second.sellPrice !== undefined ? second.sellPrice : second.price;
+      if (sortBy === "rate-desc") return p2 - p1;
       if (sortBy === "transit") {
         if (first.transitDays === second.transitDays) {
-          return first.price - second.price;
+          return p1 - p2;
         }
         return first.transitDays - second.transitDays;
       }
-      return first.price - second.price;
+      return p1 - p2;
     });
-  }, [search, sortBy, ratesFromStore]);
+  }, [search, sortBy, ratesFromStore, appliedMarkupConfig]);
 
   const validRates = useMemo(() => {
     return visibleRates.filter((rate) => (rate.price ?? 0) > 0);
@@ -773,7 +983,21 @@ function Rate() {
           })),
           quoteAccessorials: (quoteRequest?.accessorialCodes || []).map((code) => ({ accCode: code })),
         },
-        selectedCarrier: rate,
+        selectedCarrier: {
+          ...rate,
+          price: rate.sellPrice !== undefined ? rate.sellPrice : rate.price,
+          markupType: appliedMarkupConfig.isNetSellRateEnabled
+            ? "netSellRate"
+            : appliedMarkupConfig.markupDropdownOption,
+          rate: appliedMarkupConfig.isNetSellRateEnabled
+            ? String(appliedMarkupConfig.numericNetSellRate)
+            : String(appliedMarkupConfig.numericMarkupRate),
+          minimum: String(appliedMarkupConfig.numericMarkup),
+          markup: rate.markupAmount ?? 0,
+          grossSellAmount: rate.grossSell,
+          ppsFreight: rate.ppsFreight,
+          ppsFuel: rate.ppsFuel,
+        },
       },
     });
   };
