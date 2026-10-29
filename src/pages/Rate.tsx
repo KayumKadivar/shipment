@@ -66,21 +66,27 @@ export interface AppliedMarkupConfig {
 }
 
 export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig): CarrierRate {
+  const grossBuy = Number(rate.grossCharge) || 0;
+  const fuelBuy = Number(rate.fuelSurcharge) || 0;
+  const discountBuy = Number(rate.discount) || 0;
+  const netFreightBuy = Math.max(0, grossBuy - discountBuy);
+  const totalBuy = Number(rate.price) || 0;
+
   if (config.targetCarrierFilter) {
     const filter = config.targetCarrierFilter.trim().toLowerCase();
     const isMatch = [rate.name, rate.code, rate.service].some((value) =>
       (value || "").toLowerCase().includes(filter)
     );
     if (!isMatch) {
-      const defaultGrossSell = rate.grossSellAmount != null ? rate.grossSellAmount : rate.grossCharge;
-      const existingMarkup = rate.grossSellAmount != null ? (rate.grossSellAmount - (rate.grossCharge ?? 0)) : 0;
+      const defaultGrossSell = rate.grossSellAmount != null ? rate.grossSellAmount : netFreightBuy;
+      const existingMarkup = rate.grossSellAmount != null ? (rate.grossSellAmount - netFreightBuy) : 0;
       const defaultSellPrice = rate.sellPrice !== undefined ? rate.sellPrice : (rate.price + existingMarkup);
       return {
         ...rate,
         sellPrice: defaultSellPrice,
         grossSell: defaultGrossSell,
         fuelSell: rate.fuelSell ?? rate.fuelSurcharge,
-        discountSell: rate.discountSell ?? rate.discount,
+        discountSell: 0,
         markupAmount: existingMarkup,
         ppsFreight: existingMarkup,
         ppsFuel: 0,
@@ -92,11 +98,6 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
   const numRate = Math.max(0, config.numericMarkupRate || 0);
   const numMin = Math.max(0, config.numericMarkup || 0);
   const numNetSell = Math.max(0, config.numericNetSellRate || 0);
-
-  const grossBuy = Number(rate.grossCharge) || 0;
-  const fuelBuy = Number(rate.fuelSurcharge) || 0;
-  const discountBuy = Number(rate.discount) || 0;
-  const totalBuy = Number(rate.price) || 0;
 
   if (config.isNetSellRateEnabled) {
     const ppsFreight = numNetSell;
@@ -122,12 +123,12 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
     if (config.markupDropdownOption === "Flat") {
       calculatedMarkup = rateToUse;
     } else if (config.markupDropdownOption === "% Freight") {
-      calculatedMarkup = grossBuy * (rateToUse / 100);
+      calculatedMarkup = netFreightBuy * (rateToUse / 100);
       if (calculatedMarkup < numMin) {
         calculatedMarkup = numMin;
       }
     } else if (config.markupDropdownOption === "% Freight + Fuel") {
-      calculatedMarkup = (grossBuy + fuelBuy) * (rateToUse / 100);
+      calculatedMarkup = (netFreightBuy + fuelBuy) * (rateToUse / 100);
       if (calculatedMarkup < numMin) {
         calculatedMarkup = numMin;
       }
@@ -139,13 +140,13 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
     }
 
     const totalMarkupToDistribute = Math.round(calculatedMarkup * 100) / 100;
-    const baseTotal = grossBuy + fuelBuy;
+    const baseTotal = netFreightBuy + fuelBuy;
 
     let ppsFreight = 0;
     let ppsFuel = 0;
 
     if (totalMarkupToDistribute > 0 && baseTotal > 0) {
-      const freightPercent = Math.round((grossBuy / baseTotal) * 10000) / 100;
+      const freightPercent = Math.round((netFreightBuy / baseTotal) * 10000) / 100;
       const fuelPercent = Math.round((fuelBuy / baseTotal) * 10000) / 100;
 
       ppsFreight = Math.round(((totalMarkupToDistribute * freightPercent) / 100) * 100) / 100;
@@ -159,7 +160,7 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
       ppsFuel = 0;
     }
 
-    const grossSell = Math.round((grossBuy + ppsFreight) * 100) / 100;
+    const grossSell = Math.round((netFreightBuy + ppsFreight) * 100) / 100;
     const fuelSell = Math.round((fuelBuy + ppsFuel) * 100) / 100;
     const sellPrice = Math.round((totalBuy + totalMarkupToDistribute) * 100) / 100;
 
@@ -168,15 +169,15 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
       sellPrice,
       grossSell,
       fuelSell,
-      discountSell: discountBuy,
+      discountSell: 0,
       markupAmount: totalMarkupToDistribute,
       ppsFreight,
       ppsFuel,
     };
   }
 
-  const defaultGrossSell = rate.grossSellAmount != null ? rate.grossSellAmount : rate.grossCharge;
-  const existingMarkup = rate.grossSellAmount != null ? (rate.grossSellAmount - (rate.grossCharge ?? 0)) : 0;
+  const defaultGrossSell = rate.grossSellAmount != null ? rate.grossSellAmount : netFreightBuy;
+  const existingMarkup = rate.grossSellAmount != null ? (rate.grossSellAmount - netFreightBuy) : 0;
   const defaultSellPrice = rate.sellPrice !== undefined ? rate.sellPrice : (rate.price + existingMarkup);
 
   return {
@@ -184,7 +185,7 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
     sellPrice: defaultSellPrice,
     grossSell: defaultGrossSell,
     fuelSell: rate.fuelSell ?? rate.fuelSurcharge,
-    discountSell: rate.discountSell ?? rate.discount,
+    discountSell: 0,
     markupAmount: existingMarkup,
     ppsFreight: existingMarkup,
     ppsFuel: 0,
