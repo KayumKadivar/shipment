@@ -591,12 +591,13 @@ function NewQuote() {
   const { clients } = useAppSelector((state) => state.customerLocation);
   const rateLoading = useAppSelector((state) => state.customerRate.loading);
 
+  const loggedInClientCode =
+    useAppSelector((state) => state.app.clientCode) ||
+    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+    DEFAULT_CLIENT_CODE;
+
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
-    () =>
-      quoteFormData?.selectedClientCode ||
-      sessionStorage.getItem("quotes_selectedClientCode") ||
-      sessionStorage.getItem("customerLocation_selectedClientCode") ||
-      "",
+    () => quoteFormData?.selectedClientCode || "",
   );
 
   useEffect(() => {
@@ -636,26 +637,37 @@ function NewQuote() {
     dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
 
-  const activeClientCode = clients.some(
-    (client) => client.clientCode === selectedClientCode,
-  )
-    ? selectedClientCode
-    : clients.find((client) => client.clientCode === DEFAULT_CLIENT_CODE)
-        ?.clientCode ||
+  const defaultLoggedClient = useMemo(() => {
+    return (
+      clients.find((client) => client.isLoggedClient)?.clientCode ||
+      clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
+      loggedInClientCode ||
+      DEFAULT_CLIENT_CODE ||
       clients[0]?.clientCode ||
-      "";
+      ""
+    );
+  }, [clients, loggedInClientCode]);
+
+  const activeClientCode = useMemo(() => {
+    if (selectedClientCode && clients.some((client) => client.clientCode === selectedClientCode)) {
+      return selectedClientCode;
+    }
+    return defaultLoggedClient;
+  }, [clients, selectedClientCode, defaultLoggedClient]);
 
   useEffect(() => {
-    if (!selectedClientCode && clients.length > 0) {
-      const defaultClient =
-        clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE) || clients[0];
-      if (defaultClient?.clientCode) {
-        setSelectedClientCode(defaultClient.clientCode);
-        sessionStorage.setItem("quotes_selectedClientCode", defaultClient.clientCode);
-        sessionStorage.setItem("customerLocation_selectedClientCode", defaultClient.clientCode);
-      }
+    try {
+      sessionStorage.removeItem("quotes_selectedClientCode");
+    } catch {
+      // ignore
     }
-  }, [clients, selectedClientCode]);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedClientCode && defaultLoggedClient) {
+      setSelectedClientCode(defaultLoggedClient);
+    }
+  }, [clients, selectedClientCode, defaultLoggedClient]);
 
   const clientOptions = useMemo(() => {
     const list = [...clients];
@@ -691,9 +703,7 @@ function NewQuote() {
   }, [clients]);
 
   const handleClientChange = (value: string) => {
-    setSelectedClientCode(value);
-    sessionStorage.setItem("quotes_selectedClientCode", value);
-    sessionStorage.setItem("customerLocation_selectedClientCode", value);
+    setSelectedClientCode(value || defaultLoggedClient);
   };
 
   const [productOptions, setProductOptions] = useState<

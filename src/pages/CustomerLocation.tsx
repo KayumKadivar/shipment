@@ -42,6 +42,7 @@ import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import { getAllCustomerLocations, getCustomerLocationByID, updateCustomerLocation, deleteCustomerLocations, fetchClientsAndSubclients } from "../store/customerLocationSlice";
+import { DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import type {
   CustomerLocation,
   LocationType,
@@ -184,19 +185,48 @@ function CustomerLocationPage({
   const isPostalFocusedRef = useRef(false);
   const [postalDropdownOpen, setPostalDropdownOpen] = useState(false);
 
-  const [selectedClientCode, setSelectedClientCode] = useState<string>(
-    () => sessionStorage.getItem("customerLocation_selectedClientCode") || ""
-  );
+  const loggedInClientCode =
+    useAppSelector((state) => state.app.clientCode) ||
+    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+    DEFAULT_CLIENT_CODE;
+
+  const defaultLoggedClient = useMemo(() => {
+    return (
+      clients.find((client) => client.isLoggedClient)?.clientCode ||
+      clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
+      loggedInClientCode ||
+      DEFAULT_CLIENT_CODE ||
+      clients[0]?.clientCode ||
+      ""
+    );
+  }, [clients, loggedInClientCode]);
+
+  const [selectedClientCode, setSelectedClientCode] = useState<string>("");
 
   useEffect(() => {
     dispatch(fetchClientsAndSubclients());
   }, [dispatch]);
 
-  const activeClientCode = clients.some(
-    (client) => client.clientCode === selectedClientCode,
-  )
-    ? selectedClientCode
-    : clients[0]?.clientCode || "";
+  const activeClientCode = useMemo(() => {
+    if (selectedClientCode && clients.some((client) => client.clientCode === selectedClientCode)) {
+      return selectedClientCode;
+    }
+    return defaultLoggedClient;
+  }, [clients, selectedClientCode, defaultLoggedClient]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem("customerLocation_selectedClientCode");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedClientCode && defaultLoggedClient) {
+      setSelectedClientCode(defaultLoggedClient);
+    }
+  }, [defaultLoggedClient, selectedClientCode]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -211,7 +241,6 @@ function CustomerLocationPage({
 
   useEffect(() => {
     if (activeClientCode) {
-      sessionStorage.setItem("customerLocation_selectedClientCode", activeClientCode);
       dispatch(getAllCustomerLocations({
         clientCode: activeClientCode,
         searchText: debouncedQuery,
@@ -773,7 +802,10 @@ function CustomerLocationPage({
             showSearch
             placeholder='Search or select client...'
             value={activeClientCode}
-            onChange={setSelectedClientCode}
+            onChange={(val) => {
+              setSelectedClientCode(val || defaultLoggedClient);
+              setCurrentPage(1);
+            }}
             style={{ minWidth: 250 }}
             filterOption={(input, option) =>
               String(option?.searchValue || "")

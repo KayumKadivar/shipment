@@ -188,13 +188,25 @@ const NewShipment: React.FC = () => {
   const { data: accessorialsList = [], selectedAccessorialIds = [] } = useAppSelector((state) => state.accessorials);
   const { clients = [] } = useAppSelector((state) => state.customerLocation);
 
-  const [selectedClientCode, setSelectedClientCode] = useState<string>(
-    () =>
+  const loggedInClientCode =
+    useAppSelector((state) => state.app.clientCode) ||
+    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+    DEFAULT_CLIENT_CODE;
+
+  const defaultLoggedClient = useMemo(() => {
+    return (
       quote?.clientCode ||
-      sessionStorage.getItem("quotes_selectedClientCode") ||
-      sessionStorage.getItem("customerLocation_selectedClientCode") ||
+      clients.find((client) => client.isLoggedClient)?.clientCode ||
+      clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
+      loggedInClientCode ||
       DEFAULT_CLIENT_CODE ||
+      clients[0]?.clientCode ||
       ""
+    );
+  }, [quote, clients, loggedInClientCode]);
+
+  const [selectedClientCode, setSelectedClientCode] = useState<string>(
+    () => quote?.clientCode || loggedInClientCode || DEFAULT_CLIENT_CODE || ""
   );
 
   useEffect(() => {
@@ -208,14 +220,10 @@ const NewShipment: React.FC = () => {
   }, [quote?.clientCode]);
 
   useEffect(() => {
-    if (!selectedClientCode && clients.length > 0) {
-      const defaultClient =
-        clients.find((c) => c.clientCode === DEFAULT_CLIENT_CODE) || clients[0];
-      if (defaultClient?.clientCode) {
-        setSelectedClientCode(defaultClient.clientCode);
-      }
+    if (!selectedClientCode && defaultLoggedClient) {
+      setSelectedClientCode(defaultLoggedClient);
     }
-  }, [clients, selectedClientCode]);
+  }, [clients, selectedClientCode, defaultLoggedClient]);
 
   const clientOptions = useMemo(() => {
     let list = [...clients];
@@ -247,9 +255,7 @@ const NewShipment: React.FC = () => {
   }, [clients, selectedClientCode, quote]);
 
   const handleClientChange = (value: string) => {
-    setSelectedClientCode(value);
-    sessionStorage.setItem("quotes_selectedClientCode", value);
-    sessionStorage.setItem("customerLocation_selectedClientCode", value);
+    setSelectedClientCode(value || defaultLoggedClient);
     searchedZipsRef.current = {};
   };
 
@@ -1683,12 +1689,7 @@ const NewShipment: React.FC = () => {
         </div>
         <Flex gap={12}>
           <Button danger onClick={() => navigate('/shipments')}>Cancel</Button>
-          <Button
-            onClick={() => { if (!validateProductItems()) return; }}
-            disabled={isSavingShipment}
-          >
-            Save Quote
-          </Button>
+  
           <Button
             type="primary"
             danger
@@ -2172,7 +2173,7 @@ const NewShipment: React.FC = () => {
         onOk={handleRefactorModalOk}
         onCancel={handleRefactorModalCancel}
         okText="OK"
-        cancelText="Cancel"
+        cancelButtonProps={{ style: { display: 'none' } }}
         confirmLoading={isSavingShipment}
         centered
         okButtonProps={{ danger: true }}
@@ -2202,13 +2203,7 @@ const NewShipment: React.FC = () => {
       {/* ══ FOOTER BUTTONS ══ */}
       <Flex justify="flex-end" gap={12} wrap="wrap">
         <Button onClick={() => navigate('/shipments')} className="btn-outline">✕ Close</Button>
-        <Button
-          className="btn-outline"
-          onClick={() => { if (!validateProductItems()) return; }}
-          disabled={isSavingShipment}
-        >
-          Save Quote
-        </Button>
+        
         <Button
           type="primary"
           danger

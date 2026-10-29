@@ -11,13 +11,15 @@ import {
   useLoadScript,
   type Libraries,
 } from "@react-google-maps/api";
-import { Button, Checkbox, Empty, Input, Select, Spin, message } from "antd";
+import { Button, Checkbox, Col, Empty, Input, Select, Spin, message } from "antd";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE_URL, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
 import { fetchCarrierLogo, saveCustomerQuote, clearQuoteFormData } from "../store/customerRateSlice";
+import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
+import "../components/New Shipment/newshipment.css";
 // import abfLogo from "../assets/image 55.png";
 // import rlLogo from "../assets/image 57.png";
 import SendRatesDialog, {
@@ -409,15 +411,24 @@ export function CarrierCard({
   checked,
   onCheckedChange,
   onShipIt,
+  isCorporate,
   // onSend,
 }: {
   rate: CarrierRate;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   onShipIt: () => void;
+  isCorporate?: boolean;
   onSend?: () => void;
 }) {
   const sellDetails = getChargeSellDetails(rate);
+  const storeIsCorporate = useAppSelector((state) => state.app.isCorporate);
+  const showBuyCharges =
+    isCorporate !== undefined
+      ? isCorporate
+      : (storeIsCorporate ??
+        (typeof localStorage !== "undefined" &&
+          localStorage.getItem("isCorporate") === "true"));
 
   return (
     <article
@@ -486,14 +497,16 @@ export function CarrierCard({
               <dt>Est. Delivery Date</dt>
               <dd>{formatDateTimeDisplay(rate.estimatedDelivery)}</dd>
             </div>
-            <div className='rate-detail-charges'>
-              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {rate.grossCharge}</dt>
-              <dt>Discount : {rate.discount}</dt>
-              <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
-              {rate.accessorialCharges?.map((charge, idx) => (
-                <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
-              ))}
-            </div>
+            {showBuyCharges && (
+              <div className='rate-detail-charges'>
+                <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {rate.grossCharge}</dt>
+                <dt>Discount : {rate.discount}</dt>
+                <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
+                {rate.accessorialCharges?.map((charge, idx) => (
+                  <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
+                ))}
+              </div>
+            )}
             <div className='rate-detail-charges rate-detail-charges-sell'>
               <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {sellDetails.grossSell}</dt>
               <dt>Discount : {sellDetails.discountSell}</dt>
@@ -534,9 +547,49 @@ function Rate() {
   const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
 
-  // Markup state
-  const [markupType, setMarkupType] = useState<"flat" | "percentage" | "netSellRate">("netSellRate");
-  const [markup, setMarkup] = useState<string>("0");
+  const ratesFromStore = useAppSelector((state) => state.customerRate.rates) as CarrierRate[];
+  const loadingRates = useAppSelector((state) => state.customerRate.loading);
+  const quoteRequest = useAppSelector((state) => state.customerRate.quoteRequest);
+  const accessorialsData = useAppSelector((state) => state.accessorials.data);
+
+  // isCorporate check (matching CustomerRate.tsx & QuoteRateDetail.tsx)
+  const storeIsCorporate = useAppSelector((state) => state.app.isCorporate);
+  const clients = useAppSelector((state) => state.customerLocation?.clients) || [];
+  const clientCodeToUse =
+    quoteRequest?.clientCode ||
+    sessionStorage.getItem("quotes_selectedClientCode") ||
+    sessionStorage.getItem("customerLocation_selectedClientCode") ||
+    DEFAULT_CLIENT_CODE;
+  const selectedClient = clientCodeToUse
+    ? clients.find((c) => c.clientCode === clientCodeToUse)
+    : undefined;
+  const clientCorporateFlag = (
+    selectedClient as { isCorporate?: boolean } | undefined
+  )?.isCorporate;
+
+  const isCorporate =
+    typeof clientCorporateFlag === "boolean"
+      ? clientCorporateFlag
+      : (storeIsCorporate ??
+        (typeof localStorage !== "undefined" &&
+          localStorage.getItem("isCorporate") === "true"));
+
+  // Markup UI State (matching QuoteRateDetail.tsx)
+  const [isMarkupEnabled, setIsMarkupEnabled] = useState(true);
+  const [markupDropdownOption, setMarkupDropdownOption] = useState("% Freight + Fuel");
+  const [markupRate, setMarkupRate] = useState("25");
+  const [isMarkupRateDirty, setIsMarkupRateDirty] = useState(false);
+  const [markup, setMarkup] = useState("50");
+  const [isNetSellRateEnabled, setIsNetSellRateEnabled] = useState(false);
+  const [netSellRate, setNetSellRate] = useState("");
+  const [isNetSellDirty, setIsNetSellDirty] = useState(false);
+
+  const handleApplyMarkup = () => {
+    // UI only for now - no backend logic
+  };
+
+  // Legacy markup state
+  const [, setMarkupType] = useState<"flat" | "percentage" | "netSellRate">("netSellRate");
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("rate-asc");
@@ -546,11 +599,6 @@ function Rate() {
   const [sendRecipients, setSendRecipients] = useState<string[]>([""]);
   const [sendRateIds, setSendRateIds] = useState<string[]>([]);
   const [sendValidationError, setSendValidationError] = useState("");
-
-  const ratesFromStore = useAppSelector((state) => state.customerRate.rates) as CarrierRate[];
-  const loadingRates = useAppSelector((state) => state.customerRate.loading);
-  const quoteRequest = useAppSelector((state) => state.customerRate.quoteRequest);
-  const accessorialsData = useAppSelector((state) => state.accessorials.data);
 
   const dynamicOrigin = quoteRequest 
     ? `${quoteRequest.origCity || ''}, ${quoteRequest.origState || ''} ${quoteRequest.origZip || ''}, ${quoteRequest.origCountry || ''}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ', ')
@@ -563,6 +611,10 @@ function Rate() {
   const shipmentDate = quoteRequest?.shipmentDate 
     ? new Date(quoteRequest.shipmentDate).toLocaleDateString("en-US", { month: '2-digit', day: '2-digit', year: 'numeric' })
     : "";
+
+  useEffect(() => {
+    dispatch(fetchClientsAndSubclients());
+  }, [dispatch]);
 
   useEffect(() => {
     const fetchClientMarkup = async () => {
@@ -942,30 +994,124 @@ function Rate() {
               <p className='rate-results-count'>
                 {`Showing ${visibleRates.length} of ${(ratesFromStore || []).length} carriers`}
               </p>
-              <div className='text-muted-13 markup-row-wrap quote-summary-markup'>
-                <span className='markup-label'>Mark Up</span>
-                <Checkbox
-                  checked={markupType === "netSellRate"}
-                  onChange={() => setMarkupType("netSellRate")}
-                  className="markup-checkbox"
-                >
-                  Net Sell Rate
-                </Checkbox>
-                <div className="markup-input-wrap">
-                  <span className="markup-unit-symbol">$</span>
-                  <Input
-                    value={markup}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.]/g, "");
-                      setMarkup(val);
-                    }}
-                    className="input-sm-center"
-                  />
+              {isCorporate && (
+                <div className="cr-markup-col">
+                  <div className="text-muted-13 markup-row-wrap">
+                    <Checkbox
+                      checked={isMarkupEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsMarkupEnabled(checked);
+                        if (checked) {
+                          setIsNetSellRateEnabled(false);
+                        }
+                      }}
+                      className="markup-checkbox"
+                    >
+                      Mark Up
+                    </Checkbox>
+
+                    {isMarkupEnabled && (
+                      <>
+                        <Select
+                          value={markupDropdownOption}
+                          onChange={(val) => {
+                            setMarkupDropdownOption(val);
+                          }}
+                          style={{ minWidth: 230 }}
+                          size="middle"
+                          options={[
+                            { value: "Flat", label: "Flat" },
+                            { value: "% Freight", label: "% Freight" },
+                            {
+                              value: "% Freight + Fuel",
+                              label: "% Freight + Fuel",
+                            },
+                            {
+                              value: "% Freight + Fuel + Accessorial",
+                              label: "% Freight + Fuel + Accessorial",
+                            },
+                          ]}
+                        />
+                        <div className="markup-input-wrap">
+                          {markupDropdownOption === "Flat" ? (
+                            <span className="markup-unit-symbol"></span>
+                          ) : (
+                            <span className="markup-unit-symbol">%</span>
+                          )}
+                          <Input
+                            value={markupRate}
+                            status={isMarkupRateDirty ? "error" : undefined}
+                            className={`input-sm-center ${isMarkupRateDirty ? "border-red-highlight" : ""}`}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9.]/g, "");
+                              setMarkupRate(val);
+                              setIsMarkupRateDirty(true);
+                            }}
+                            onPressEnter={handleApplyMarkup}
+                          />
+                        </div>
+                        <div className="markup-input-wrap">
+                          <span
+                            className="markup-min-label"
+                            style={{ fontWeight: 500, fontSize: 13, color: "#555" }}
+                          >
+                            Min.
+                          </span>
+                          <span className="markup-unit-symbol">$</span>
+                          <Input
+                            value={markup}
+                            className="input-sm-center"
+                            disabled={markupDropdownOption === "Flat"}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9.]/g, "");
+                              setMarkup(val);
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <Checkbox
+                      checked={isNetSellRateEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsNetSellRateEnabled(checked);
+                        if (checked) {
+                          setIsMarkupEnabled(false);
+                        }
+                      }}
+                      className="markup-checkbox"
+                    >
+                      Net Sell Rate
+                    </Checkbox>
+
+                    {isNetSellRateEnabled && (
+                      <div className="markup-input-wrap">
+                        <span className="markup-unit-symbol">$</span>
+                        <Input
+                          value={netSellRate}
+                          status={isNetSellDirty ? "error" : undefined}
+                          className={`input-sm-center ${isNetSellDirty ? "border-red-highlight" : ""}`}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, "");
+                            setNetSellRate(val);
+                            setIsNetSellDirty(true);
+                          }}
+                          onPressEnter={handleApplyMarkup}
+                        />
+                      </div>
+                    )}
+                    {isCorporate && (
+                      <Col>
+                        <Button danger type="primary" onClick={handleApplyMarkup}>
+                          Apply
+                        </Button>
+                      </Col>
+                    )}
+                  </div>
                 </div>
-                <Button className="markup-apply-btn">
-                  Apply
-                </Button>
-              </div>
+              )}
             </div>
           )}
           {loadingRates && (
@@ -982,6 +1128,7 @@ function Rate() {
                     <CarrierCard
                       key={rate.id}
                       rate={rate}
+                      isCorporate={isCorporate}
                       checked={selectedRates.includes(rate.id)}
                       onCheckedChange={(checked) =>
                         setRateChecked(rate, checked)
@@ -1004,6 +1151,7 @@ function Rate() {
                       <CarrierCard
                         key={rate.id}
                         rate={rate}
+                        isCorporate={isCorporate}
                         checked={selectedRates.includes(rate.id)}
                         onCheckedChange={(checked) =>
                           setRateChecked(rate, checked)

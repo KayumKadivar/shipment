@@ -45,6 +45,7 @@ import {
   getProductPackageTypes,
 } from "../store/customerProductSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
+import { DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import type {
   CustomerProduct,
   ProductFormValues,
@@ -184,28 +185,53 @@ function CustomerProductPage({
   const [messageApi, messageContext] = message.useMessage();
   const [modalApi, modalContext] = Modal.useModal();
   
-  const [selectedClientCode, setSelectedClientCode] = useState<string>(
-    () => sessionStorage.getItem("customerProduct_selectedClientCode") || ""
-  );
+  const loggedInClientCode =
+    useAppSelector((state) => state.app.clientCode) ||
+    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+    DEFAULT_CLIENT_CODE;
+
+  const defaultLoggedClient = useMemo(() => {
+    return (
+      clients.find((client) => client.isLoggedClient)?.clientCode ||
+      clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
+      loggedInClientCode ||
+      DEFAULT_CLIENT_CODE ||
+      clients[0]?.clientCode ||
+      ""
+    );
+  }, [clients, loggedInClientCode]);
+
+  const [selectedClientCode, setSelectedClientCode] = useState<string>("");
 
   useEffect(() => {
     dispatch(fetchClientsAndSubclients());
     dispatch(getProductPackageTypes());
   }, [dispatch]);
 
-  const activeClientCode = clients.some(
-    (client) => client.clientCode === selectedClientCode,
-  )
-    ? selectedClientCode
-    : clients[0]?.clientCode || "";
+  const activeClientCode = useMemo(() => {
+    if (selectedClientCode && clients.some((client) => client.clientCode === selectedClientCode)) {
+      return selectedClientCode;
+    }
+    return defaultLoggedClient;
+  }, [clients, selectedClientCode, defaultLoggedClient]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem("customerProduct_selectedClientCode");
+      sessionStorage.removeItem("customerProduct_selectedClientName");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedClientCode && defaultLoggedClient) {
+      setSelectedClientCode(defaultLoggedClient);
+    }
+  }, [defaultLoggedClient, selectedClientCode]);
 
   const handleClientChange = (value: string) => {
-    setSelectedClientCode(value);
-    sessionStorage.setItem("customerProduct_selectedClientCode", value);
-    const selectedClient = clients.find(c => c.clientCode === value);
-    if (selectedClient?.clientName) {
-      sessionStorage.setItem("customerProduct_selectedClientName", selectedClient.clientName);
-    }
+    setSelectedClientCode(value || defaultLoggedClient);
     setCurrentPage(1); 
   };
 
@@ -222,18 +248,13 @@ function CustomerProductPage({
 
   useEffect(() => {
     if (!activeClientCode) return;
-    sessionStorage.setItem("customerProduct_selectedClientCode", activeClientCode);
-    const selectedClient = clients.find(c => c.clientCode === activeClientCode);
-    if (selectedClient?.clientName) {
-      sessionStorage.setItem("customerProduct_selectedClientName", selectedClient.clientName);
-    }
     dispatch(getCustomerProducts({
       clientCode: activeClientCode,
       searchText: debouncedQuery,
       pageNumber: currentPage,
       pageSize: pageSize
     }));
-  }, [dispatch, activeClientCode, debouncedQuery, currentPage, pageSize, clients]);
+  }, [dispatch, activeClientCode, debouncedQuery, currentPage, pageSize]);
 
   const filteredProducts = products;
   const visibleProducts = products;
@@ -297,8 +318,7 @@ function CustomerProductPage({
     const selectedClient = clients.find(c => c.clientCode === activeClientCode);
     const clientName =
       selectedClient?.clientName ||
-      sessionStorage.getItem("customerProduct_selectedClientName") ||
-      sessionStorage.getItem("customerLocation_selectedClientName") ||
+      (typeof localStorage !== "undefined" ? localStorage.getItem("clientName") : null) ||
       "DEV TESTING";
 
     navigate("/customer-products/add", {

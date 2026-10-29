@@ -4,7 +4,7 @@ import {
   SearchOutlined,
   SendOutlined,
 } from "@ant-design/icons";
-import { Button, Empty, Input, Select, Spin, Result, message } from "antd";
+import { Button, Checkbox, Col, Empty, Input, Select, Spin, Result, message } from "antd";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
@@ -21,6 +21,8 @@ import {
 } from "../store/customerRateSlice";
 import { fetchQuoteById } from "../store/quoteSlice";
 import { fetchAccessorials } from "../store/accessorialsSlice";
+import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
+import "../components/New Shipment/newshipment.css";
 import SendRatesDialog from "../components/rate/SendRatesDialog";
 import {
   RateMap,
@@ -56,9 +58,48 @@ function QuoteRateDetail() {
   const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
 
-  // Markup state
+  const { currentQuote: apiQuote, loading } = useAppSelector((state) => state.quote);
+  const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
+  const accessorialsData = useAppSelector((state) => state.accessorials.data);
+  const storeIsCorporate = useAppSelector((state) => state.app.isCorporate);
+  const clients = useAppSelector((state) => state.customerLocation?.clients) || [];
+
+  // isCorporate check (matching CustomerRate.tsx)
+  const clientCodeToUse =
+    apiQuote?.clientCode ||
+    sessionStorage.getItem("quotes_selectedClientCode") ||
+    sessionStorage.getItem("customerLocation_selectedClientCode") ||
+    DEFAULT_CLIENT_CODE;
+  const selectedClient = clientCodeToUse
+    ? clients.find((c) => c.clientCode === clientCodeToUse)
+    : undefined;
+  const clientCorporateFlag = (
+    selectedClient as { isCorporate?: boolean } | undefined
+  )?.isCorporate;
+
+  const isCorporate =
+    typeof clientCorporateFlag === "boolean"
+      ? clientCorporateFlag
+      : (storeIsCorporate ??
+        (typeof localStorage !== "undefined" &&
+          localStorage.getItem("isCorporate") === "true"));
+
+  // Markup UI State (UI only, no calculation logic)
+  const [isMarkupEnabled, setIsMarkupEnabled] = useState(true);
+  const [markupDropdownOption, setMarkupDropdownOption] = useState("% Freight + Fuel");
+  const [markupRate, setMarkupRate] = useState("25");
+  const [isMarkupRateDirty, setIsMarkupRateDirty] = useState(false);
+  const [markup, setMarkup] = useState("50");
+  const [isNetSellRateEnabled, setIsNetSellRateEnabled] = useState(false);
+  const [netSellRate, setNetSellRate] = useState("");
+  const [isNetSellDirty, setIsNetSellDirty] = useState(false);
+
+  const handleApplyMarkup = () => {
+    // UI only for now - no backend logic
+  };
+
+  // Legacy markup state
   const [markupType, setMarkupType] = useState<"flat" | "percentage" | "netSellRate">("netSellRate");
-  const [markup, setMarkup] = useState<string>("0");
 
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("rate-asc");
@@ -69,15 +110,12 @@ function QuoteRateDetail() {
   const [sendRateIds, setSendRateIds] = useState<string[]>([]);
   const [sendValidationError, setSendValidationError] = useState("");
 
-  const { currentQuote: apiQuote, loading } = useAppSelector((state) => state.quote);
-  const quoteFormData = useAppSelector((state) => state.customerRate.quoteFormData);
-  const accessorialsData = useAppSelector((state) => state.accessorials.data);
-
   useEffect(() => {
     if (reference) {
       dispatch(fetchQuoteById(reference));
     }
     dispatch(fetchAccessorials());
+    dispatch(fetchClientsAndSubclients());
   }, [dispatch, reference]);
 
   useEffect(() => {
@@ -85,7 +123,7 @@ function QuoteRateDetail() {
       const clientCodeToUse =
         apiQuote?.clientCode ||
         sessionStorage.getItem("quotes_selectedClientCode") ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+    sessionStorage.getItem("customerLocation_selectedClientCode") ||
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
@@ -487,9 +525,7 @@ function QuoteRateDetail() {
           <Button onClick={handleEditQuote}>
             Edit Quote
           </Button>
-          <Button onClick={() => messageApi.success("Quote is already saved.")}>
-            Save Quote
-          </Button>
+        
           <Button
             danger
             onClick={() => messageApi.info("Quote deletion is not connected yet.")}>
@@ -649,6 +685,125 @@ function QuoteRateDetail() {
               <p className='rate-results-count'>
                 {`Showing ${visibleRates.length} of ${rates.length} carriers`}
               </p>
+
+              {isCorporate && (
+                <div className="cr-markup-col">
+                  <div className="text-muted-13 markup-row-wrap">
+                    <Checkbox
+                      checked={isMarkupEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsMarkupEnabled(checked);
+                        if (checked) {
+                          setIsNetSellRateEnabled(false);
+                        }
+                      }}
+                      className="markup-checkbox"
+                    >
+                      Mark Up
+                    </Checkbox>
+
+                    {isMarkupEnabled && (
+                      <>
+                        <Select
+                          value={markupDropdownOption}
+                          onChange={(val) => {
+                            setMarkupDropdownOption(val);
+                          }}
+                          style={{ minWidth: 230 }}
+                          size="middle"
+                          options={[
+                            { value: "Flat", label: "Flat" },
+                            { value: "% Freight", label: "% Freight" },
+                            {
+                              value: "% Freight + Fuel",
+                              label: "% Freight + Fuel",
+                            },
+                            {
+                              value: "% Freight + Fuel + Accessorial",
+                              label: "% Freight + Fuel + Accessorial",
+                            },
+                          ]}
+                        />
+                        <div className="markup-input-wrap">
+                          {markupDropdownOption === "Flat" ? (
+                            <span className="markup-unit-symbol"></span>
+                          ) : (
+                            <span className="markup-unit-symbol">%</span>
+                          )}
+                          <Input
+                            value={markupRate}
+                            status={isMarkupRateDirty ? "error" : undefined}
+                            className={`input-sm-center ${isMarkupRateDirty ? "border-red-highlight" : ""}`}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9.]/g, "");
+                              setMarkupRate(val);
+                              setIsMarkupRateDirty(true);
+                            }}
+                            onPressEnter={handleApplyMarkup}
+                          />
+                        </div>
+                        <div className="markup-input-wrap">
+                          <span
+                            className="markup-min-label"
+                            style={{ fontWeight: 500, fontSize: 13, color: "#555" }}
+                          >
+                            Min.
+                          </span>
+                          <span className="markup-unit-symbol">$</span>
+                          <Input
+                            value={markup}
+                            className="input-sm-center"
+                            disabled={markupDropdownOption === "Flat"}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9.]/g, "");
+                              setMarkup(val);
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <Checkbox
+                      checked={isNetSellRateEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setIsNetSellRateEnabled(checked);
+                        if (checked) {
+                          setIsMarkupEnabled(false);
+                        }
+                      }}
+                      className="markup-checkbox"
+                    >
+                      Net Sell Rate
+                    </Checkbox>
+
+                    {isNetSellRateEnabled && (
+                      <div className="markup-input-wrap">
+                        <span className="markup-unit-symbol">$</span>
+                        <Input
+                          value={netSellRate}
+                          status={isNetSellDirty ? "error" : undefined}
+                          className={`input-sm-center ${isNetSellDirty ? "border-red-highlight" : ""}`}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, "");
+                            setNetSellRate(val);
+                            setIsNetSellDirty(true);
+                          }}
+                          onPressEnter={handleApplyMarkup}
+                        />
+                      </div>
+                    )}
+                    {isCorporate && (
+                      <Col>
+                        <Button danger type="primary" onClick={handleApplyMarkup}>
+                          Apply
+                        </Button>
+                      </Col>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -666,6 +821,7 @@ function QuoteRateDetail() {
                     <CarrierCard
                       key={rate.id}
                       rate={rate}
+                      isCorporate={isCorporate}
                       checked={selectedRates.includes(rate.id)}
                       onCheckedChange={(checked) =>
                         setRateChecked(rate, checked)
@@ -688,6 +844,7 @@ function QuoteRateDetail() {
                       <CarrierCard
                         key={rate.id}
                         rate={rate}
+                        isCorporate={isCorporate}
                         checked={selectedRates.includes(rate.id)}
                         onCheckedChange={(checked) =>
                           setRateChecked(rate, checked)
