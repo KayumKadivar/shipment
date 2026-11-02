@@ -288,24 +288,33 @@ export const fetchCarrierRates = createAsyncThunk<
       }
 
       let apiRates: ApiRate[] = [];
+      let rawQuoteClean: any = null;
       const responseData = response.data?.data as any;
       if (responseData) {
         if (Array.isArray(responseData)) {
-          apiRates = responseData;
-        } else if (Array.isArray(responseData.leastCostCarriers)) {
-          apiRates = responseData.leastCostCarriers;
-        } else if (Array.isArray(responseData.quoteResults)) {
-          apiRates = responseData.quoteResults;
-        } else if (Array.isArray(responseData.rates)) {
-          apiRates = responseData.rates;
-        } else if (Array.isArray(responseData.carrierRates)) {
-          apiRates = responseData.carrierRates;
-        } else if (Array.isArray(responseData.carriers)) {
-          apiRates = responseData.carriers;
+          apiRates = responseData.map((r: any) => ({ ...r }));
+        } else if (typeof responseData === "object") {
+          const list =
+            responseData.leastCostCarriers ||
+            responseData.quoteResults ||
+            responseData.rates ||
+            responseData.carrierRates ||
+            responseData.carriers ||
+            [];
+         
+          apiRates = (Array.isArray(list) ? list : []).map((r: any) => ({ ...r }));
+
+         
+          rawQuoteClean = {
+            ...responseData,
+            quoteResults: Array.isArray(responseData.quoteResults)
+              ? responseData.quoteResults.map((qr: any) => ({ ...qr }))
+              : undefined,
+          };
         }
       }
-      if (responseData && typeof responseData === "object" && !Array.isArray(responseData)) {
-        (apiRates as any).rawQuote = responseData;
+      if (rawQuoteClean) {
+        (apiRates as any).rawQuote = rawQuoteClean;
       }
       console.log("Extracted apiRates:", apiRates);
       return apiRates;
@@ -411,15 +420,17 @@ export const searchCarriers = createAsyncThunk<
   }
 );
 
+export interface SaveCustomerQuoteArgs {
+  marginType?: string;
+  marginPercent?: number | string;
+  isNetSellRate?: boolean;
+  calculatedRates?: any[];
+  rawQuote?: any;
+}
+
 export const saveCustomerQuote = createAsyncThunk<
   QuoteSaveApiResponse,
-  {
-    marginType?: string;
-    marginPercent?: number | string;
-    isNetSellRate?: boolean;
-    calculatedRates?: any[];
-    rawQuote?: any;
-  } | void,
+  SaveCustomerQuoteArgs | void,
   {
     state: { customerRate: CustomerRateState };
     rejectValue: string;
@@ -428,18 +439,19 @@ export const saveCustomerQuote = createAsyncThunk<
   "customerRate/saveCustomerQuote",
   async (args, { getState, rejectWithValue }) => {
     try {
+      const safeArgs = (args || {}) as SaveCustomerQuoteArgs;
       const { rates, rawQuote } = getState().customerRate;
       const token = localStorage.getItem("authToken");
 
-      const baseQuote = args?.rawQuote || rawQuote || {};
-      const calculatedRates = args?.calculatedRates || rates || [];
-      const isNetSell = Boolean(args?.isNetSellRate);
+      const baseQuote = safeArgs.rawQuote || rawQuote || {};
+      const calculatedRates = safeArgs.calculatedRates || rates || [];
+      const isNetSell = Boolean(safeArgs.isNetSellRate);
 
-      let marginType = args?.marginType || baseQuote.marginType || "Flat";
+      let marginType = safeArgs.marginType || baseQuote.marginType || "Flat";
       if (isNetSell) {
         marginType = "NetSell";
       }
-      const marginPercent = Number(args?.marginPercent ?? baseQuote.marginPercent) || 0;
+      const marginPercent = Number(safeArgs.marginPercent ?? baseQuote.marginPercent) || 0;
 
       const fallbackBrokerCode =
         (baseQuote.clientCode && String(baseQuote.clientCode).trim()) ||
@@ -814,9 +826,12 @@ const customerRateSlice = createSlice({
       })
       .addCase(fetchCarrierLogo.fulfilled, (state, action) => {
         const { scac, logo } = action.payload;
-        state.rates = state.rates.map(rate =>
-          rate.code === scac ? { ...rate, logo } : rate
-        );
+        if (!logo) return;
+        state.rates.forEach((rate) => {
+          if (rate.code === scac && rate.logo !== logo) {
+            rate.logo = logo;
+          }
+        });
       })
       .addCase(searchCarriers.pending, (state) => {
         state.carrierSearchLoading = true;

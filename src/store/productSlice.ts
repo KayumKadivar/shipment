@@ -38,8 +38,8 @@ const initialState: ProductState = {
   items: [
     {
       id: "1",
-      pallets: "",
-      pieces: "",
+      pallets: "1",
+      pieces: "1",
       packageType: "",
       description: "",
       stackable: false,
@@ -65,8 +65,8 @@ const productSlice = createSlice({
     addProductRow: (state) => {
       state.items.push({
         id: Date.now().toString(),
-        pallets: "",
-        pieces: "",
+        pallets: "1",
+        pieces: "1",
         packageType: "",
         description: "",
         stackable: false,
@@ -156,8 +156,8 @@ const productSlice = createSlice({
       state.items = [
         {
           id: "1",
-          pallets: "",
-          pieces: "",
+          pallets: "1",
+          pieces: "1",
           packageType: "",
           description: "",
           stackable: false,

@@ -134,7 +134,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const isRating = loadingRate ?? loading;
   const activeError = rateError !== undefined ? rateError : storeError;
 
-  // isCorporate: true shows BUY AMOUNT and MARKUP; false hides them (read from Redux store / prop / localStorage)
+ 
   const storeIsCorporate = useSelector(
     (state: RootState) => state.app.isCorporate,
   );
@@ -157,11 +157,14 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           (typeof localStorage !== "undefined" &&
             localStorage.getItem("isCorporate") === "true"));
 
+  const customerRateAccessorialsFetchedRef = useRef(false);
   useEffect(() => {
-    if (!accessorialsList || accessorialsList.length === 0) {
+   
+    if (!customerRateAccessorialsFetchedRef.current && (!accessorialsList || accessorialsList.length === 0)) {
+      customerRateAccessorialsFetchedRef.current = true;
       dispatch(fetchAccessorials());
     }
-  }, [accessorialsList, dispatch]);
+  }, []); 
 
   // Markup & Net Sell Rate states
   const [minimumRate, setMinimumRate] = useState<number>(0);
@@ -198,6 +201,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   }, [hasRateChanged]);
 
   // Applied markup state (active and recalculated on table when applied)
+  const fetchedMarkupClientRef = useRef<string | null>(null);
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<{
     isMarkupEnabled: boolean;
     markupDropdownOption: string;
@@ -315,7 +319,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
-      if (!clientCodeToUse) return;
+      if (!clientCodeToUse || fetchedMarkupClientRef.current === clientCodeToUse) return;
+      fetchedMarkupClientRef.current = clientCodeToUse;
 
       const token = localStorage.getItem("authToken");
       const headers: Record<string, string> = {

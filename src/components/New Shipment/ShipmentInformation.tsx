@@ -56,7 +56,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
         if (onChange) onChange(form.getFieldsValue());
       }
     }
-  }, [equipmentList, form, onChange]);
+  }, [equipmentList]); 
 
   useEffect(() => {
     if (serviceLevels.length > 0) {
@@ -85,7 +85,8 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
         if (onChange) onChange(form.getFieldsValue());
       }
     }
-  }, [serviceLevels, form, onChange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceLevels]); // onChange/form intentionally omitted — called but not trigger conditions
 
   useEffect(() => {
     if (paymentTermsList.length > 0) {
@@ -98,7 +99,8 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
         if (onChange) onChange(form.getFieldsValue());
       }
     }
-  }, [paymentTermsList, form, onChange]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentTermsList]); // onChange/form intentionally omitted — called but not trigger conditions
 
   const equipmentOptions = useMemo(() => {
     if (!equipmentList || equipmentList.length === 0) {

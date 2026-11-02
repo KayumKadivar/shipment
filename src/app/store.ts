@@ -45,8 +45,12 @@ export const store = configureStore({
     equipment: equipmentReducer,
     serviceLevel: serviceLevelReducer,
     paymentTerm: paymentTermReducer,
-
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: false,
+      immutableCheck: false,
+    }),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

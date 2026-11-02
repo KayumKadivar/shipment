@@ -96,6 +96,7 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
   const grossBuy = Number(rate.grossCharge) || 0;
   const fuelBuy = Number(rate.fuelSurcharge) || 0;
   const discountBuy = Number(rate.discount) || 0;
+  const netFreightBuy = Math.max(0, grossBuy - discountBuy);
   const totalBuy = Number(rate.price) || 0;
 
   if (config.isNetSellRateEnabled) {
@@ -122,12 +123,12 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
     if (config.markupDropdownOption === "Flat") {
       calculatedMarkup = rateToUse;
     } else if (config.markupDropdownOption === "% Freight") {
-      calculatedMarkup = grossBuy * (rateToUse / 100);
+      calculatedMarkup = netFreightBuy * (rateToUse / 100);
       if (calculatedMarkup < numMin) {
         calculatedMarkup = numMin;
       }
     } else if (config.markupDropdownOption === "% Freight + Fuel") {
-      calculatedMarkup = (grossBuy + fuelBuy) * (rateToUse / 100);
+      calculatedMarkup = (netFreightBuy + fuelBuy) * (rateToUse / 100);
       if (calculatedMarkup < numMin) {
         calculatedMarkup = numMin;
       }
@@ -139,13 +140,13 @@ export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig
     }
 
     const totalMarkupToDistribute = Math.round(calculatedMarkup * 100) / 100;
-    const baseTotal = grossBuy + fuelBuy;
+    const baseTotal = netFreightBuy + fuelBuy;
 
     let ppsFreight = 0;
     let ppsFuel = 0;
 
     if (totalMarkupToDistribute > 0 && baseTotal > 0) {
-      const freightPercent = Math.round((grossBuy / baseTotal) * 10000) / 100;
+      const freightPercent = Math.round((netFreightBuy / baseTotal) * 10000) / 100;
       const fuelPercent = Math.round((fuelBuy / baseTotal) * 10000) / 100;
 
       ppsFreight = Math.round(((totalMarkupToDistribute * freightPercent) / 100) * 100) / 100;
@@ -403,25 +404,59 @@ export function RateMap({ originAddress, destinationAddress }: { originAddress: 
   );
 }
 
+const carrierLogoCache = new Map<string, string>();
+const carrierLogoFailedSet = new Set<string>();
+const carrierLogoInFlightSet = new Set<string>();
+
 export function CarrierLogo({ rate }: { rate: CarrierRate }) {
   const dispatch = useAppDispatch();
-  const [error, setError] = useState(false);
-  const [localLogo, setLocalLogo] = useState<string | null>(rate.logo || null);
+  const code = (rate.code || "").trim();
+  const [error, setError] = useState(() => carrierLogoFailedSet.has(code));
+  const [localLogo, setLocalLogo] = useState<string | null>(
+    () => rate.logo || carrierLogoCache.get(code) || null
+  );
 
   useEffect(() => {
-    if (rate.logo || localLogo || !rate.code) return;
+    if (!code) return;
+    if (rate.logo) {
+      carrierLogoCache.set(code, rate.logo);
+      setLocalLogo(rate.logo);
+      return;
+    }
+    if (carrierLogoCache.has(code)) {
+      setLocalLogo(carrierLogoCache.get(code)!);
+      return;
+    }
+    if (carrierLogoFailedSet.has(code)) {
+      setError(true);
+      return;
+    }
+    if (carrierLogoInFlightSet.has(code)) {
+      return;
+    }
 
-    void dispatch(fetchCarrierLogo(rate.code))
+    carrierLogoInFlightSet.add(code);
+
+    void dispatch(fetchCarrierLogo(code))
       .unwrap()
       .then((res) => {
-        if (res.logo) setLocalLogo(res.logo);
+        carrierLogoInFlightSet.delete(code);
+        if (res.logo) {
+          carrierLogoCache.set(code, res.logo);
+          setLocalLogo(res.logo);
+        } else {
+          carrierLogoFailedSet.add(code);
+          setError(true);
+        }
       })
       .catch(() => {
+        carrierLogoInFlightSet.delete(code);
+        carrierLogoFailedSet.add(code);
         setError(true);
       });
-  }, [rate.code, rate.logo, localLogo, dispatch]);
+  }, [code, rate.logo, dispatch]);
 
-  const loading = !rate.logo && !localLogo && !error && Boolean(rate.code);
+  const loading = !rate.logo && !localLogo && !error && Boolean(code);
 
   if (loading) {
     return <div className="rate-placeholder-logo"><Spin size="small" /></div>;

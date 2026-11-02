@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { setProductItems, addProductRow, removeProductRow, updateProductRow, updateProductHazmat, setWeightUnit, resetProductItems, type ProductItem } from '../../store/productSlice';
 import { setSelectedAccessorials, fetchAccessorials, clearSelectedAccessorials } from '../../store/accessorialsSlice';
@@ -15,7 +15,7 @@ import OriginLocation from './OriginLocation';
 import DestinationLocation from './DestinationLocation';
 import ShipmentInformation from './ShipmentInformation';
 import Accessorials from './Accessorials';
-import CustomerRate from './CustomerRate';
+import CustomerRate, { type CustomerRateProps } from './CustomerRate';
 import CarrierRateModal from './CarrierRateModal';
 import type { CarrierRate } from '../../pages/Rate';
 import BillToLocation from './BillToLocation';
@@ -209,8 +209,12 @@ const NewShipment: React.FC = () => {
     () => quote?.clientCode || loggedInClientCode || DEFAULT_CLIENT_CODE || ""
   );
 
+  const clientsFetchedRef = useRef(false);
   useEffect(() => {
-    dispatch(fetchClientsAndSubclients());
+    if (!clientsFetchedRef.current) {
+      clientsFetchedRef.current = true;
+      dispatch(fetchClientsAndSubclients());
+    }
   }, [dispatch]);
 
   useEffect(() => {
@@ -359,11 +363,16 @@ const NewShipment: React.FC = () => {
     };
   }, [dispatch]);
 
+  const accessorialsFetchedRef = useRef(false);
   useEffect(() => {
-    if (!accessorialsList || accessorialsList.length === 0) {
+    // Guard: dispatch only once on mount. accessorialsList must NOT be a dep —
+    // its reference changes after every fetch, causing an infinite dispatch loop.
+    if (!accessorialsFetchedRef.current && (!accessorialsList || accessorialsList.length === 0)) {
+      accessorialsFetchedRef.current = true;
       dispatch(fetchAccessorials());
     }
-  }, [accessorialsList, dispatch]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — run once on mount
 
 
 
@@ -432,8 +441,8 @@ const NewShipment: React.FC = () => {
       if (initialProductsSnapshotRef.current === null) {
         initialProductsSnapshotRef.current = [{
           id: "1",
-          pallets: "",
-          pieces: "",
+          pallets: "1",
+          pieces: "1",
           class: "",
           weight: "",
           length: "",
@@ -446,7 +455,12 @@ const NewShipment: React.FC = () => {
     }
   }, [quote, dispatch]);
 
+  const accessorialsMatchedRef = useRef(false);
   useEffect(() => {
+    // Guard: match quote accessorials to list only once per quote load.
+    // accessorialsList changes reference on every Redux update — without the guard
+    // this effect would re-dispatch setSelectedAccessorials on every render.
+    if (accessorialsMatchedRef.current) return;
     if (quote?.quoteAccessorials && quote.quoteAccessorials.length > 0 && accessorialsList.length > 0) {
       const quoteAccCodes = quote.quoteAccessorials.map((a) => String(a.accCode || "").toUpperCase());
       const matched = accessorialsList
@@ -472,7 +486,7 @@ const NewShipment: React.FC = () => {
     } else {
       dispatch(clearSelectedAccessorials());
     }
-  }, [quote, accessorialsList, dispatch]);
+  }, [quote, accessorialsList, dispatch]); // accessorialsMatchedRef guards against repeated dispatch
 
   const [originData, setOriginData] = useState<any>(() => {
     return {
@@ -1182,9 +1196,24 @@ const NewShipment: React.FC = () => {
   });
   const [isSavingShipment, setIsSavingShipment] = useState<boolean>(false);
 
-  const toIsoOrCurrent = (dateStr?: string): string => {
-    if (!dateStr || !dateStr.trim()) return new Date().toISOString();
-    const parsed = new Date(dateStr.trim());
+
+  const handleRateDetailsChange = useCallback((rates: Parameters<NonNullable<CustomerRateProps['onRateDetailsChange']>>[0]) => {
+    rateDetailsRef.current = rates;
+  }, []);
+
+
+  const handleShipmentInfoChange = useCallback((vals: any) => {
+    shipmentInfoValuesRef.current = vals;
+  }, []);
+
+  const toIsoOrCurrent = (dateVal?: any): string => {
+    if (!dateVal) return new Date().toISOString();
+    if (typeof dateVal === "object" && typeof dateVal.toISOString === "function") {
+      return dateVal.toISOString();
+    }
+    const str = String(dateVal).trim();
+    if (!str) return new Date().toISOString();
+    const parsed = new Date(str);
     if (!isNaN(parsed.getTime())) {
       return parsed.toISOString();
     }
@@ -1814,7 +1843,7 @@ const NewShipment: React.FC = () => {
           <Flex vertical gap={16} className="ns-right-col">
             <ShipmentInformation
               initialData={shipmentInfoData}
-              onChange={(vals) => { shipmentInfoValuesRef.current = vals; }}
+              onChange={handleShipmentInfoChange}
             />
             <Accessorials />
           </Flex>
@@ -2068,7 +2097,7 @@ const NewShipment: React.FC = () => {
             onRate={handleFetchRatesForShipment}
             loadingRate={ratesLoading}
             onSelectCarrier={setSelectedCarrierInfo}
-            onRateDetailsChange={(rates) => { rateDetailsRef.current = rates; }}
+            onRateDetailsChange={handleRateDetailsChange}
             clientCode={selectedClientCode || quote?.clientCode}
             isCorporate={selectedClient?.isCorporate}
             isFromReference={isFromReference}

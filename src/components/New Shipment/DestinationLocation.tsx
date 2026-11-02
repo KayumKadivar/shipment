@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin } from 'antd';
+import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 import type { FormInstance } from 'antd';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
@@ -597,8 +598,20 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         </Row>
         <Row gutter={[12, 12]} className="location-date-time-row">
           <Col xs={24} md={10}>
-            <Form.Item label="Exp. Delivery Date" name="expDeliveryDate" className="location-time-label">
-              <Input placeholder="mm/dd/yyyy" />
+            <Form.Item
+              label="Exp. Delivery Date"
+              name="expDeliveryDate"
+              className="location-time-label"
+              getValueProps={(val) => ({
+                value: val ? (dayjs.isDayjs(val) ? val : dayjs(val).isValid() ? dayjs(val) : null) : null,
+              })}
+              normalize={(val) => (val && dayjs.isDayjs(val) ? val.format("MM/DD/YYYY") : (val || ""))}
+            >
+              <DatePicker
+                style={{ width: "100%" }}
+                format="MM/DD/YYYY"
+                placeholder="MM/DD/YYYY"
+              />
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
@@ -630,8 +643,20 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         </Row>
         <Row gutter={[12, 12]} className="location-date-time-row">
           <Col xs={24} md={10}>
-            <Form.Item label="Delivery Date" name="deliveryDate" className="location-time-label">
-              <Input placeholder="mm/dd/yyyy" />
+            <Form.Item
+              label="Delivery Date"
+              name="deliveryDate"
+              className="location-time-label"
+              getValueProps={(val) => ({
+                value: val ? (dayjs.isDayjs(val) ? val : dayjs(val).isValid() ? dayjs(val) : null) : null,
+              })}
+              normalize={(val) => (val && dayjs.isDayjs(val) ? val.format("MM/DD/YYYY") : (val || ""))}
+            >
+              <DatePicker
+                style={{ width: "100%" }}
+                format="MM/DD/YYYY"
+                placeholder="MM/DD/YYYY"
+              />
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
