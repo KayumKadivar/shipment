@@ -11,6 +11,7 @@ export interface CarrierRateModalProps {
   error?: string | null;
   onSelectRate: (rate: CarrierRate) => void;
   selectedRateId?: string;
+  actionLabel?: string;
 }
 
 const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
@@ -21,6 +22,7 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
   error = null,
   onSelectRate,
   selectedRateId,
+ /* actionLabel,*/
 }) => {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('rate-asc');
@@ -175,6 +177,7 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
                       checked={selectedRateId === rate.id}
                       onCheckedChange={() => onSelectRate(rate)}
                       onShipIt={() => onSelectRate(rate)}
+                     /* actionLabel={actionLabel}*/
                     />
                   ))}
                 </div>

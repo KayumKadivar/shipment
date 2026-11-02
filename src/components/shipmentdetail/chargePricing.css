@@ -1,0 +1,17 @@
+.shipment-charges-tab .shipment-charge-pricing {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 16px 0 24px;
+}
+.shipment-charges-tab .shipment-charge-pricing .ant-select { width: 280px; }
+.shipment-charges-tab .shipment-charge-pricing .ant-input,
+.shipment-charges-tab .shipment-charge-pricing .ant-input-affix-wrapper { width: 90px; }
+.shipment-charges-tab .shipment-charge-pricing .ant-input-affix-wrapper .ant-input { width: 100%; }
+.shipment-charges-tab .shipment-charge-pricing-min { display: flex; align-items: center; gap: 10px; font-weight: 600; color: #555; }
+.shipment-charges-tab .shipment-charge-pricing .ant-btn { min-width: 100px; }
+@media (max-width: 600px) {
+  .shipment-charges-tab .shipment-charge-pricing { gap: 12px; }
+  .shipment-charges-tab .shipment-charge-pricing .ant-select { width: min(280px, 100%); }
+}

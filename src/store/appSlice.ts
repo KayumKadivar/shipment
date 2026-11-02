@@ -157,6 +157,7 @@ export const loginUser = createAsyncThunk<
         );
         if (clientRes.data?.data) {
           const rawData = clientRes.data.data;
+          isCorporate = typeof rawData.isCorporate === "boolean" ? rawData.isCorporate : null;
           const list = Array.isArray(rawData)
             ? rawData
             : Array.isArray(rawData.clientAndProfileDetails)
@@ -193,14 +194,13 @@ export const loginUser = createAsyncThunk<
             const logged = matchByUser || matchByDev || list.find(isItemLogged) || list[0];
             if (logged) {
               profileCode = logged.profileCode || null;
-              isCorporate = typeof logged.isCorporate === "boolean" ? logged.isCorporate : null;
+              isCorporate = isCorporate ?? (typeof logged.isCorporate === "boolean" ? logged.isCorporate : null);
               clientCode = logged.clientCode || null;
               clientName = logged.clientName || null;
               ratingClientCode = logged.ratingClientCode ?? null;
               ratingProfileCode = logged.ratingProfileCode ?? null;
 
               if (profileCode) localStorage.setItem("profileCode", profileCode);
-              if (isCorporate !== null) localStorage.setItem("isCorporate", String(isCorporate));
               if (clientCode) localStorage.setItem("clientCode", clientCode);
               if (clientName) localStorage.setItem("clientName", clientName);
               if (ratingClientCode) localStorage.setItem("ratingClientCode", ratingClientCode);
@@ -212,14 +212,16 @@ export const loginUser = createAsyncThunk<
               profileCode = clientRes.data.data.profiles[0].profileCode;
               localStorage.setItem("profileCode", profileCode as string);
             }
-            if (typeof clientRes.data.data.isCorporate === "boolean") {
-              isCorporate = clientRes.data.data.isCorporate;
-              localStorage.setItem("isCorporate", String(isCorporate));
-            }
           }
         }
       } catch {
         // A profile is optional for authentication; protected screens can still load.
+      }
+
+      if (isCorporate !== null) {
+        localStorage.setItem("isCorporate", String(isCorporate));
+      } else {
+        localStorage.removeItem("isCorporate");
       }
 
       return {

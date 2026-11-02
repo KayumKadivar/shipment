@@ -1,3 +1,4 @@
+import { createGetRatesRequest } from "../lib/createGetRatesRequest";
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 import { API_BASE_URL } from "../config/apiConfig";
@@ -95,6 +96,8 @@ export interface RatingShipment {
   class?: string;
   weight?: string | number;
   weightUnit?: string;
+  cubicFeet?: number;
+  linearFeet?: number;
   units?: string | number;
   pallets?: string | number;
   pieces?: string | number;
@@ -253,11 +256,11 @@ export const fetchCarrierRates = createAsyncThunk<
         payload.profileCode ||
         (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) || "";
 
-      const requestPayload = {
+      const requestPayload = createGetRatesRequest({
         ...payload,
         ratingProfileCode,
         ratingClientCode,
-      };
+      });
 
       const response = await axios.post<RateApiResponse>(
         `${API_BASE_URL}/Rating/GetQuote`,

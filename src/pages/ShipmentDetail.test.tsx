@@ -1,26 +1,63 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import type { ClientOption } from "../store/customerLocationSlice";
+import { act } from "@testing-library/react";
+import type { ShipmentRerateRate } from "../store/shipmentRerateSlice";
 import type { ShipmentDetails } from "../types/shipment.types";
+import type { CarrierRate } from "./Rate";
 import ShipmentDetail from "./ShipmentDetail";
 
-const { dispatchMock, shipmentState } = vi.hoisted(() => ({
+const { dispatchMock, shipmentState, rerateState, rerateShipmentMock, lookupUnwrapMock, lookupAbortMock, lookupMock } =
+  vi.hoisted(() => ({
   dispatchMock: vi.fn(),
+  lookupUnwrapMock: vi.fn<() => Promise<ClientOption[]>>(),
+  lookupAbortMock: vi.fn(),
+  lookupMock: vi.fn((clientCode: string) => ({ type: "customerLocation/request", payload: clientCode })),
   shipmentState: {
     currentShipment: null as ShipmentDetails | null,
     loading: false,
     error: null as string | null,
     requestedLoadNumber: "LOAD-100" as string | null,
   },
+  rerateState: {
+    rates: [] as ShipmentRerateRate[],
+    rate: null as ShipmentRerateRate | null,
+    loading: false,
+    error: null as string | null,
+  },
+  rerateShipmentMock: vi.fn((payload: unknown) => ({
+    payload,
+    type: "shipmentRerate/request",
+  })),
 }));
 
 vi.mock("../app/hooks", () => ({
   useAppDispatch: () => dispatchMock,
-  useAppSelector: (selector: (state: { shipment: typeof shipmentState }) => unknown) =>
-    selector({ shipment: shipmentState }),
+  useAppSelector: (selector: (state: {
+    shipment: typeof shipmentState;
+    app: { profileCode: string; ratingProfileCode: string; ratingClientCode: string };
+    customerLocation: { clients: { clientCode: string; ratingProfileCode: string; ratingClientCode: string }[] };
+    shipmentRerate: typeof rerateState;
+  }) => unknown) =>
+    selector({
+      shipment: shipmentState,
+      app: { profileCode: "PROFILE-42", ratingProfileCode: "APP-PROFILE", ratingClientCode: "APP-CLIENT" },
+      customerLocation: { clients: [{ clientCode: "CLIENT-42", ratingProfileCode: "CLIENT-BUY-PROFILE", ratingClientCode: "CLIENT-BUY-CODE" }] },
+      shipmentRerate: rerateState,
+    }),
 }));
+
+vi.mock("../store/customerLocationSlice", () => ({ fetchClientsAndSubclients: lookupMock }));
 
 vi.mock("../store/shipmentSlice", () => ({
   fetchShipmentByLoadNumber: vi.fn((loadNumber: string) => ({
@@ -36,6 +73,59 @@ vi.mock("../store/carrierTrackingSlice", () => ({
   })),
 }));
 
+vi.mock("../store/shipmentRerateSlice", () => ({
+  clearShipmentRerate: vi.fn(() => ({
+    type: "shipmentRerate/clearShipmentRerate",
+  })),
+  selectShipmentRerateRate: vi.fn((rateId: string) => ({
+    payload: rateId,
+    type: "shipmentRerate/selectShipmentRerateRate",
+  })),
+  rerateShipment: Object.assign(rerateShipmentMock, {
+    fulfilled: {
+      match: (action: { type?: string }) =>
+        action.type === "shipmentRerate/rerateShipment/fulfilled",
+    },
+  }),
+}));
+
+vi.mock("../components/New Shipment/CarrierRateModal", () => ({
+  default: ({
+    open,
+    onClose,
+    rates,
+    onSelectRate,
+    actionLabel,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    rates: CarrierRate[];
+    onSelectRate: (rate: CarrierRate) => void;
+    actionLabel?: string;
+  }) =>
+    open ? (
+      <div role='dialog' aria-label='Quote Results'>
+        {rates.map((rate) => (
+          <div key={rate.id}>
+            <span>{rate.name}</span>
+            <span>{rate.code}</span>
+            <span>{rate.service}</span>
+            <span>{rate.price}</span>
+            <span>{rate.transitDays} business days</span>
+            <span>{rate.estimatedDelivery}</span>
+            <span>{rate.quoteExpiry}</span>
+            <button type='button' onClick={() => onSelectRate(rate)}>
+              {actionLabel ?? "Ship It"}
+            </button>
+          </div>
+        ))}
+        <button type='button' onClick={onClose}>
+          Close quote results
+        </button>
+      </div>
+    ) : null,
+}));
+
 vi.mock("@react-google-maps/api", () => ({
   GoogleMap: () => null,
   PolylineF: () => null,
@@ -47,12 +137,15 @@ vi.mock("../components/shipmentdetail/LoadTab", () => ({
     onChangeCommitted,
     onEditorStateChange,
   }: {
-    onChangeCommitted: () => void;
+    onChangeCommitted: (requiresRerate?: boolean) => void;
     onEditorStateChange: (isEditing: boolean) => void;
   }) => (
     <>
-      <button type='button' onClick={onChangeCommitted}>
+      <button type='button' onClick={() => onChangeCommitted()}>
         Commit load change
+      </button>
+      <button type='button' onClick={() => onChangeCommitted(true)}>
+        Commit rate-affecting load change
       </button>
       <button type='button' onClick={() => onEditorStateChange(true)}>
         Open load editor
@@ -62,7 +155,11 @@ vi.mock("../components/shipmentdetail/LoadTab", () => ({
 }));
 
 vi.mock("../components/shipmentdetail/Charges", () => ({
-  default: () => null,
+  default: ({ reratedRate }: { reratedRate?: ShipmentRerateRate | null }) => (
+    <div data-testid='charges-rerated-rate'>
+      {reratedRate ? `${reratedRate.scac}:${reratedRate.grossCharge}` : "none"}
+    </div>
+  ),
 }));
 
 vi.mock("../components/shipmentdetail/Tracking", () => ({
@@ -74,7 +171,28 @@ const shipment = {
   proNumber: "PRO-100",
   bolStatus: "In Transit",
   equipment: "LTL",
-  products: [],
+  pickupdate: "2026-10-15",
+  scac: "FXFE",
+  clientCode: "CLIENT-42",
+  clientName: "Test Client",
+  orgCityName: "Atlanta",
+  orgStateCode: "GA",
+  orgPostalCode: "30303",
+  orgCountryCode: "USA",
+  destCityName: "Chicago",
+  destStateCode: "IL",
+  destPostalCode: "60606",
+  destCountryCode: "USA",
+  products: [
+    {
+      productDescription: "Freight",
+      productClass: "70",
+      productWeight: 100,
+      pallets: 1,
+      pieces: 1,
+      hazMat: false,
+    },
+  ],
   userName: "Created User",
   orgWhoEntered: "Tendered User",
   clientEmail: "client@example.com",
@@ -90,9 +208,32 @@ const shipment = {
   destNote: "Delivery instructions",
 } as unknown as ShipmentDetails;
 
-function renderShipmentDetail() {
+const returnedRerate: ShipmentRerateRate = {
+  id: "FXFE-0-52246240",
+  carrierName: "FEDEX FREIGHT-PRIORITY",
+  scac: "FXFE",
+  rateType: "Flat",
+  statusCode: 1,
+  errorMessage: null,
+  totalShipmentCost: 110,
+  transitDays: 2,
+  deliveryDate: "0001-01-01T00:00:00",
+  quoteExpirationDate: "2026-10-26T00:00:00",
+  grossCharge: 100,
+  fuelSurcharge: 0,
+  discount: 0,
+  accessorialCharges: [
+    {
+      accessorialCode: "INS",
+      accessorialDescription: "INSIDE DELIVERY",
+      accessorialCharge: 10,
+    },
+  ],
+};
+
+function renderShipmentDetail(state?: unknown) {
   return render(
-    <MemoryRouter initialEntries={["/shipments/LOAD-100"]}>
+    <MemoryRouter initialEntries={[{ pathname: "/shipments/LOAD-100", state }]}>
       <Routes>
         <Route path='/shipments/:shipmentId' element={<ShipmentDetail />} />
         <Route path='/shipments' element={<div>Shipments list</div>} />
@@ -101,13 +242,53 @@ function renderShipmentDetail() {
   );
 }
 
-describe("ShipmentDetail", () => {
+/** Commits a load change and starts the public rerate action. */
+function requestRerate() {
+  fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+  fireEvent.click(screen.getByRole("button", { name: "Commit rate-affecting load change" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Re-Rate" }));
+}
+
+describe("ShipmentDetail", { timeout: 20_000 }, () => {
   beforeEach(() => {
+    lookupMock.mockClear();
+    lookupAbortMock.mockReset();
+    lookupUnwrapMock.mockReset().mockResolvedValue([
+      { clientCode: "CLIENT-42", clientName: "Client", ratingProfileCode: "CLIENT-BUY-PROFILE", ratingClientCode: "CLIENT-BUY-CODE" },
+    ]);
+    rerateShipmentMock.mockClear();
     shipmentState.currentShipment = shipment;
     shipmentState.loading = false;
     shipmentState.error = null;
     shipmentState.requestedLoadNumber = "LOAD-100";
-    dispatchMock.mockReturnValue({ abort: vi.fn() });
+    rerateState.rates = [];
+    rerateState.rate = null;
+    rerateState.loading = false;
+    rerateState.error = null;
+    dispatchMock.mockImplementation(
+      (action: { type?: string; payload?: string }) => {
+        if (action.type === "customerLocation/request") {
+          return { unwrap: lookupUnwrapMock, abort: lookupAbortMock };
+        }
+        if (action.type === "shipmentRerate/request") {
+          rerateState.rates = [returnedRerate];
+          rerateState.rate = null;
+          return Promise.resolve({
+            type: "shipmentRerate/rerateShipment/fulfilled",
+            payload: [returnedRerate],
+          });
+        }
+
+        if (action.type === "shipmentRerate/selectShipmentRerateRate") {
+          rerateState.rate =
+            rerateState.rates.find((rate) => rate.id === action.payload) ??
+            null;
+        }
+
+        return { abort: vi.fn() };
+      },
+    );
     vi.stubGlobal(
       "ResizeObserver",
       class ResizeObserver {
@@ -173,6 +354,10 @@ describe("ShipmentDetail", () => {
       ).toBeTruthy();
     });
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
+      "disabled",
+      true,
+    );
   });
 
   it("ShipmentDetail_whenBillToEditingIsCancelled_restoresTheSavedValue", () => {
@@ -267,6 +452,305 @@ describe("ShipmentDetail", () => {
     ).toBeNull();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+  });
+
+  it("ShipmentDetail_whenRateAffectingLoadChangeIsGloballySaved_enablesRerateReminder", () => {
+    renderShipmentDetail();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Commit rate-affecting load change",
+      }),
+    );
+
+    expect(screen.getByText("Screen has some unsaved data!!")).toBeTruthy();
+    expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.queryByText("Screen has some unsaved data!!")).toBeNull();
+    expect(screen.getByText("Shipment Need to be re rated !")).toHaveProperty(
+      "className",
+      "shipment-detail-rerate-message",
+    );
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+  });
+
+  it("ShipmentDetail_whenRowClientDiffersFromLogin_usesTheRowClientRatingCodes", async () => {
+    lookupUnwrapMock.mockResolvedValue([
+      { clientCode: "OTHER", clientName: "Other", ratingClientCode: "WRONG", ratingProfileCode: "WRONG" },
+      { clientCode: "ROW-CLIENT", clientName: "Row", ratingClientCode: "ROW-BUY", ratingProfileCode: "ROW-PROFILE" },
+    ]);
+    renderShipmentDetail({ loadNumber: "LOAD-100", clientCode: "ROW-CLIENT" });
+    requestRerate();
+    await waitFor(() => expect(rerateShipmentMock).toHaveBeenCalledWith(expect.objectContaining({
+      clientCode: "ROW-CLIENT", ratingClientCode: "ROW-BUY", ratingProfileCode: "ROW-PROFILE",
+    })));
+    expect(lookupMock).toHaveBeenCalledWith("ROW-CLIENT");
+  });
+
+  it("ShipmentDetail_whenDirectLinkHasNoRowContext_looksUpTheShipmentClient", async () => {
+    renderShipmentDetail();
+    requestRerate();
+    await waitFor(() => expect(rerateShipmentMock).toHaveBeenCalledTimes(1));
+    expect(lookupMock).toHaveBeenCalledWith("CLIENT-42");
+  });
+
+  it("ShipmentDetail_whenRowContextBelongsToAnotherLoad_usesTheShipmentClient", async () => {
+    renderShipmentDetail({ loadNumber: "OTHER-LOAD", clientCode: "WRONG" });
+    requestRerate();
+    await waitFor(() => expect(rerateShipmentMock).toHaveBeenCalledTimes(1));
+    expect(lookupMock).toHaveBeenCalledWith("CLIENT-42");
+  });
+
+  it("ShipmentDetail_whenRowClientIsMissing_doesNotLookupOrRequestRates", async () => {
+    renderShipmentDetail({ loadNumber: "LOAD-100", clientCode: null });
+    requestRerate();
+    expect(await screen.findByText("A shipment client code is required to re-rate the shipment.")).toBeTruthy();
+    expect(lookupMock).not.toHaveBeenCalled();
+    expect(rerateShipmentMock).not.toHaveBeenCalled();
+  });
+
+  it("ShipmentDetail_whenClientLookupFails_doesNotRequestRates", async () => {
+    lookupUnwrapMock.mockRejectedValue("Client lookup unavailable");
+    renderShipmentDetail();
+    requestRerate();
+    expect(await screen.findByText("Client lookup unavailable")).toBeTruthy();
+    expect(rerateShipmentMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty("disabled", false);
+  });
+
+  it("ShipmentDetail_whenMatchingClientIsMissing_doesNotRequestRates", async () => {
+    lookupUnwrapMock.mockResolvedValue([{ clientCode: "OTHER", clientName: "Other", ratingClientCode: "WRONG", ratingProfileCode: "WRONG" }]);
+    renderShipmentDetail();
+    requestRerate();
+    expect(await screen.findByText("Rating client and profile codes are unavailable for client CLIENT-42.")).toBeTruthy();
+    expect(rerateShipmentMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["ratingClientCode", "ratingProfileCode"])(
+    "ShipmentDetail_whenEitherRatingCodeIsBlank_doesNotRequestRates (%s)", async (field) => {
+      lookupUnwrapMock.mockResolvedValue([{ clientCode: "CLIENT-42", clientName: "Client", ratingClientCode: "BUY", ratingProfileCode: "PROFILE", [field]: "  " }]);
+      renderShipmentDetail();
+      requestRerate();
+      expect(await screen.findByText("Rating client and profile codes are unavailable for client CLIENT-42.")).toBeTruthy();
+      expect(rerateShipmentMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ShipmentDetail_whenLookupIsPending_disablesDuplicateRerates", async () => {
+    lookupUnwrapMock.mockReturnValue(new Promise(() => {}));
+    renderShipmentDetail();
+    requestRerate();
+    const button = screen.getByRole("button", { name: /Re-Rate$/ });
+    expect(button).toHaveProperty("disabled", true);
+    fireEvent.click(button);
+    expect(lookupMock).toHaveBeenCalledTimes(1);
+    expect(rerateShipmentMock).not.toHaveBeenCalled();
+  });
+
+  it("ShipmentDetail_whenUnmountedDuringLookup_abortsAndDoesNotRequestRates", async () => {
+    let resolveLookup: (clients: ClientOption[]) => void = () => {};
+    lookupUnwrapMock.mockReturnValue(new Promise((resolve) => { resolveLookup = resolve; }));
+    const view = renderShipmentDetail();
+    requestRerate();
+    view.unmount();
+    expect(lookupAbortMock).toHaveBeenCalledTimes(1);
+    await act(async () => resolveLookup([{ clientCode: "CLIENT-42", clientName: "Client", ratingClientCode: "BUY", ratingProfileCode: "PROFILE" }]));
+    expect(rerateShipmentMock).not.toHaveBeenCalled();
+  });
+
+  it("ShipmentDetail_whenClientHasRatingCodes_usesThemBeforeAppDefaults", async () => {
+    renderShipmentDetail();
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Commit rate-affecting load change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Re-Rate" }));
+    await waitFor(() => expect(rerateShipmentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ ratingProfileCode: "CLIENT-BUY-PROFILE", ratingClientCode: "CLIENT-BUY-CODE" }),
+    ));
+  });
+
+  it("ShipmentDetail_whenRerateSucceeds_opensResultsWithoutChangingCharges", async () => {
+    renderShipmentDetail();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Commit rate-affecting load change",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Re-Rate" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Quote Results",
+    });
+
+    expect(within(dialog).getByText("FEDEX FREIGHT-PRIORITY")).toBeTruthy();
+    expect(within(dialog).getByText("FXFE")).toBeTruthy();
+    expect(within(dialog).getByText("Flat")).toBeTruthy();
+    expect(within(dialog).getByText("110")).toBeTruthy();
+    expect(within(dialog).getByText("2 business days")).toBeTruthy();
+    expect(within(dialog).getByText("N/A")).toBeTruthy();
+    expect(within(dialog).getByText("2026-10-26T00:00:00")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Select" })).toBeTruthy();
+    expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(rerateShipmentMock).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("tab", { name: "Charges" }).getAttribute("aria-selected"),
+    ).toBe("false");
+    expect(screen.getByTestId("charges-rerated-rate").textContent).toBe("none");
+  });
+
+  it("ShipmentDetail_whenRerateModalIsClosed_keepsTheRerateReminder", async () => {
+    renderShipmentDetail();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Commit rate-affecting load change",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Re-Rate" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Close quote results" }),
+    );
+
+    expect(screen.queryByRole("dialog", { name: "Quote Results" })).toBeNull();
+    expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
+    expect(screen.getByTestId("charges-rerated-rate").textContent).toBe("none");
+  });
+
+  it("ShipmentDetail_whenRateIsSelected_appliesItAndShowsCharges", async () => {
+    renderShipmentDetail();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Commit rate-affecting load change",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Re-Rate" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Select" }));
+
+    expect(screen.queryByRole("dialog", { name: "Quote Results" })).toBeNull();
+    expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(
+      screen.getByRole("tab", { name: "Charges" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(screen.getByTestId("charges-rerated-rate").textContent).toBe(
+      "FXFE:100",
+    );
+  });
+
+  it("ShipmentDetail_whenRerateRequestFails_keepsRerateReminder", async () => {
+    renderShipmentDetail();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Commit rate-affecting load change",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    dispatchMock.mockImplementation((action: { type?: string }) =>
+      action.type === "shipmentRerate/request"
+        ? Promise.resolve({
+            type: "shipmentRerate/rerateShipment/rejected",
+            payload: "Rating failed",
+          })
+        : { abort: vi.fn() },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Re-Rate" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+  });
+
+  it.each([
+    ["Pickup", "Denver, CO, 80202"],
+    ["Delivery", "Austin, TX, 78701"],
+  ])(
+    "ShipmentDetail_when%sCityStateZipIsGloballySaved_enablesRerateReminder",
+    (section, value) => {
+      renderShipmentDetail();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: `Edit ${section}` }),
+      );
+      const card = screen
+        .getByRole("heading", { name: section })
+        .closest("article") as HTMLElement;
+      fireEvent.change(within(card).getByLabelText("City/state/zip"), {
+        target: { value },
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: `Save ${section}` }),
+      );
+
+      expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+      expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
+        "disabled",
+        false,
+      );
+    },
+  );
+
+  it("ShipmentDetail_whenPickupDateIsGloballySaved_enablesRerateReminder", () => {
+    renderShipmentDetail();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Schedule" }));
+    const scheduleCard = screen
+      .getByRole("heading", { name: "Schedule" })
+      .closest("article") as HTMLElement;
+    const pickupDateInput = within(scheduleCard).getAllByPlaceholderText(
+      "M/D/YY",
+    )[0];
+    fireEvent.change(pickupDateInput, {
+      target: { value: "10/20/26" },
+    });
+    fireEvent.keyDown(pickupDateInput, { key: "Enter", code: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Save Schedule" }));
+
+    expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
+      "disabled",
+      false,
+    );
   });
 
   it("ShipmentDetail_whenGlobalCancelIsClicked_navigatesToShipments", () => {

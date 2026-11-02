@@ -34,6 +34,7 @@ export const fetchServiceLevel = createAsyncThunk<
   ServiceLevelItem[],
   void,
   {
+    state: { serviceLevel: ServiceLevelState };
     rejectValue: string;
   }
 >(
@@ -86,9 +87,8 @@ export const fetchServiceLevel = createAsyncThunk<
   },
   {
     condition: (_, { getState }) => {
-      const state = (getState() as { serviceLevel?: ServiceLevelState })
-        ?.serviceLevel;
-      return !state || (!state.loading && !state.loaded);
+      const state = getState().serviceLevel;
+      return !state.loading && !state.loaded;
     },
   }
 );

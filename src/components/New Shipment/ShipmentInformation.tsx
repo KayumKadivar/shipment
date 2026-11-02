@@ -1,14 +1,9 @@
 import React, { useEffect, useMemo } from 'react';
 import { Card, Form, Input, Select, Row, Col, Checkbox } from 'antd';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { fetchEquipment } from '../../store/equipmentSlice';
-import { fetchServiceLevel, type ServiceLevelItem } from '../../store/serviceLevelSlice';
-import { fetchPaymentTerm } from '../../store/paymentTermSlice';
-
-export interface OptionItem {
-  value: string;
-  label: string;
-}
+import { fetchEquipment } from '../../store/equipmentSlice.ts';
+import { fetchServiceLevel } from '../../store/serviceLevelSlice.ts';
+import { fetchPaymentTerm } from '../../store/paymentTermSlice.ts';
 
 export interface ShipmentInformationProps {
   initialData?: {
@@ -24,20 +19,20 @@ export interface ShipmentInformationProps {
 const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, onChange }) => {
   const [form] = Form.useForm();
   const dispatch = useAppDispatch();
-  const { data: equipmentList = [] as string[], loading: equipmentLoading } = useAppSelector(
-    (state: any) => state.equipment || {}
+  const { data: equipmentList = [], loading: equipmentLoading } = useAppSelector(
+    (state) => state.equipment
   );
-  const { data: serviceLevels = [] as ServiceLevelItem[], loading: serviceLevelLoading } = useAppSelector(
-    (state: any) => state.serviceLevel || {}
+  const { data: serviceLevels = [], loading: serviceLevelLoading } = useAppSelector(
+    (state) => state.serviceLevel
   );
-  const { data: paymentTermsList = [] as string[], loading: paymentTermsLoading } = useAppSelector(
-    (state: any) => state.paymentTerm || {}
+  const { data: paymentTermsList = [], loading: paymentTermsLoading } = useAppSelector(
+    (state) => state.paymentTerm
   );
 
   useEffect(() => {
-    (dispatch as any)(fetchEquipment());
-    (dispatch as any)(fetchServiceLevel());
-    (dispatch as any)(fetchPaymentTerm());
+    dispatch(fetchEquipment());
+    dispatch(fetchServiceLevel());
+    dispatch(fetchPaymentTerm());
   }, [dispatch]);
 
   useEffect(() => {
@@ -68,7 +63,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
       const current = form.getFieldValue("serviceLevel");
       const currentStr = String(current ?? "").trim().toLowerCase();
       const matched = serviceLevels.find(
-        (sl: ServiceLevelItem) =>
+        (sl) =>
           sl.description?.trim().toLowerCase() === currentStr ||
           sl.serviceLevelCode?.trim().toLowerCase() === currentStr
       );
@@ -81,7 +76,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
       } else if (!current) {
         const defaultOption =
           serviceLevels.find(
-            (sl: ServiceLevelItem) =>
+            (sl) =>
               sl.description?.trim().toLowerCase() === "standard" ||
               sl.serviceLevelCode?.trim().toLowerCase() === "standard"
           ) || serviceLevels[0];
@@ -97,7 +92,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
       const current = form.getFieldValue("paymentTerms");
       if (!current) {
         const defaultVal =
-          paymentTermsList.find((p: string) => p.toLowerCase() === "3rd party prep") ||
+          paymentTermsList.find((p) => p.toLowerCase() === "3rd party prep") ||
           paymentTermsList[0];
         form.setFieldValue("paymentTerms", defaultVal);
         if (onChange) onChange(form.getFieldsValue());
@@ -105,22 +100,22 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
     }
   }, [paymentTermsList, form, onChange]);
 
-  const equipmentOptions: OptionItem[] = useMemo(() => {
+  const equipmentOptions = useMemo(() => {
     if (!equipmentList || equipmentList.length === 0) {
       return [{ value: "LTL", label: "LTL" }];
     }
-    return equipmentList.map((item: string): OptionItem => ({
+    return equipmentList.map((item) => ({
       value: item,
       label: item,
     }));
   }, [equipmentList]);
 
-  const serviceLevelOptions: OptionItem[] = useMemo(() => {
+  const serviceLevelOptions = useMemo(() => {
     if (!serviceLevels || serviceLevels.length === 0) {
       return [{ value: "Standard", label: "Standard" }];
     }
     return serviceLevels
-      .map((item: ServiceLevelItem): OptionItem | null => {
+      .map((item) => {
         const text = (item.description || item.serviceLevelCode || "").trim();
         if (!text) return null;
         return {
@@ -128,14 +123,14 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
           label: text,
         };
       })
-      .filter((opt: OptionItem | null): opt is OptionItem => Boolean(opt));
+      .filter((opt): opt is { value: string; label: string } => Boolean(opt));
   }, [serviceLevels]);
 
-  const paymentTermOptions: OptionItem[] = useMemo(() => {
+  const paymentTermOptions = useMemo(() => {
     if (!paymentTermsList || paymentTermsList.length === 0) {
       return [{ value: "3rd Party Prep", label: "3rd Party Prep" }];
     }
-    return paymentTermsList.map((item: string): OptionItem => ({
+    return paymentTermsList.map((item) => ({
       value: item,
       label: item,
     }));
@@ -157,7 +152,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
           paymentTerms: "3rd Party Prep",
           sendCarrierPickupReq: false,
         }}
-        onValuesChange={(_: unknown, all: Record<string, unknown>) => {
+        onValuesChange={(_, all) => {
           if (onChange) onChange(all);
         }}
       >
@@ -176,7 +171,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
                 loading={equipmentLoading}
                 placeholder="Select Equipment"
                 showSearch
-                filterOption={(input: string, option?: { label?: unknown; value?: unknown }) =>
+                filterOption={(input, option) =>
                   String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
                 }
               />
@@ -192,7 +187,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
                 loading={serviceLevelLoading}
                 placeholder="Select Service Level"
                 showSearch
-                filterOption={(input: string, option?: { label?: unknown; value?: unknown }) =>
+                filterOption={(input, option) =>
                   String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
                 }
               />
@@ -213,7 +208,7 @@ const ShipmentInformation: React.FC<ShipmentInformationProps> = ({ initialData, 
             loading={paymentTermsLoading}
             placeholder="Select Payment Term"
             showSearch
-            filterOption={(input: string, option?: { label?: unknown; value?: unknown }) =>
+            filterOption={(input, option) =>
               String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
             }
           />

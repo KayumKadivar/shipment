@@ -6,14 +6,30 @@ import {
   PlusOutlined,
 } from "@ant-design/icons";
 import { AutoComplete, Button, Input, Popconfirm, Select } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { DEFAULT_CLIENT_CODE } from "../../config/apiConfig";
 import { fetchAccessorials } from "../../store/accessorialsSlice";
 import { fetchPackageTypes } from "../../store/packageTypesSlice";
+import {
+  clearShipmentProductSearch,
+  searchShipmentProducts,
+  type ShipmentProductSearchResult,
+} from "../../store/shipmentProductSearchSlice";
 import type {
   ShipmentDetails,
   ShipmentProduct,
+  ShipmentRerateLoadValues,
+  ShipmentRerateProduct,
 } from "../../types/shipment.types";
+import LoadInternalNotes from "./LoadInternalNotes";
 import { createShipmentAccessorialLabels } from "./shipmentAccessorials";
 
 type LoadLine = {
@@ -27,6 +43,16 @@ type LoadLine = {
   freightClass: string;
   nmfc: string;
   description: string;
+  hazMat: boolean;
+  hazMatClass: string;
+  hazMatUN: string;
+  hazMatProperShippingName: string;
+  hazMatPackingGroup: string;
+  hazMatPhone: string;
+  hazMatContact: string;
+  pieces: number;
+  linearFeet: number;
+  stackable: boolean;
 };
 
 type LineEditor = {
@@ -38,6 +64,13 @@ type LineEditor = {
 type PackageTypeOption = {
   value: string;
   label: string;
+};
+
+type ProductOption = {
+  key: string;
+  value: string;
+  label: ReactNode;
+  product: ShipmentProductSearchResult;
 };
 
 type AccessorialDraftLine = {
@@ -52,9 +85,19 @@ type AccessorialOption = {
 
 type LoadTabProps = {
   shipment: ShipmentDetails;
-  onChangeCommitted: () => void;
+  onChangeCommitted: (requiresRerate?: boolean) => void;
   onEditorStateChange: (isEditing: boolean) => void;
+  onRateInputsChange?: (values: ShipmentRerateLoadValues) => void;
 };
+
+const RerateLoadLineFields: ReadonlyArray<keyof LoadLine> = [
+  "units",
+  "weight",
+  "length",
+  "width",
+  "height",
+  "freightClass",
+];
 
 const FREIGHT_CLASS_OPTIONS = [
   "50",
@@ -97,6 +140,16 @@ function createShipmentLine(
     freightClass: product.productClass ?? "",
     nmfc: product.nmfc ?? "",
     description: product.productDescription ?? "",
+    hazMat: product.hazMat,
+    hazMatClass: product.hazmatClass ?? "",
+    hazMatUN: product.hazmatUnNaNumber ?? "",
+    hazMatProperShippingName: product.hazmatProperShippingName ?? "",
+    hazMatPackingGroup: product.hazmatGroup ?? "",
+    hazMatPhone: product.hazmatPhone ?? "",
+    hazMatContact: product.hazmatContact ?? "",
+    pieces: product.pieces ?? 1,
+    linearFeet: product.linearFeet ?? 0,
+    stackable: product.stackable ?? false,
   };
 }
 
@@ -112,7 +165,79 @@ function createEmptyLine(): LoadLine {
     freightClass: "",
     nmfc: "",
     description: "",
+    hazMat: false,
+    hazMatClass: "",
+    hazMatUN: "",
+    hazMatProperShippingName: "",
+    hazMatPackingGroup: "",
+    hazMatPhone: "",
+    hazMatContact: "",
+    pieces: 1,
+    linearFeet: 0,
+    stackable: false,
   };
+}
+
+function numericValue(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function createRerateProduct(line: LoadLine): ShipmentRerateProduct {
+  const units = numericValue(line.units);
+
+  return {
+    class: line.freightClass.trim(),
+    weight: numericValue(line.weight),
+    weightUnit: "Lbs",
+    units,
+    cubicFeet: 0,
+    hazMat: line.hazMat,
+    hazMatClass: line.hazMatClass.trim() || undefined,
+    hazMatUN: line.hazMatUN.trim() || undefined,
+    hazMatProperShippingName:
+      line.hazMatProperShippingName.trim() || undefined,
+    hazMatPackingGroup: line.hazMatPackingGroup.trim() || undefined,
+    hazMatPhone: line.hazMatPhone.trim() || undefined,
+    hazMatContact: line.hazMatContact.trim() || undefined,
+    nmfc: line.nmfc.trim() || undefined,
+    description: line.description.trim() || undefined,
+    pallets:
+      line.packageType.trim().toLocaleLowerCase() === "pallet" ? units : 0,
+    pieces: line.pieces,
+    length: numericValue(line.length),
+    width: numericValue(line.width),
+    height: numericValue(line.height),
+    packageType: line.packageType.trim() || undefined,
+    linearFeet: line.linearFeet,
+    stackable: line.stackable,
+  };
+}
+
+function resolveAccessorialCodes(
+  labels: string[],
+  shipment: ShipmentDetails,
+  options: Array<{ accessorialName: string; accesorialCode?: string }>,
+) {
+  const details = [
+    ...(shipment.buyRate?.accesorialCostDetails ?? []),
+    ...(shipment.sellRate?.accesorialCostDetails ?? []),
+  ];
+
+  return [...new Set(labels.map((label) => {
+    const normalizedLabel = label.trim().toLocaleLowerCase();
+    const option = options.find(
+      (item) =>
+        item.accessorialName.trim().toLocaleLowerCase() === normalizedLabel,
+    );
+    const detail = details.find((item) =>
+      [item.accCode, item.description].some(
+        (candidate) => candidate?.trim().toLocaleLowerCase() === normalizedLabel,
+      ),
+    );
+
+    return option?.accesorialCode?.trim() || detail?.accCode?.trim() || label.trim();
+  }).filter(Boolean))];
 }
 
 function displayDimensions(line: LoadLine) {
@@ -129,18 +254,46 @@ function loadLinesAreEqual(first: LoadLine, second: LoadLine) {
 function LoadLineInputs({
   line,
   onChange,
+  onProductSearch,
+  onProductSelect,
+  productOptions,
+  productSearchLoading,
+  productSearchError,
   packageTypeOptions,
   packageTypesLoading,
   packageTypesError,
 }: {
   line: LoadLine;
   onChange: (field: keyof LoadLine, value: string) => void;
+  onProductSearch: (value: string) => void;
+  onProductSelect: (product: ShipmentProductSearchResult) => void;
+  productOptions: ProductOption[];
+  productSearchLoading: boolean;
+  productSearchError: string | null;
   packageTypeOptions: PackageTypeOption[];
   packageTypesLoading: boolean;
   packageTypesError: string | null;
 }) {
   return (
     <>
+      <td>
+        <AutoComplete<string, ProductOption>
+          value={line.description}
+          aria-label='Description'
+          options={productOptions}
+          filterOption={false}
+          defaultActiveFirstOption
+          notFoundContent={
+            productSearchError ||
+            (productSearchLoading
+              ? "Searching products..."
+              : "No products found")
+          }
+          onChange={(value) => onChange("description", value)}
+          onSearch={onProductSearch}
+          onSelect={(_, option) => onProductSelect(option.product)}
+        />
+      </td>
       <td>
         <Input
           value={line.units}
@@ -215,13 +368,6 @@ function LoadLineInputs({
           onChange={(event) => onChange("nmfc", event.target.value)}
         />
       </td>
-      <td>
-        <Input
-          value={line.description}
-          aria-label='Description'
-          onChange={(event) => onChange("description", event.target.value)}
-        />
-      </td>
     </>
   );
 }
@@ -230,6 +376,7 @@ function LoadTab({
   shipment,
   onChangeCommitted,
   onEditorStateChange,
+  onRateInputsChange,
 }: LoadTabProps) {
   const dispatch = useAppDispatch();
   const {
@@ -242,6 +389,11 @@ function LoadTab({
     loading: accessorialsLoading,
     error: accessorialsError,
   } = useAppSelector((state) => state.accessorials);
+  const {
+    data: productSearchResults,
+    loading: productSearchLoading,
+    error: productSearchError,
+  } = useAppSelector((state) => state.shipmentProductSearch);
   const [lines, setLines] = useState<LoadLine[]>(() =>
     shipment.products.map((product, index) =>
       createShipmentLine(shipment, product, index),
@@ -254,8 +406,13 @@ function LoadTab({
   const [accessorialDraft, setAccessorialDraft] = useState<
     AccessorialDraftLine[] | null
   >(null);
+  const [internalNotesEditing, setInternalNotesEditing] = useState(false);
   const [accessorialLookupRequested, setAccessorialLookupRequested] =
     useState(false);
+  const productSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const activeProductSearchRef = useRef<{ abort: () => void } | null>(null);
   const packageTypeOptions = useMemo<PackageTypeOption[]>(
     () =>
       packageTypes
@@ -280,6 +437,23 @@ function LoadTab({
       )?.value ?? "",
     [packageTypeOptions],
   );
+  const productOptions = useMemo<ProductOption[]>(
+    () =>
+      productSearchResults.map((product, index) => ({
+        key: `shipment-product-${product.productId}-${index}`,
+        value: product.description,
+        product,
+        label: (
+          <div className='shipment-load-product-option'>
+            <strong>{product.description || "Unnamed product"}</strong>
+            <span>
+              {`Packaging group: ${product.packageType || "—"} | Class: ${product.freightClass || "—"}`}
+            </span>
+          </div>
+        ),
+      })),
+    [productSearchResults],
+  );
   const lineEditorLine =
     lineEditor &&
     !lineEditor.packageTypeWasEdited &&
@@ -292,12 +466,27 @@ function LoadTab({
     dispatch(fetchPackageTypes());
   }, [dispatch]);
 
+  const resetProductSearch = useCallback(() => {
+    if (productSearchTimerRef.current) {
+      clearTimeout(productSearchTimerRef.current);
+      productSearchTimerRef.current = null;
+    }
+    activeProductSearchRef.current?.abort();
+    activeProductSearchRef.current = null;
+    dispatch(clearShipmentProductSearch());
+  }, [dispatch]);
+
+  useEffect(() => () => resetProductSearch(), [resetProductSearch]);
+
   useEffect(() => {
-    onEditorStateChange(Boolean(lineEditor || accessorialDraft));
-  }, [accessorialDraft, lineEditor, onEditorStateChange]);
+    onEditorStateChange(
+      Boolean(lineEditor || accessorialDraft || internalNotesEditing),
+    );
+  }, [accessorialDraft, internalNotesEditing, lineEditor, onEditorStateChange]);
 
   const beginNewLine = () => {
     if (lineEditor) return;
+    resetProductSearch();
     setLineEditor({
       line: { ...createEmptyLine(), packageType: defaultPackageType },
       isNew: true,
@@ -306,6 +495,7 @@ function LoadTab({
   };
 
   const beginEditLine = (line: LoadLine) => {
+    resetProductSearch();
     setLineEditor({
       line: {
         ...line,
@@ -329,32 +519,101 @@ function LoadTab({
     );
   };
 
+  const requestProductSearch = (value: string) => {
+    resetProductSearch();
+    const searchText = value.trim();
+    if (searchText.length < 2) return;
+
+    productSearchTimerRef.current = setTimeout(() => {
+      productSearchTimerRef.current = null;
+      activeProductSearchRef.current = dispatch(
+        searchShipmentProducts({
+          clientCode: shipment.clientCode?.trim() || DEFAULT_CLIENT_CODE,
+          searchText,
+        }),
+      );
+    }, 350);
+  };
+
+  const selectProduct = (product: ShipmentProductSearchResult) => {
+    resetProductSearch();
+    setLineEditor((current) =>
+      current
+        ? {
+            ...current,
+            line: {
+              ...current.line,
+              description: product.description,
+              units: numberText(product.pallets),
+              packageType: product.packageType,
+              weight: numberText(product.weight),
+              length: numberText(product.length),
+              width: numberText(product.width),
+              height: numberText(product.height),
+              freightClass: product.freightClass,
+              nmfc: product.nmfc,
+              hazMat: product.isHazmat,
+              hazMatClass: product.hazmatClass,
+              hazMatUN: product.hazmatUn,
+            },
+            packageTypeWasEdited: true,
+          }
+        : current,
+    );
+  };
+
+  const cancelLineEditing = () => {
+    resetProductSearch();
+    setLineEditor(null);
+  };
+
   const saveLine = () => {
     if (!lineEditor || !lineEditorLine) return;
+    const existingLine = lines.find((line) => line.id === lineEditorLine.id);
     const hasChanges =
       lineEditor.isNew ||
-      !lines.some(
-        (line) =>
-          line.id === lineEditorLine.id &&
-          loadLinesAreEqual(line, lineEditorLine),
+      !existingLine ||
+      !loadLinesAreEqual(existingLine, lineEditorLine);
+    const requiresRerate =
+      lineEditor.isNew ||
+      !existingLine ||
+      RerateLoadLineFields.some(
+        (field) => existingLine[field] !== lineEditorLine[field],
       );
 
-    if (lineEditor.isNew) {
-      setLines((current) => [...current, lineEditorLine]);
-    } else {
-      setLines((current) =>
-        current.map((line) =>
+    const nextLines = lineEditor.isNew
+      ? [...lines, lineEditorLine]
+      : lines.map((line) =>
           line.id === lineEditorLine.id ? lineEditorLine : line,
-        ),
-      );
-    }
+        );
+    setLines(nextLines);
+    resetProductSearch();
     setLineEditor(null);
-    if (hasChanges) onChangeCommitted();
+    if (hasChanges) {
+      onRateInputsChange?.({
+        shipments: nextLines.map(createRerateProduct),
+        accessorialCodes: resolveAccessorialCodes(
+          accessorials,
+          shipment,
+          accessorialOptionsSource,
+        ),
+      });
+      onChangeCommitted(requiresRerate);
+    }
   };
 
   const deleteLine = (id: string) => {
-    setLines((current) => current.filter((line) => line.id !== id));
-    onChangeCommitted();
+    const nextLines = lines.filter((line) => line.id !== id);
+    setLines(nextLines);
+    onRateInputsChange?.({
+      shipments: nextLines.map(createRerateProduct),
+      accessorialCodes: resolveAccessorialCodes(
+        accessorials,
+        shipment,
+        accessorialOptionsSource,
+      ),
+    });
+    onChangeCommitted(true);
   };
 
   const beginAccessorialEdit = () => {
@@ -447,7 +706,17 @@ function LoadTab({
 
     setAccessorials(nextAccessorials);
     setAccessorialDraft(null);
-    if (hasChanges) onChangeCommitted();
+    if (hasChanges) {
+      onRateInputsChange?.({
+        shipments: lines.map(createRerateProduct),
+        accessorialCodes: resolveAccessorialCodes(
+          nextAccessorials,
+          shipment,
+          accessorialOptionsSource,
+        ),
+      });
+      onChangeCommitted(true);
+    }
   };
 
   const accessorialSaveDisabled =
@@ -464,13 +733,13 @@ function LoadTab({
           className={`shipment-load-table${lineEditor ? " is-editing" : ""}`}>
           <thead>
             <tr>
+              <th>Description</th>
               <th>Units</th>
               <th>Package</th>
               <th>Weight</th>
               <th>Dimensions</th>
               <th>Class</th>
               <th>NMFC</th>
-              <th>Description</th>
               <th aria-label='Actions' />
             </tr>
           </thead>
@@ -488,19 +757,24 @@ function LoadTab({
                     <LoadLineInputs
                       line={lineEditorLine ?? lineEditor.line}
                       onChange={updateLineDraft}
+                      onProductSearch={requestProductSearch}
+                      onProductSelect={selectProduct}
+                      productOptions={productOptions}
+                      productSearchLoading={productSearchLoading}
+                      productSearchError={productSearchError}
                       packageTypeOptions={packageTypeOptions}
                       packageTypesLoading={packageTypesLoading}
                       packageTypesError={packageTypesError}
                     />
                   ) : (
                     <>
+                      <td>{line.description}</td>
                       <td>{line.units}</td>
                       <td>{line.packageType}</td>
                       <td>{line.weight ? `${line.weight}lbs` : ""}</td>
                       <td>{displayDimensions(line)}</td>
                       <td>{line.freightClass}</td>
                       <td>{line.nmfc}</td>
-                      <td>{line.description}</td>
                     </>
                   )}
                   <td className='shipment-load-actions'>
@@ -520,7 +794,7 @@ function LoadTab({
                           icon={<CloseOutlined />}
                           aria-label='Cancel load line editing'
                           title='Cancel'
-                          onClick={() => setLineEditor(null)}
+                          onClick={cancelLineEditing}
                         />
                       </>
                     ) : (
@@ -563,6 +837,11 @@ function LoadTab({
                 <LoadLineInputs
                   line={lineEditorLine ?? lineEditor.line}
                   onChange={updateLineDraft}
+                  onProductSearch={requestProductSearch}
+                  onProductSelect={selectProduct}
+                  productOptions={productOptions}
+                  productSearchLoading={productSearchLoading}
+                  productSearchError={productSearchError}
                   packageTypeOptions={packageTypeOptions}
                   packageTypesLoading={packageTypesLoading}
                   packageTypesError={packageTypesError}
@@ -593,7 +872,7 @@ function LoadTab({
                       icon={<CloseOutlined />}
                       aria-label='Cancel new load line'
                       title='Cancel'
-                      onClick={() => setLineEditor(null)}
+                      onClick={cancelLineEditing}
                     />
                   </>
                 ) : (
@@ -623,104 +902,112 @@ function LoadTab({
         </Button>
       </div>
 
-      <article className='shipment-load-accessorials'>
-        <header>
-          <h2>Accessorials</h2>
-          <div className='shipment-load-accessorial-actions'>
-            {accessorialDraft ? (
-              <>
-                <Button
-                  type='text'
-                  size='small'
-                  icon={<CheckOutlined />}
-                  aria-label='Save accessorials'
-                  title='Save'
-                  disabled={accessorialSaveDisabled}
-                  onClick={saveAccessorials}
-                />
-                <Button
-                  type='text'
-                  size='small'
-                  icon={<CloseOutlined />}
-                  aria-label='Cancel accessorial editing'
-                  title='Cancel'
-                  onClick={() => setAccessorialDraft(null)}
-                />
-              </>
-            ) : (
-              <Button
-                type='text'
-                size='small'
-                icon={<EditOutlined />}
-                aria-label='Edit accessorials'
-                title='Edit accessorials'
-                onClick={beginAccessorialEdit}
-              />
-            )}
-          </div>
-        </header>
-
-        <div className='shipment-load-accessorial-list'>
-          {!accessorials.length && !accessorialDraft ? (
-            <span>No accessorials were returned.</span>
-          ) : null}
-          {accessorialDraft
-            ? accessorialDraft.map((accessorial, index) => (
-              <div className='shipment-load-accessorial-edit-row' key={index}>
-                <AutoComplete<string, AccessorialOption>
-                  value={accessorial.value}
-                  aria-label={`Accessorial ${index + 1}`}
-                  options={createAccessorialOptions(accessorial.value)}
-                  filterOption={false}
-                  defaultActiveFirstOption
-                  notFoundContent={
-                    accessorialsError ||
-                    (accessorialsLoading
-                      ? "Loading accessorials..."
-                      : "No accessorials found")
-                  }
-                  onChange={(value) => updateAccessorial(index, value)}
-                  onSearch={requestAccessorialLookup}
-                  onSelect={(value) => selectAccessorial(index, value)}
-                />
-                <Popconfirm
-                  title='Delete accessorial?'
-                  description='This removes the accessorial from the draft.'
-                  okText='Delete'
-                  cancelText='Cancel'
-                  okButtonProps={{ danger: true }}
-                  onConfirm={() => deleteAccessorial(index)}>
+      <div className='shipment-load-support-grid'>
+        <article className='shipment-load-accessorials'>
+          <header>
+            <h2>Accessorials</h2>
+            <div className='shipment-load-accessorial-actions'>
+              {accessorialDraft ? (
+                <>
                   <Button
                     type='text'
                     size='small'
-                    danger
-                    icon={<DeleteOutlined />}
-                    aria-label={`Delete accessorial ${index + 1}`}
-                    title='Delete accessorial'
+                    icon={<CheckOutlined />}
+                    aria-label='Save accessorials'
+                    title='Save'
+                    disabled={accessorialSaveDisabled}
+                    onClick={saveAccessorials}
                   />
-                </Popconfirm>
-              </div>
-            ))
-            : accessorials.map((accessorial, index) => (
-              <div className='shipment-detail-field' key={index}>
-                <span>{`Accessorial ${index + 1}`}</span>
-                <strong>{accessorial}</strong>
-              </div>
-            ))}
-        </div>
+                  <Button
+                    type='text'
+                    size='small'
+                    icon={<CloseOutlined />}
+                    aria-label='Cancel accessorial editing'
+                    title='Cancel'
+                    onClick={() => setAccessorialDraft(null)}
+                  />
+                </>
+              ) : (
+                <Button
+                  type='text'
+                  size='small'
+                  icon={<EditOutlined />}
+                  aria-label='Edit accessorials'
+                  title='Edit accessorials'
+                  onClick={beginAccessorialEdit}
+                />
+              )}
+            </div>
+          </header>
 
-        {accessorialDraft ? (
-          <div className='shipment-load-accessorial-add-line'>
-            <Button
-              type='text'
-              icon={<PlusOutlined />}
-              aria-label='Add accessorial line'
-              onClick={addAccessorial}>
-              Add Line
-            </Button>
+          <div className='shipment-load-accessorial-list'>
+            {!accessorials.length && !accessorialDraft ? (
+              <span>No accessorials were returned.</span>
+            ) : null}
+            {accessorialDraft
+              ? accessorialDraft.map((accessorial, index) => (
+                <div className='shipment-load-accessorial-edit-row' key={index}>
+                  <AutoComplete<string, AccessorialOption>
+                    value={accessorial.value}
+                    aria-label={`Accessorial ${index + 1}`}
+                    options={createAccessorialOptions(accessorial.value)}
+                    filterOption={false}
+                    defaultActiveFirstOption
+                    notFoundContent={
+                      accessorialsError ||
+                      (accessorialsLoading
+                        ? "Loading accessorials..."
+                        : "No accessorials found")
+                    }
+                    onChange={(value) => updateAccessorial(index, value)}
+                    onSearch={requestAccessorialLookup}
+                    onSelect={(value) => selectAccessorial(index, value)}
+                  />
+                  <Popconfirm
+                    title='Delete accessorial?'
+                    description='This removes the accessorial from the draft.'
+                    okText='Delete'
+                    cancelText='Cancel'
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => deleteAccessorial(index)}>
+                    <Button
+                      type='text'
+                      size='small'
+                      danger
+                      icon={<DeleteOutlined />}
+                      aria-label={`Delete accessorial ${index + 1}`}
+                      title='Delete accessorial'
+                    />
+                  </Popconfirm>
+                </div>
+              ))
+              : accessorials.map((accessorial, index) => (
+                <div className='shipment-detail-field' key={index}>
+                  <span>{`Accessorial ${index + 1}`}</span>
+                  <strong>{accessorial}</strong>
+                </div>
+              ))}
           </div>
-        ) : null}
-      </article>
+
+          {accessorialDraft ? (
+            <div className='shipment-load-accessorial-add-line'>
+              <Button
+                type='text'
+                icon={<PlusOutlined />}
+                aria-label='Add accessorial line'
+                onClick={addAccessorial}>
+                Add Line
+              </Button>
+            </div>
+          ) : null}
+        </article>
+
+        <LoadInternalNotes
+          initialNotes={shipment.bolDispatchNotes}
+          onNoteAdded={() => onChangeCommitted()}
+          onEditorStateChange={setInternalNotesEditing}
+        />
+      </div>
     </section>
   );
 }

@@ -1,13 +1,22 @@
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { Alert, Button, Empty, Input, Spin, Tabs, Tag, Typography } from "antd";
+import {
+  Alert,
+  Button,
+  Empty,
+  Input,
+  Spin,
+  Tabs,
+  Tag,
+  Typography,
+} from "antd";
 import {
   GoogleMap,
   PolylineF,
   useLoadScript,
   type Libraries,
 } from "@react-google-maps/api";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import AdvancedMapMarker from "../lib/AdvancedMapMarker";
 import {
@@ -16,6 +25,7 @@ import {
   type RouteLocation,
 } from "../lib/googleRoutes";
 import AuditTab from "../components/shipmentdetail/Audit";
+import CarrierRateModal from "../components/New Shipment/CarrierRateModal";
 import ChargesTab from "../components/shipmentdetail/Charges";
 import DetailEditActions from "../components/shipmentdetail/DetailEditActions";
 import DetailsTab from "../components/shipmentdetail/Details";
@@ -30,9 +40,20 @@ import {
 import DocumentTab from "../components/shipmentdetail/Document";
 import LoadTab from "../components/shipmentdetail/LoadTab";
 import TrackingTab from "../components/shipmentdetail/Tracking";
+import {
+  createShipmentRerateLoadValues,
+  createShipmentRerateRequest,
+} from "../components/shipmentdetail/shipmentRerateRequest";
 import { fetchCarrierTracking } from "../store/carrierTrackingSlice";
+import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import { fetchShipmentByLoadNumber } from "../store/shipmentSlice";
+import {
+  clearShipmentRerate,
+  rerateShipment,
+  selectShipmentRerateRate,
+} from "../store/shipmentRerateSlice";
 import type { ShipmentDetails } from "../types/shipment.types";
+import type { CarrierRate } from "./Rate";
 
 const apiKeyPlaceholder = "PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE";
 const googleLibraries: Libraries = ["marker", "places", "routes"];
@@ -59,6 +80,22 @@ const initialTabEditingState: TabEditingState = {
   charges: false,
   tracking: false,
 };
+
+const RerateDetailFields = new Set<keyof ShipmentDetailEditValues>([
+  "pickupCityStateZip",
+  "deliveryCityStateZip",
+  "schedulePickupDate",
+]);
+
+function displayRerateDate(value: string | null) {
+  const normalizedValue = value?.trim();
+
+  if (!normalizedValue || normalizedValue.startsWith("0001-01-01")) {
+    return "N/A";
+  }
+
+  return normalizedValue;
+}
 
 function DetailField({
   label,
@@ -353,6 +390,26 @@ function ShipmentRouteMap({ shipment }: { shipment: ShipmentDetails }) {
 
 function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const location = useLocation();
+  const [isResolvingRatingProfile, setIsResolvingRatingProfile] = useState(false);
+  const ratingLookupRequest = useRef<{ abort: () => void } | null>(null);
+  const rerateInProgress = useRef(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      ratingLookupRequest.current?.abort();
+      ratingLookupRequest.current = null;
+    };
+  }, []);
+  const rerateState = useAppSelector((state) => state.shipmentRerate);
+  const rerateRates = rerateState?.rates;
+  const reratedRate = rerateState?.rate ?? null;
+  const rerateLoading = rerateState?.loading ?? false;
+  const rerateError = rerateState?.error ?? null;
   const [activeTab, setActiveTab] = useState("Details");
   const initialDetailValues = createShipmentDetailEditValues(shipment);
   const [savedDetailValues, setSavedDetailValues] =
@@ -362,6 +419,15 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   const [activeDetailEditor, setActiveDetailEditor] =
     useState<ShipmentDetailEditSection | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [hasPendingRerateChanges, setHasPendingRerateChanges] = useState(false);
+  const [needsRerating, setNeedsRerating] = useState(false);
+  const [isRerateModalOpen, setIsRerateModalOpen] = useState(false);
+  const [rerateValidationError, setRerateValidationError] = useState<
+    string | null
+  >(null);
+  const [rerateLoadValues, setRerateLoadValues] = useState(() =>
+    createShipmentRerateLoadValues(shipment),
+  );
   const [tabEditingState, setTabEditingState] = useState<TabEditingState>(
     initialTabEditingState,
   );
@@ -376,9 +442,35 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
     isReferenceEditing ? draftDetailValues : savedDetailValues;
   const hasOpenInlineEditor =
     activeDetailEditor !== null || Object.values(tabEditingState).some(Boolean);
+  const rerateModalRates = useMemo<CarrierRate[]>(
+    () =>
+      (rerateRates ?? []).map((rate) => ({
+        id: rate.id,
+        name: rate.carrierName,
+        code: rate.scac ?? "",
+        service: rate.rateType,
+        price: rate.totalShipmentCost,
+        transitDays: rate.transitDays,
+        estimatedDelivery: displayRerateDate(rate.deliveryDate),
+        logoKind: "image",
+        warning: rate.errorMessage ?? "",
+        quoteExpiry: displayRerateDate(rate.quoteExpirationDate),
+        liabilityNew: "",
+        liabilityUsed: "",
+        grossCharge: rate.grossCharge,
+        discount: rate.discount,
+        fuelSurcharge: rate.fuelSurcharge,
+        accessorialCharges: rate.accessorialCharges,
+      })),
+    [rerateRates],
+  );
 
-  const markChangesPending = useCallback(() => {
+  const markChangesPending = useCallback((requiresRerate = false) => {
     setHasUnsavedChanges(true);
+
+    if (requiresRerate) {
+      setHasPendingRerateChanges(true);
+    }
   }, []);
 
   const updateTabEditingState = useCallback(
@@ -421,13 +513,17 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   };
 
   const saveDetailsEditing = () => {
-    const hasChanges = (
+    const changedFields = (
       Object.keys(draftDetailValues) as Array<keyof ShipmentDetailEditValues>
-    ).some((field) => draftDetailValues[field] !== savedDetailValues[field]);
+    ).filter((field) => draftDetailValues[field] !== savedDetailValues[field]);
 
     setSavedDetailValues({ ...draftDetailValues });
     setActiveDetailEditor(null);
-    if (hasChanges) markChangesPending();
+    if (changedFields.length > 0) {
+      markChangesPending(
+        changedFields.some((field) => RerateDetailFields.has(field)),
+      );
+    }
   };
 
   const cancelDetailsEditing = () => {
@@ -437,11 +533,92 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
 
   const savePendingChanges = () => {
     setHasUnsavedChanges(false);
+
+    if (hasPendingRerateChanges) {
+      setNeedsRerating(true);
+      setHasPendingRerateChanges(false);
+    }
   };
 
   const cancelPendingChanges = () => {
     navigate("/shipments");
   };
+
+  const handleRerate = async () => {
+    if (rerateInProgress.current) return;
+    rerateInProgress.current = true;
+    setIsResolvingRatingProfile(true);
+    setRerateValidationError(null);
+
+    try {
+      const shipmentContext: unknown = location.state;
+      const hasMatchingRowContext = shipmentContext !== null
+        && typeof shipmentContext === "object"
+        && "loadNumber" in shipmentContext
+        && shipmentContext.loadNumber === shipment.loadNumber
+        && "clientCode" in shipmentContext;
+      const clientCode = hasMatchingRowContext
+        ? (typeof shipmentContext.clientCode === "string" ? shipmentContext.clientCode.trim() : "")
+        : shipment.clientCode?.trim() || "";
+      if (!clientCode) {
+        throw new Error("A shipment client code is required to re-rate the shipment.");
+      }
+
+      const request = dispatch(fetchClientsAndSubclients(clientCode));
+      ratingLookupRequest.current = request;
+      const clients = await request.unwrap();
+      if (!isMounted.current || ratingLookupRequest.current !== request) return;
+      ratingLookupRequest.current = null;
+      const matchingClient = clients.find((client) => client.clientCode.trim() === clientCode);
+      const ratingClientCode = matchingClient?.ratingClientCode?.trim();
+      const ratingProfileCode = matchingClient?.ratingProfileCode?.trim();
+      if (!ratingClientCode || !ratingProfileCode) {
+        throw new Error(`Rating client and profile codes are unavailable for client ${clientCode}.`);
+      }
+
+      const payload = createShipmentRerateRequest({
+        shipment: { ...shipment, clientCode },
+        detailValues: savedDetailValues,
+        loadValues: rerateLoadValues,
+        ratingClientCode,
+        ratingProfileCode,
+      });
+      const result = await dispatch(rerateShipment(payload));
+
+      if (isMounted.current && rerateShipment.fulfilled.match(result)) {
+        setIsRerateModalOpen(true);
+      }
+    } catch (error: unknown) {
+      if (!isMounted.current) return;
+      setRerateValidationError(
+        error instanceof Error ? error.message
+          : typeof error === "string" ? error
+          : "Unable to prepare the shipment for re-rating.",
+      );
+    } finally {
+      rerateInProgress.current = false;
+      ratingLookupRequest.current = null;
+      if (isMounted.current) setIsResolvingRatingProfile(false);
+    }
+  };
+
+  const handleSelectRerateRate = (selectedRate: CarrierRate) => {
+    dispatch(selectShipmentRerateRate(selectedRate.id));
+    setIsRerateModalOpen(false);
+    setActiveTab("Charges");
+    setNeedsRerating(false);
+    setHasPendingRerateChanges(false);
+    setHasUnsavedChanges(true);
+  };
+
+  const rerateButton = (
+    <Button
+      loading={rerateLoading || isResolvingRatingProfile}
+      disabled={!needsRerating || rerateLoading || isResolvingRatingProfile}
+      onClick={handleRerate}>
+      Re-Rate
+    </Button>
+  );
 
   return (
     <section className='shipment-detail-page'>
@@ -450,13 +627,26 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
           ← All Shipments
         </button>
         <div className='shipment-detail-actions'>
+          {hasUnsavedChanges || needsRerating ? (
+            <div className='shipment-detail-status-messages'>
+              {hasUnsavedChanges ? (
+                <span
+                  className='shipment-detail-unsaved-message'
+                  role='status'>
+                  Screen has some unsaved data!!
+                </span>
+              ) : null}
+              {needsRerating ? (
+                <span
+                  className='shipment-detail-rerate-message'
+                  role='status'>
+                  Shipment Need to be re rated !
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           {hasUnsavedChanges ? (
             <>
-              <span
-                className='shipment-detail-unsaved-message'
-                role='status'>
-                Screen has some unsaved data!!
-              </span>
               <Button
                 type='primary'
                 disabled={hasOpenInlineEditor}
@@ -497,8 +687,31 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
         items={shipmentDetailTabs}
         animated={{ inkBar: true, tabPane: false }}
         aria-label='Shipment detail tabs'
+        tabBarExtraContent={{
+          right: rerateButton,
+        }}
         onChange={setActiveTab}
       />
+
+      <CarrierRateModal
+        open={isRerateModalOpen}
+        onClose={() => setIsRerateModalOpen(false)}
+        rates={rerateModalRates}
+        loading={rerateLoading}
+        error={rerateError}
+        onSelectRate={handleSelectRerateRate}
+        selectedRateId={reratedRate?.id}
+        actionLabel='Select'
+      />
+
+      {rerateValidationError || rerateError ? (
+        <Alert
+          type='error'
+          showIcon
+          title='Unable to re-rate shipment'
+          description={rerateValidationError || rerateError}
+        />
+      ) : null}
 
       <div className='shipment-detail-layout'>
         <aside className='shipment-detail-left'>
@@ -606,6 +819,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
               shipment={shipment}
               onChangeCommitted={markChangesPending}
               onEditorStateChange={handleLoadEditingStateChange}
+              onRateInputsChange={setRerateLoadValues}
             />
           </div>
           <div hidden={activeTab !== "Charges"}>
@@ -614,6 +828,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
               shipment={shipment}
               onChangeCommitted={markChangesPending}
               onEditorStateChange={handleChargesEditingStateChange}
+              reratedRate={reratedRate}
             />
           </div>
           <div hidden={activeTab !== "Tracking"}>
@@ -643,6 +858,7 @@ function ShipmentDetail() {
   useEffect(() => {
     if (!loadNumber) return;
 
+    dispatch(clearShipmentRerate());
     const shipmentRequest = dispatch(fetchShipmentByLoadNumber(loadNumber));
     const trackingRequest = dispatch(
       fetchCarrierTracking({ loadNumber }),

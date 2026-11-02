@@ -1,12 +1,11 @@
-import {
-  CheckOutlined,
-  CloseOutlined,
-  SettingOutlined,
-} from "@ant-design/icons";
-import { Alert, Button, Checkbox, DatePicker, Input, Select, Spin } from "antd";
+import { Alert, Button, Checkbox, DatePicker, Input, Select, Spin, TimePicker } from "antd";
+import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { fetchCarrierTracking } from "../../store/carrierTrackingSlice";
+import { fetchShipmentTrackingNotification, saveShipmentTrackingNotification } from "../../store/shipmentTrackingNotificationSlice";
+import { fetchShipmentTrackingReminder, saveShipmentTrackingReminder } from "../../store/shipmentTrackingReminderSlice";
+import { getReminderValidationError, toReminderDraft, toReminderPayload, type ReminderDraft } from "./trackingReminderForm";
 import type { ShipmentDetails } from "../../types/shipment.types";
 
 type NotificationMethod = "Email";
@@ -14,18 +13,10 @@ type NotificationMethod = "Email";
 type NotificationPreferences = {
   methods: NotificationMethod[];
   email: string;
-  event: string;
-};
-
-type ReminderDraft = {
-  user: string;
-  dateRange: [string, string] | null;
-  time: string;
-  timezone: string;
-};
-
-type TrackingReminder = ReminderDraft & {
-  id: string;
+  isNotifyOnPickupRequest: boolean;
+  isNotifyOnInTransit: boolean;
+  isNotifyOnOutForDelivery: boolean;
+  isNotifyOnDelivered: boolean;
 };
 
 type TrackingProps = {
@@ -37,20 +28,11 @@ type TrackingProps = {
 const initialNotifications: NotificationPreferences = {
   methods: [],
   email: "",
-  event: "",
+  isNotifyOnPickupRequest: false,
+  isNotifyOnInTransit: false,
+  isNotifyOnOutForDelivery: false,
+  isNotifyOnDelivered: false,
 };
-
-function notificationPreferencesAreEqual(
-  first: NotificationPreferences,
-  second: NotificationPreferences,
-) {
-  return (
-    first.email === second.email &&
-    first.event === second.event &&
-    first.methods.length === second.methods.length &&
-    first.methods.every((method, index) => method === second.methods[index])
-  );
-}
 
 function formatTrackingDate(value: string) {
   const parsedDate = new Date(value);
@@ -63,28 +45,71 @@ function formatTrackingDate(value: string) {
   ].join(" ");
 }
 
-function Tracking({
-  shipment,
-  onChangeCommitted,
-  onEditorStateChange,
-}: TrackingProps) {
+function Tracking({ shipment, onEditorStateChange }: TrackingProps) {
   const dispatch = useAppDispatch();
   const { data, loading, error, requestedLoadNumber, loadedLoadNumber } =
     useAppSelector((state) => state.carrierTracking);
-  const [notifications, setNotifications] =
-    useState<NotificationPreferences>(initialNotifications);
-  const [notificationDraft, setNotificationDraft] =
-    useState<NotificationPreferences | null>(null);
-  const [reminderDraft, setReminderDraft] = useState<ReminderDraft>(() => ({
-    user: shipment.userName ?? "",
-    dateRange: null,
-    time: "",
-    timezone: "CT",
-  }));
-  const [reminders, setReminders] = useState<TrackingReminder[]>([]);
-  const [reminderError, setReminderError] = useState("");
-  const [datePickerKey, setDatePickerKey] = useState(0);
-  const [notificationInput, setNotificationInput] = useState("");
+  const notificationState = useAppSelector((state) => state.shipmentTrackingNotification);
+  const bolNo = shipment.loadNumber.trim();
+  const notificationLoading = notificationState.loading && notificationState.requestedBolNo === bolNo;
+  const notificationError = notificationState.requestedBolNo === bolNo ? notificationState.error : null;
+  const preferences = notificationState.loadedBolNo === bolNo ? notificationState.data : null;
+  const notificationSaving = notificationState.saving && notificationState.saveBolNo === bolNo;
+  const notificationLookupReady = notificationState.loadedBolNo === bolNo && !notificationLoading && !notificationError;
+  const [notificationValidation, setNotificationValidation] = useState<{ bolNo: string; message: string } | null>(null);
+  const notificationSaveRequestRef = useRef<{ requestId: string } | null>(null);
+  const notificationInput = (preferences?.email ?? "")
+    .split(",")
+    .map((address) => address.trim())
+    .filter(Boolean)
+    .join(",");
+  const notifications: NotificationPreferences = preferences ? {
+    methods: notificationInput ? ["Email"] : [],
+    email: notificationInput,
+    isNotifyOnPickupRequest: preferences.isNotifyOnPickupRequest === true,
+    isNotifyOnInTransit: preferences.isNotifyOnInTransit === true,
+    isNotifyOnOutForDelivery: preferences.isNotifyOnOutForDelivery === true,
+    isNotifyOnDelivered: preferences.isNotifyOnDelivered === true,
+  } : initialNotifications;
+  const [notificationDraft, setNotificationDraft] = useState<{
+    bolNo: string;
+    values: Partial<NotificationPreferences>;
+  } | null>(null);
+  const displayedNotifications = {
+    ...notifications,
+    ...(notificationDraft?.bolNo === bolNo ? notificationDraft.values : {}),
+  };
+
+  /** Updates the current shipment draft before explicit persistence. */
+  const updateNotificationDraft = (changes: Partial<NotificationPreferences>) => {
+    setNotificationValidation(null);
+    setNotificationDraft((current) => ({
+      bolNo,
+      values: {
+        ...(current?.bolNo === bolNo ? current.values : {}),
+        ...changes,
+      },
+    }));
+  };
+
+  const [notificationRetry, setNotificationRetry] = useState(0);
+  const reminderState = useAppSelector((state) => state.shipmentTrackingReminder);
+  const savedReminder = reminderState.loadedBolNo === bolNo ? reminderState.data : null;
+  const reminderLoading = reminderState.loading && reminderState.requestedBolNo === bolNo;
+  const reminderSaving = reminderState.saving && reminderState.saveBolNo === bolNo;
+  const reminderLookupError = reminderState.requestedBolNo === bolNo ? reminderState.error : null;
+  const reminderLookupReady = reminderState.loadedBolNo === bolNo && !reminderLoading && !reminderLookupError;
+  const [reminderDraft, setReminderDraft] = useState<{ bolNo: string; values: ReminderDraft } | null>(null);
+  const displayedReminderDraft = reminderDraft?.bolNo === bolNo ? reminderDraft.values : toReminderDraft(savedReminder);
+  const [reminderError, setReminderError] = useState<{ bolNo: string; message: string } | null>(null);
+  const [reminderRetry, setReminderRetry] = useState(0);
+  const reminderSaveRequestRef = useRef<{ requestId: string } | null>(null);
+
+  /** Updates the current shipment's reminder draft before explicit persistence. */
+  const updateReminderDraft = (changes: Partial<ReminderDraft>) => {
+    setReminderError(null);
+    setReminderDraft({ bolNo, values: { ...displayedReminderDraft, ...changes } });
+  };
   const activeRequestRef = useRef<{ abort: () => void } | null>(null);
 
   const trackingData = loadedLoadNumber === shipment.loadNumber ? data : null;
@@ -127,55 +152,78 @@ function Tracking({
   );
 
   useEffect(() => {
-    onEditorStateChange(notificationDraft !== null);
-  }, [notificationDraft, onEditorStateChange]);
+    onEditorStateChange(false);
+  }, [onEditorStateChange]);
 
-  const toggleNotificationMethod = (
-    method: NotificationMethod,
-    checked: boolean,
-  ) => {
-    const updateMethods = (current: NotificationPreferences) => ({
-      ...current,
-      methods: checked
-        ? Array.from(new Set([...current.methods, method]))
-        : current.methods.filter((value) => value !== method),
-    });
+  useEffect(() => {
+    const request = dispatch(fetchShipmentTrackingNotification(shipment.loadNumber));
+    return () => request.abort();
+  }, [dispatch, shipment.loadNumber, notificationRetry]);
 
-    if (notificationDraft) {
-      setNotificationDraft(updateMethods(notificationDraft));
-    } else {
-      setNotifications(updateMethods);
-    }
-  };
+  useEffect(() => {
+    return () => { notificationSaveRequestRef.current = null; };
+  }, [bolNo]);
 
-  const saveNotificationSettings = () => {
-    if (!notificationDraft) return;
-    const hasChanges = !notificationPreferencesAreEqual(
-      notificationDraft,
-      notifications,
-    );
-
-    setNotifications(notificationDraft);
-    setNotificationDraft(null);
-    if (hasChanges) onChangeCommitted();
-  };
-
-  const createReminder = () => {
-    if (!reminderDraft.dateRange) {
-      setReminderError("Select a start and end date for the reminder.");
+  /** Validates recipients and persists the current shipment's complete notification snapshot. */
+  const saveNotificationSettings = async () => {
+    if (!notificationLookupReady || notificationSaving || notificationSaveRequestRef.current) return;
+    const emailAddresses = displayedNotifications.email.split(",").map((email) => email.trim());
+    const message = !displayedNotifications.methods.includes("Email")
+      ? "Select the Email notification method."
+      : !displayedNotifications.email.trim()
+        ? "Enter at least one notification email."
+        : emailAddresses.some((email) => !/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(email))
+          ? "Enter valid email addresses separated by commas."
+          : null;
+    if (message) {
+      setNotificationValidation({ bolNo, message });
       return;
     }
+    setNotificationValidation(null);
+    const request = dispatch(saveShipmentTrackingNotification({
+      shipmentTrackingNotificationId: preferences?.shipmentTrackingNotificationId ?? 0,
+      bolNo,
+      email: emailAddresses.join(","),
+      isNotifyOnPickupRequest: displayedNotifications.isNotifyOnPickupRequest,
+      isNotifyOnInTransit: displayedNotifications.isNotifyOnInTransit,
+      isNotifyOnOutForDelivery: displayedNotifications.isNotifyOnOutForDelivery,
+      isNotifyOnDelivered: displayedNotifications.isNotifyOnDelivered,
+    }));
+    notificationSaveRequestRef.current = request;
+    const result = await request;
+    if (notificationSaveRequestRef.current !== request) return;
+    notificationSaveRequestRef.current = null;
+    if (saveShipmentTrackingNotification.fulfilled.match(result)) {
+      setNotificationDraft(null);
+    }
+  };
 
-    setReminders((current) => [
-      ...current,
-      {
-        ...reminderDraft,
-        id: `reminder-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      },
-    ]);
-    setReminderDraft((current) => ({ ...current, dateRange: null }));
-    setReminderError("");
-    setDatePickerKey((current) => current + 1);
+  useEffect(() => {
+    const request = dispatch(fetchShipmentTrackingReminder(shipment.loadNumber));
+    return () => request.abort();
+  }, [dispatch, shipment.loadNumber, reminderRetry]);
+
+  useEffect(() => {
+    return () => { reminderSaveRequestRef.current = null; };
+  }, [bolNo]);
+
+  /** Validates and creates or replaces the reminder using its persisted identifier. */
+  const createReminder = async () => {
+    if (!reminderLookupReady || reminderSaving || reminderSaveRequestRef.current) return;
+    const message = getReminderValidationError(displayedReminderDraft);
+    if (message) {
+      setReminderError({ bolNo, message });
+      return;
+    }
+    setReminderError(null);
+    const request = dispatch(saveShipmentTrackingReminder(toReminderPayload(
+      displayedReminderDraft, bolNo, savedReminder?.shipmentTrackingReminderId ?? 0,
+    )));
+    reminderSaveRequestRef.current = request;
+    const result = await request;
+    if (reminderSaveRequestRef.current !== request) return;
+    reminderSaveRequestRef.current = null;
+    if (saveShipmentTrackingReminder.fulfilled.match(result)) setReminderDraft(null);
   };
 
   return (
@@ -186,198 +234,152 @@ function Tracking({
         <article className='shipment-tracking-card shipment-notification-card'>
           <header>
             <h2>Notifications method</h2>
-            <div className='shipment-tracking-card-actions'>
-              {notificationDraft ? (
-                <>
-                  <Button
-                    type='text'
-                    size='small'
-                    icon={<CheckOutlined />}
-                    aria-label='Save notification settings'
-                    title='Save'
-                    onClick={saveNotificationSettings}
-                  />
-                  <Button
-                    type='text'
-                    size='small'
-                    icon={<CloseOutlined />}
-                    aria-label='Cancel notification editing'
-                    title='Cancel'
-                    onClick={() => setNotificationDraft(null)}
-                  />
-                </>
-              ) : (
-                <Button
-                  type='text'
-                  size='small'
-                  icon={<SettingOutlined />}
-                  aria-label='Edit notification settings'
-                  title='Edit notification settings'
-                  onClick={() => setNotificationDraft({ ...notifications })}
-                />
-              )}
-            </div>
           </header>
-
-          <div className='shipment-notification-methods'>
+          {notificationLoading ? (
+            <div role="status" aria-live="polite">
+              <Spin size="small" /> Loading notification preferences...
+            </div>
+          ) : null}
+          {notificationError ? (
+            <Alert
+              type="error"
+              showIcon
+              title="Unable to load notification preferences"
+              description={notificationError}
+              action={
+                <Button
+                  size="small"
+                  onClick={() => setNotificationRetry((current) => current + 1)}>
+                  Retry
+                </Button>
+              }
+            />
+          ) : null}
+          <div className="shipment-notification-methods">
             <Checkbox
-              checked={(notificationDraft ?? notifications).methods.includes(
-                "Email",
-              )}
-              onChange={(event) =>
-                toggleNotificationMethod("Email", event.target.checked)
-              }>
+              disabled={notificationSaving}
+              checked={displayedNotifications.methods.includes("Email")}
+              onChange={(event) => updateNotificationDraft({
+                methods: event.target.checked ? ["Email"] : [],
+              })}>
               Email
             </Checkbox>
           </div>
-
-          <div className='shipment-notification-email'>
+          <div className="shipment-notification-email">
             <span>Email</span>
             <Input
-              value={notificationInput}
-              aria-label='Additional notification email'
-              onChange={(event) => setNotificationInput(event.target.value)}
+              value={displayedNotifications.email}
+              aria-label="Notification emails"
+              onChange={(event) => updateNotificationDraft({ email: event.target.value })}
+              disabled={notificationSaving}
             />
-            <strong>{(notificationDraft ?? notifications).email}</strong>
           </div>
-
-          {notificationDraft ? (
-            <div className='shipment-notification-edit-fields'>
-              <label>
-                <span>Email</span>
-                <Input
-                  type='email'
-                  value={notificationDraft.email}
-                  onChange={(event) =>
-                    setNotificationDraft((current) =>
-                      current
-                        ? { ...current, email: event.target.value }
-                        : current,
-                    )
-                  }
-                />
-              </label>
-              <label>
-                <span>Notification event</span>
-                <Select
-                  value={notificationDraft.event}
-                  options={[
-                    { value: "Shipment tendered", label: "Shipment tendered" },
-                    { value: "Shipment departed", label: "Shipment departed" },
-                    {
-                      value: "Shipment delivered",
-                      label: "Shipment delivered",
-                    },
-                  ]}
-                  onChange={(event) =>
-                    setNotificationDraft((current) =>
-                      current ? { ...current, event } : current,
-                    )
-                  }
-                />
-              </label>
-            </div>
-          ) : (
-            <p className='shipment-notification-rule'>
-              Email {notifications.email} when:
-              <strong>
-                <CheckOutlined /> {notifications.event}
-              </strong>
-            </p>
-          )}
+          <div className="shipment-notification-events">
+            <Checkbox
+              disabled={notificationSaving}
+              checked={displayedNotifications.isNotifyOnPickupRequest}
+              onChange={(event) => updateNotificationDraft({
+                isNotifyOnPickupRequest: event.target.checked,
+              })}>
+              PickupRequest
+            </Checkbox>
+            <Checkbox
+              disabled={notificationSaving}
+              checked={displayedNotifications.isNotifyOnInTransit}
+              onChange={(event) => updateNotificationDraft({
+                isNotifyOnInTransit: event.target.checked,
+              })}>
+              InTransit
+            </Checkbox>
+            <Checkbox
+              disabled={notificationSaving}
+              checked={displayedNotifications.isNotifyOnOutForDelivery}
+              onChange={(event) => updateNotificationDraft({
+                isNotifyOnOutForDelivery: event.target.checked,
+              })}>
+              OutForDelivery
+            </Checkbox>
+            <Checkbox
+              disabled={notificationSaving}
+              checked={displayedNotifications.isNotifyOnDelivered}
+              onChange={(event) => updateNotificationDraft({
+                isNotifyOnDelivered: event.target.checked,
+              })}>
+              Delivered
+            </Checkbox>
+          </div>
+          {notificationValidation?.bolNo === bolNo ? <p role="alert">{notificationValidation.message}</p> : null}
+          {notificationState.saveBolNo === bolNo && notificationState.saveError ? (
+            <Alert type="error" showIcon title="Unable to save notification preferences" description={notificationState.saveError} />
+          ) : null}
+          {notificationState.saveBolNo === bolNo && notificationState.saveSuccess && notificationDraft?.bolNo !== bolNo ? (
+            <p role="status">{notificationState.saveSuccess}</p>
+          ) : null}
+          <div className="shipment-notification-create">
+            <Button
+              loading={notificationSaving}
+              disabled={!notificationLookupReady || notificationSaving}
+              onClick={saveNotificationSettings}>
+              {preferences ? "Update Notification" : "Create Notification"}
+            </Button>
+          </div>
         </article>
 
         <article className='shipment-tracking-card shipment-reminder-form-card'>
           <h2>Tracking Reminder</h2>
+          {reminderLoading ? <div role="status"><Spin size="small" /> Loading tracking reminder...</div> : null}
+          {reminderLookupError ? <Alert type="error" showIcon title="Unable to load tracking reminder" description={reminderLookupError}
+            action={<Button onClick={() => setReminderRetry((current) => current + 1)}>Retry reminder</Button>} /> : null}
           <label className='shipment-reminder-user-field'>
             <span>Send To User</span>
-            <Input
-              value={reminderDraft.user}
-              onChange={(event) =>
-                setReminderDraft((current) => ({
-                  ...current,
-                  user: event.target.value,
-                }))
-              }
-            />
+            <Input value={displayedReminderDraft.user} aria-label="Reminder emails" disabled={reminderSaving}
+              placeholder="first@example.com,second@example.com"
+              aria-describedby="reminder-email-help"
+              onChange={(event) => updateReminderDraft({ user: event.target.value })} />
+            <span id="reminder-email-help">Separate multiple email addresses with commas.</span>
           </label>
           <div className='shipment-reminder-fields'>
             <label>
               <span>Date</span>
               <DatePicker.RangePicker
-                key={datePickerKey}
                 format='MM/DD/YYYY'
                 aria-label='Reminder date range'
-                onChange={(_, dateStrings) => {
-                  const start = dateStrings[0];
-                  const end = dateStrings[1];
-                  setReminderDraft((current) => ({
-                    ...current,
-                    dateRange: start && end ? [start, end] : null,
-                  }));
-                  if (start && end) setReminderError("");
-                }}
+                aria-labels={{ start: "Reminder start date", end: "Reminder end date" }}
+                disabled={reminderSaving}
+                value={displayedReminderDraft.dateRange ? [dayjs(displayedReminderDraft.dateRange[0]), dayjs(displayedReminderDraft.dateRange[1])] : null}
+                onChange={(dates) => updateReminderDraft({ dateRange: dates?.[0] && dates[1] ? [dates[0].format("YYYY-MM-DD"), dates[1].format("YYYY-MM-DD")] : null })}
               />
             </label>
             <label>
               <span>Reminder Time</span>
-              <Input
-                type='time'
-                value={reminderDraft.time}
-                onChange={(event) =>
-                  setReminderDraft((current) => ({
-                    ...current,
-                    time: event.target.value,
-                  }))
-                }
+              <TimePicker
+                aria-label="Reminder time"
+                use12Hours
+                format="hh:mm A"
+                needConfirm={false}
+                placeholder="Select time"
+                value={displayedReminderDraft.time ? dayjs(`2000-01-01T${displayedReminderDraft.time}:00`) : null}
+                disabled={reminderSaving}
+                onChange={(time) => updateReminderDraft({ time: time?.format("HH:mm") ?? "" })}
               />
             </label>
             <label>
               <span>Timezone</span>
-              <Select
-                value={reminderDraft.timezone}
-                options={["CT", "ET", "MT", "PT"].map((timezone) => ({
-                  value: timezone,
-                  label: timezone,
-                }))}
-                onChange={(timezone) =>
-                  setReminderDraft((current) => ({ ...current, timezone }))
-                }
-              />
+              <Select aria-label="Reminder timezone" value={displayedReminderDraft.timezone} disabled={reminderSaving}
+                options={["CT", "ET", "MT", "PT"].map((timezone) => ({ value: timezone, label: timezone }))}
+                onChange={(timezone) => updateReminderDraft({ timezone })} />
             </label>
           </div>
-          {reminderError ? (
-            <p className='shipment-reminder-error' role='alert'>
-              {reminderError}
-            </p>
-          ) : null}
+          {reminderError?.bolNo === bolNo ? <p className='shipment-reminder-error' role='alert'>{reminderError.message}</p> : null}
+          {reminderState.saveBolNo === bolNo && reminderState.saveError ? <Alert type="error" showIcon title="Unable to save tracking reminder" description={reminderState.saveError} /> : null}
+          {reminderState.saveBolNo === bolNo && reminderState.saveSuccess && reminderDraft?.bolNo !== bolNo ? <p role="status">{reminderState.saveSuccess}</p> : null}
           <div className='shipment-reminder-create'>
-            <Button onClick={createReminder}>Create Reminder</Button>
+            <Button onClick={createReminder} loading={reminderSaving} disabled={!reminderLookupReady || reminderSaving}>
+              {savedReminder ? "Update Reminder" : "Create Reminder"}
+            </Button>
           </div>
         </article>
       </div>
-
-      <article className='shipment-tracking-card shipment-reminder-list-card'>
-        <h2>Tracking Reminder</h2>
-        {reminders.length ? (
-          <div className='shipment-reminder-list'>
-            {reminders.map((reminder) => (
-              <div key={reminder.id}>
-                <strong>{reminder.user}</strong>
-                <span>
-                  {reminder.dateRange?.join(" Ã¢â‚¬â€œ ")} Ã‚Â· {reminder.time}{" "}
-                  {reminder.timezone}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p>
-            <strong>No Tracking Reminders have been added yet.</strong>
-            <span>All the Tracking Reminders will be shown here.</span>
-          </p>
-        )}
-      </article>
 
       <section
         className='shipment-tracking-events'

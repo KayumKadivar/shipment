@@ -596,12 +596,12 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
           </Col>
         </Row>
         <Row gutter={[12, 12]} className="location-date-time-row">
-          <Col xs={24} md={8}>
+          <Col xs={24} md={10}>
             <Form.Item label="Exp. Delivery Date" name="expDeliveryDate" className="location-time-label">
               <Input placeholder="mm/dd/yyyy" />
             </Form.Item>
           </Col>
-          <Col xs={12} md={8}>
+          <Col xs={12} md={7}>
             <Form.Item label="From" name="openTime">
               <Select
                 className="location-time-select"
@@ -614,7 +614,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col xs={12} md={8}>
+          <Col xs={12} md={7}>
             <Form.Item label="To" name="closeTime">
               <Select
                 className="location-time-select"
@@ -629,12 +629,12 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
           </Col>
         </Row>
         <Row gutter={[12, 12]} className="location-date-time-row">
-          <Col xs={24} md={8}>
+          <Col xs={24} md={10}>
             <Form.Item label="Delivery Date" name="deliveryDate" className="location-time-label">
               <Input placeholder="mm/dd/yyyy" />
             </Form.Item>
           </Col>
-          <Col xs={12} md={8}>
+          <Col xs={12} md={7}>
             <Form.Item label="From" name="delOpenTime">
               <Select
                 className="location-time-select"
@@ -646,7 +646,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
               />
             </Form.Item>
           </Col>
-          <Col xs={12} md={8}>
+          <Col xs={12} md={7}>
             <Form.Item label="To" name="delCloseTime">
               <Select
                 className="location-time-select"

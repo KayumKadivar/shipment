@@ -1417,11 +1417,12 @@ body {
 
 .shipment-stats {
   display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 12px;
   margin-bottom: 16px;
 }
 .shipment-stat-card.ant-card {
+  min-width: 0;
   min-height: 100px;
   border: 1px solid #cccccf;
   border-radius: 6px;
@@ -1433,6 +1434,22 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.shipment-stat-card .stat-label {
+  align-items: flex-start;
+  overflow-wrap: anywhere;
+}
+.shipment-stat-card .stat-label i {
+  flex: 0 0 6px;
+  margin-top: 4px;
+}
+.shipment-status-counts-feedback {
+  margin-bottom: 12px;
+}
+.shipment-status-counts-feedback[role="status"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .stat-label {
   display: flex;
@@ -2313,11 +2330,136 @@ body {
   background: transparent;
 }
 
+.shipment-load-internal-notes.ant-card {
+  min-width: 0;
+  margin-top: 40px;
+  padding: 16px 20px 18px;
+  border: 0;
+  border-radius: 6px;
+  background: #f4f5f7;
+}
+.shipment-load-internal-notes .ant-card-head {
+  min-height: 0;
+  margin-bottom: 8px;
+  padding: 0;
+  border-bottom: 0;
+}
+.shipment-load-internal-notes .ant-card-head-wrapper {
+  gap: 12px;
+}
+.shipment-load-internal-notes .ant-card-body {
+  padding: 0;
+}
+.shipment-load-internal-notes h2 {
+  margin: 0;
+  color: #111;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-actions .ant-btn,
+.shipment-load-internal-notes .shipment-load-internal-notes-edit-row .ant-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-actions .ant-btn:not(:disabled) {
+  color: #888;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-actions .ant-btn:not(:disabled):hover {
+  color: #df2027;
+  background: #fff0f1;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-actions .ant-btn[aria-label^="Save"]:not(:disabled) {
+  color: #17864b;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-edit-row .ant-btn-dangerous:not(:disabled) {
+  color: #df2027;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-list,
+.shipment-load-internal-notes .shipment-load-internal-notes-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shipment-load-internal-notes .shipment-detail-field strong {
+  min-width: 0;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  background: #f4f5f7;
+  white-space: pre-wrap;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-empty {
+  margin: 0;
+  color: #777;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-edit-row .ant-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 25px;
+  font-size: 11px;
+}
+.shipment-load-internal-notes .ant-form {
+  margin-top: 16px;
+}
+.shipment-load-internal-notes .ant-form-item {
+  margin-bottom: 12px;
+}
+.shipment-load-internal-notes .ant-form-item-label > label {
+  color: #777;
+  font-size: 12px;
+}
+.shipment-load-internal-notes .ant-input {
+  border-color: #dde0e4;
+  border-radius: 4px;
+  color: #111;
+  background: #fff;
+  box-shadow: none;
+}
+.shipment-load-internal-notes .ant-input:focus,
+.shipment-load-internal-notes .ant-input:focus-within {
+  border-color: #df2027;
+  box-shadow: 0 0 0 2px rgba(223, 32, 39, 0.12);
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-input {
+  resize: vertical;
+  font-size: 12px;
+}
+.shipment-load-internal-notes .ant-input:disabled {
+  color: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.04);
+}
+.shipment-load-internal-notes .shipment-load-internal-notes-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
 @media (max-width: 768px) {
   .shipment-load-table {
     min-width: 760px;
   }
   .shipment-load-accessorials {
+    margin-top: 24px;
+    padding: 15px 16px;
+  }
+  .shipment-load-internal-notes.ant-card {
     margin-top: 24px;
     padding: 15px 16px;
   }
@@ -3777,7 +3919,7 @@ body {
 
 @media (max-width: 1180px) {
   .shipment-stats {
-    grid-template-columns: repeat(3, minmax(160px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
   .shipment-detail-layout {
@@ -5693,7 +5835,6 @@ body {
   grid-row: 1;
 }
 
-
 .rate-card__details dt,
 .rate-card__details dd {
   margin: 0;
@@ -5737,11 +5878,6 @@ body {
 .rate-carrier-list--grid .rate-detail-liability-used {
   grid-column: 1;
   grid-row: 3;
-}
-
-.rate-carrier-list--grid .rate-detail-charges-sell {
-  grid-column: 2;
-  grid-row: 2;
 }
 
 .rate-empty-state {
@@ -5806,11 +5942,6 @@ body {
   .rate-detail-liability-used {
     grid-column: 1;
     grid-row: 3;
-  }
-
-  .rate-detail-charges-sell {
-    grid-column: 2;
-    grid-row: 2;
   }
 }
 
@@ -6781,4 +6912,23 @@ body {
 .ant-select-dropdown .rc-virtual-list-holder {
   scrollbar-width: thin;
   scrollbar-color: #bfbfbf transparent;
-}
+}
+
+.shipment-notification-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.shipment-notification-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 15px 0;
+}
+
+.shipment-notification-create {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 12px;
+}

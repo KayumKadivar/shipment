@@ -16,14 +16,25 @@ import {
   message,
   Popconfirm,
 } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   fetchChargeAccessorials,
   type ChargeAccessorial,
 } from "../../store/chargeAccessorialsSlice";
+import type { ShipmentRerateRate } from "../../store/shipmentRerateSlice";
 import type { ShipmentDetails } from "../../types/shipment.types";
+import axios from "axios";
+import { API_BASE_URL } from "../../config/apiConfig";
+import ChargePricingControls from "./ChargePricingControls";
+import {
+  applyChargePricing,
+  calculateChargeMarkup,
+  chargePricingFromConfig,
+  defaultChargePricing,
+  type ChargePricingDraft,
+} from "./chargePricing";
 import { aggregateAccessorialCharges } from "./shipmentAccessorials";
 
 type ChargeLine = {
@@ -66,6 +77,7 @@ type ChargesProps = {
   shipment: ShipmentDetails;
   onChangeCommitted: () => void;
   onEditorStateChange: (isEditing: boolean) => void;
+  reratedRate?: ShipmentRerateRate | null;
 };
 
 const deductibleTiers = [
@@ -78,6 +90,10 @@ const deductibleTiers = [
 const DuplicateChargeDescriptionMessage = "Duplicate value not allowed";
 const DuplicateChargeDescriptionMessageKey =
   "duplicate-charge-description";
+const MissingBuyRateMessage = "Buy rate is required";
+const MissingSellRateMessage = "Sell rate is required";
+const MissingBuyAndSellRatesMessage = "Buy and sell rates are required";
+const MissingChargeRatesMessageKey = "missing-charge-rates";
 
 const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -135,8 +151,23 @@ function normalizeChargeLineCosts(line: ChargeLine) {
   };
 }
 
+function getMissingChargeRatesMessage(line: ChargeLine) {
+  if (line.buyCost === null && line.sellCost === null) {
+    return MissingBuyAndSellRatesMessage;
+  }
+
+  if (line.buyCost === null) return MissingBuyRateMessage;
+  if (line.sellCost === null) return MissingSellRateMessage;
+
+  return null;
+}
+
 function normalizeChargeDescription(description: string) {
   return description.trim().toLocaleLowerCase();
+}
+
+function isFreightCharge(line: ChargeLine) {
+  return normalizeChargeDescription(line.description) === "freight";
 }
 
 function isPriorityFuelCharge(line: ChargeLine) {
@@ -241,6 +272,92 @@ function createInitialCharges(shipment: ShipmentDetails): ChargesState {
   };
 }
 
+function normalizedChargeCode(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function mergeReratedChargeLines(
+  currentLines: ChargeLine[],
+  rate: ShipmentRerateRate,
+) {
+  const lines = [...currentLines];
+  const updateCoreLine = (
+    id: string,
+    code: string,
+    description: string,
+    buyCost: number,
+  ) => {
+    const index = lines.findIndex(
+      (line) =>
+        line.id === id || normalizedChargeCode(line.code) === code,
+    );
+
+    if (index >= 0) {
+      lines[index] = { ...lines[index], buyCost };
+      return;
+    }
+
+    lines.push({ id, code, description, buyCost, sellCost: null });
+  };
+
+  updateCoreLine("freight", "FRT", "Freight", rate.grossCharge);
+  updateCoreLine(
+    "discount",
+    "DSC",
+    "Discount",
+    normalizeDiscount(rate.discount) ?? 0,
+  );
+  updateCoreLine("fuel", "FSC", "Fuel surcharge", rate.fuelSurcharge);
+
+  const matchedLineIds = new Set<string>();
+  rate.accessorialCharges.forEach((charge, index) => {
+    const code = charge.accessorialCode.trim() || "ACC";
+    const description =
+      charge.accessorialDescription.trim() || "Accessorial";
+    const normalizedCode = normalizedChargeCode(code);
+    const normalizedDescription = normalizeChargeDescription(description);
+    const isAvailableAccessorial = (line: ChargeLine) =>
+      !matchedLineIds.has(line.id) &&
+      !["freight", "discount", "fuel"].includes(line.id);
+    let existingIndex = lines.findIndex(
+      (line) =>
+        isAvailableAccessorial(line) &&
+        normalizedChargeCode(line.code) === normalizedCode,
+    );
+
+    if (existingIndex < 0) {
+      existingIndex = lines.findIndex(
+        (line) =>
+          isAvailableAccessorial(line) &&
+          normalizeChargeDescription(line.description) ===
+            normalizedDescription,
+      );
+    }
+
+    if (existingIndex >= 0) {
+      const existingLine = lines[existingIndex];
+      lines[existingIndex] = {
+        ...existingLine,
+        buyCost: charge.accessorialCharge,
+      };
+      matchedLineIds.add(existingLine.id);
+      return;
+    }
+
+    const id = `rerate-accessorial-${index}-${normalizedCode}-${normalizedDescription}`;
+    lines.push({
+      id,
+      code,
+      description,
+      buyCost: charge.accessorialCharge,
+      sellCost: charge.accessorialCharge,
+    });
+    matchedLineIds.add(id);
+  });
+
+  return orderChargeLines(lines.map(normalizeDiscountChargeLine));
+}
+
 function createEmptyCharge(): ChargeLine {
   return {
     id: `charge-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -308,6 +425,7 @@ function Charges({
   shipment,
   onChangeCommitted,
   onEditorStateChange,
+  reratedRate,
 }: ChargesProps) {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -315,9 +433,59 @@ function Charges({
   const chargeAccessorials = useAppSelector(
     (state) => state.chargeAccessorials.data,
   );
+  const storeIsCorporate = useAppSelector((state) => state.app.isCorporate);
+  const isCorporate = storeIsCorporate === true;
+
   const [charges, setCharges] = useState<ChargesState>(() =>
     createInitialCharges(shipment),
   );
+  const [pricingDraft, setPricingDraft] =
+    useState<ChargePricingDraft>(defaultChargePricing);
+  const [isPricingDirty, setIsPricingDirty] = useState(false);
+  const pricingTouched = useRef(false);
+  const [previousIsCorporate, setPreviousIsCorporate] = useState(isCorporate);
+
+  if (previousIsCorporate !== isCorporate) {
+    setPreviousIsCorporate(isCorporate);
+    if (!isCorporate) {
+      setPricingDraft(defaultChargePricing);
+      setIsPricingDirty(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!isCorporate) {
+      pricingTouched.current = false;
+    }
+  }, [isCorporate]);
+  const [sourceLines, setSourceLines] = useState(
+    () => createInitialCharges(shipment).lines,
+  );
+
+  useEffect(() => {
+    if (!isCorporate || !shipment.clientCode) return;
+    const controller = new AbortController();
+    const token = localStorage.getItem("authToken");
+    axios.get(
+      `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(shipment.clientCode)}`,
+      {
+        signal: controller.signal,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    ).then((response) => {
+        if (controller.signal.aborted || pricingTouched.current || !response.data?.isSuccess) return;
+        const data = response.data.data;
+        const config = Array.isArray(data) ? data[0] : data;
+        const draft = config ? chargePricingFromConfig(config) : null;
+        if (draft) setPricingDraft(draft);
+      }).catch(() => {
+        // Client defaults are optional; saved rates remain authoritative until Apply.
+      });
+    return () => controller.abort();
+  }, [shipment.clientCode, isCorporate]);
+
+  const [appliedReratedRate, setAppliedReratedRate] =
+    useState<ShipmentRerateRate | null>(null);
   const [liabilityDraft, setLiabilityDraft] =
     useState<CarrierLiability | null>(null);
   const [insuranceDraft, setInsuranceDraft] =
@@ -357,7 +525,7 @@ function Charges({
       }));
   }, [chargeAccessorials, lineEditor?.line.description]);
   const hasInlineEditor = Boolean(
-    liabilityDraft || insuranceDraft || lineEditor,
+    liabilityDraft || insuranceDraft || lineEditor || (isCorporate && isPricingDirty),
   );
 
   useEffect(() => {
@@ -369,6 +537,16 @@ function Charges({
   useEffect(() => {
     onEditorStateChange(hasInlineEditor);
   }, [hasInlineEditor, onEditorStateChange]);
+
+  if (reratedRate && reratedRate !== appliedReratedRate) {
+    setAppliedReratedRate(reratedRate);
+    const lines = mergeReratedChargeLines(sourceLines, reratedRate).map((line) => {
+      const current = charges.lines.find((item) => item.id === line.id);
+      return current ? { ...line, sellCost: current.sellCost } : line;
+    });
+    setSourceLines(lines);
+    setCharges((current) => ({ ...current, lines }));
+  }
 
   const updateLiabilityDraft = (
     field: keyof CarrierLiability,
@@ -460,6 +638,13 @@ function Charges({
     });
   };
 
+  const showMissingChargeRatesError = (content: string) => {
+    messageApi.error({
+      key: MissingChargeRatesMessageKey,
+      content,
+    });
+  };
+
   const selectLineAccessorial = (
     selectedValue: string,
     option: ChargeAccessorialOption,
@@ -484,7 +669,19 @@ function Charges({
 
   const saveLine = () => {
     if (!lineEditor) return;
-    const lineToSave = normalizeChargeLineCosts(lineEditor.line);
+    const lineToSave = normalizeChargeLineCosts(
+      !isCorporate && lineEditor.isNew
+        ? { ...lineEditor.line, buyCost: lineEditor.line.sellCost }
+        : lineEditor.line,
+    );
+    const missingRatesMessage = isCorporate
+      ? getMissingChargeRatesMessage(lineToSave)
+      : lineToSave.sellCost === null ? MissingSellRateMessage : null;
+
+    if (missingRatesMessage) {
+      showMissingChargeRatesError(missingRatesMessage);
+      return;
+    }
 
     if (hasDuplicateChargeDescription(charges.lines, lineToSave)) {
       showDuplicateDescriptionError();
@@ -499,11 +696,18 @@ function Charges({
       !existingLine ||
       !chargeLineValuesAreEqual(existingLine, lineToSave);
 
+    const sourceLine = { ...lineToSave };
+    setSourceLines((current) => orderChargeLines(
+      lineEditor.isNew ? [...current, sourceLine] : current.map(
+        (line) => line.id === sourceLine.id ? sourceLine : line,
+      ),
+    ));
+    const savedLine = lineToSave;
     setCharges((current) => {
       const lines = lineEditor.isNew
-        ? [...current.lines, lineToSave]
+        ? [...current.lines, savedLine]
         : current.lines.map((line) =>
-            line.id === lineToSave.id ? lineToSave : line,
+            line.id === lineToSave.id ? savedLine : line,
           );
 
       return {
@@ -516,10 +720,31 @@ function Charges({
   };
 
   const deleteLine = (id: string) => {
+    const lineToDelete = charges.lines.find((line) => line.id === id);
+
+    if (!lineToDelete || isFreightCharge(lineToDelete)) return;
+    setSourceLines((current) => current.filter((line) => line.id !== id));
+
     setCharges((current) => ({
       ...current,
       lines: current.lines.filter((line) => line.id !== id),
     }));
+    onChangeCommitted();
+  };
+
+  const updatePricingDraft = (value: ChargePricingDraft) => {
+    pricingTouched.current = true;
+    setPricingDraft(value);
+    setIsPricingDirty(true);
+  };
+
+  const handleApplyMarkup = () => {
+    if (liabilityDraft || insuranceDraft || lineEditor) return;
+    pricingTouched.current = true;
+    const lines = sourceLines;
+    const increments = calculateChargeMarkup(lines, pricingDraft);
+    setCharges((current) => ({ ...current, lines: applyChargePricing(lines, pricingDraft, increments) }));
+    setIsPricingDirty(false);
     onChangeCommitted();
   };
 
@@ -700,34 +925,43 @@ function Charges({
 
       <section className='shipment-charge-lines' aria-labelledby='charges-title'>
         <h2 id='charges-title'>Charges</h2>
+        {isCorporate && <ChargePricingControls
+          value={pricingDraft}
+          dirty={isPricingDirty}
+          disabled={Boolean(liabilityDraft || insuranceDraft || lineEditor)}
+          onChange={updatePricingDraft}
+          onApply={handleApplyMarkup}
+        />}
         <div className='shipment-charge-table-wrap'>
           <table className='shipment-charge-table'>
             <colgroup>
               <col className='shipment-charge-col-code' />
               <col className='shipment-charge-col-description' />
-              <col className='shipment-charge-col-buy' />
+              {isCorporate && <col className='shipment-charge-col-buy' />}
               <col className='shipment-charge-col-sell' />
-              <col className='shipment-charge-col-margin' />
+              {isCorporate && <col className='shipment-charge-col-margin' />}
               <col className='shipment-charge-col-actions' />
             </colgroup>
             <thead>
               <tr>
                 <th>Code</th>
                 <th>Description</th>
-                <th>Buy</th>
+                {isCorporate && <th>Buy</th>}
                 <th>Sell</th>
-                <th>Margin</th>
+                {isCorporate && <th>Margin</th>}
                 <th aria-label='Actions' />
               </tr>
             </thead>
             <tbody>
               {!charges.lines.length && !lineEditor?.isNew ? (
                 <tr>
-                  <td colSpan={6}>No charges were returned.</td>
+                  <td colSpan={isCorporate ? 6 : 4}>No charges were returned.</td>
                 </tr>
               ) : null}
               {charges.lines.map((line) => {
                 const isEditing = lineEditor?.line.id === line.id;
+                const isFreight = isFreightCharge(line);
+                const isDeleteDisabled = Boolean(lineEditor) || isFreight;
                 return (
                   <tr key={line.id} className={isEditing ? "is-editing" : ""}>
                     {isEditing && lineEditor ? (
@@ -750,7 +984,7 @@ function Charges({
                             onSelect={selectLineAccessorial}
                           />
                         </td>
-                        <td>
+                        {isCorporate && <td>
                           <InputNumber
                             value={lineEditor.line.buyCost}
                             prefix='$'
@@ -768,7 +1002,7 @@ function Charges({
                               updateLineDraft("buyCost", value)
                             }
                           />
-                        </td>
+                        </td>}
                         <td>
                           <InputNumber
                             value={lineEditor.line.sellCost}
@@ -793,11 +1027,11 @@ function Charges({
                       <>
                         <td>{line.code}</td>
                         <td>{line.description}</td>
-                        <td>{formatCurrency(line.buyCost)}</td>
+                        {isCorporate && <td>{formatCurrency(line.buyCost)}</td>}
                         <td>{formatCurrency(line.sellCost)}</td>
                       </>
                     )}
-                    <td aria-label='Margin' />
+                    {isCorporate && <td aria-label='Margin'>{formatCurrency((line.sellCost ?? 0) - (line.buyCost ?? 0))}</td>}
                     <td className='shipment-charge-row-actions'>
                       {isEditing ? (
                         <>
@@ -832,6 +1066,7 @@ function Charges({
                             }
                           />
                           <Popconfirm
+                            disabled={isDeleteDisabled}
                             title='Delete charge line?'
                             description='This removes the charge from this shipment.'
                             okText='Delete'
@@ -843,9 +1078,13 @@ function Charges({
                               size='small'
                               danger
                               icon={<DeleteOutlined />}
-                              disabled={Boolean(lineEditor)}
+                              disabled={isDeleteDisabled}
                               aria-label={`Delete ${line.description}`}
-                              title='Delete charge'
+                              title={
+                                isFreight
+                                  ? "Freight charge cannot be deleted"
+                                  : "Delete charge"
+                              }
                             />
                           </Popconfirm>
                         </>
@@ -875,7 +1114,7 @@ function Charges({
                       onSelect={selectLineAccessorial}
                     />
                   </td>
-                  <td>
+                  {isCorporate && <td>
                     <InputNumber
                       value={lineEditor.line.buyCost}
                       prefix='$'
@@ -893,7 +1132,7 @@ function Charges({
                         updateLineDraft("buyCost", value)
                       }
                     />
-                  </td>
+                  </td>}
                   <td>
                     <InputNumber
                       value={lineEditor.line.sellCost}
@@ -913,7 +1152,7 @@ function Charges({
                       }
                     />
                   </td>
-                  <td aria-label='Margin' />
+                  {isCorporate && <td aria-label='Margin' />}
                   <td className='shipment-charge-row-actions'>
                     <Button
                       type='text'
@@ -940,14 +1179,14 @@ function Charges({
                 <td colSpan={2}>
                   <strong>Total</strong>
                 </td>
-                <td
+                {isCorporate && <td
                   className={
                     totals.buy < 0
                       ? "shipment-charge-total-negative"
                       : undefined
                   }>
                   {formatCurrency(totals.buy)}
-                </td>
+                </td>}
                 <td
                   className={
                     totals.sell < 0
@@ -956,14 +1195,14 @@ function Charges({
                   }>
                   {formatCurrency(totals.sell)}
                 </td>
-                <td
+                {isCorporate && <td
                   className={
                     totalMargin < 0
                       ? "shipment-charge-total-negative"
                       : undefined
                   }>
                   {formatCurrency(totalMargin)}
-                </td>
+                </td>}
                 <td aria-label='Actions' />
               </tr>
             </tfoot>

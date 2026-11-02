@@ -1,5 +1,5 @@
 import { ClockCircleOutlined, TruckOutlined } from "@ant-design/icons";
-import { Button, Checkbox, Empty, Table } from "antd";
+import { Checkbox, Empty, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ShipmentRecord } from "../../types/shipment.types";
 
@@ -11,8 +11,7 @@ type ShipmentTableProps = {
   onPageChange: (page: number) => void;
   onShipmentSelected: (key: string, selected: boolean) => void;
   onVisibleShipmentsSelected: (keys: string[], selected: boolean) => void;
-  onEdit: (shipment: ShipmentRecord) => void;
-  onOpenShipment: (key: string) => void;
+  onOpenShipment: (key: string, clientCode?: string | null) => void;
 };
 
 function Multiline({
@@ -39,7 +38,6 @@ function ShipmentTable({
   onPageChange,
   onShipmentSelected,
   onVisibleShipmentsSelected,
-  onEdit,
   onOpenShipment,
 }: ShipmentTableProps) {
   const hasVisibleShipments = shipments.length > 0;
@@ -167,21 +165,6 @@ function ShipmentTable({
         </span>
       ),
     },
-    {
-      title: "Action",
-      width: 92,
-      fixed: "right",
-      render: (_, record) => (
-        <Button
-          size='small'
-          onClick={(event) => {
-            event.stopPropagation();
-            onEdit(record);
-          }}>
-          Edit
-        </Button>
-      ),
-    },
   ];
 
   return (
@@ -198,7 +181,7 @@ function ShipmentTable({
           `shipment-clickable-row${record.selected ? " selected-row" : ""}`
         }
         onRow={(record) => ({
-          onClick: () => onOpenShipment(record.loadNumber),
+          onClick: () => onOpenShipment(record.loadNumber, record.clientCode),
         })}
         scroll={{ x: 1280 }}
       />

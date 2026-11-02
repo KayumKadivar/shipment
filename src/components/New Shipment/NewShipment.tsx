@@ -962,6 +962,8 @@ const NewShipment: React.FC = () => {
       shipments,
       accessorialCodes,
       profileCode: quote?.profileCode,
+      ratingProfileCode: clients.find((c) => c.clientCode === selectedClientCode)?.ratingProfileCode,
+      ratingClientCode: clients.find((c) => c.clientCode === selectedClientCode)?.ratingClientCode,
       clientCode: selectedClientCode || quote?.clientCode || DEFAULT_CLIENT_CODE,
       clientName: selectedClient?.clientName || quote?.clientName || "",
       scac: scacToUse,
@@ -2181,7 +2183,7 @@ const NewShipment: React.FC = () => {
         okButtonProps={{ danger: true }}
       >
         <Typography.Paragraph className="confirmation-modal-text">
-          Rate factor is applied. do you want to save shipment?
+          Changes detected in rate factors. You must re-rate the shipment before changes can be saved.
         </Typography.Paragraph>
       </Modal>
 
@@ -2192,13 +2194,13 @@ const NewShipment: React.FC = () => {
         onOk={handleMinMarkupModalOk}
         onCancel={handleMinMarkupModalCancel}
         okText="OK"
-        cancelText="Cancel"
+        cancelButtonProps={{ style: { display: 'none' } }}
         confirmLoading={isSavingShipment}
         centered
         okButtonProps={{ danger: true }}
       >
         <Typography.Paragraph className="confirmation-modal-text">
-          your markup is less than minimum rate. do you want to save shipment?
+          The current markup does not match the configured factor. Please verify to proceed with saving the shipment
         </Typography.Paragraph>
       </Modal>
 

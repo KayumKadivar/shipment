@@ -17,6 +17,8 @@ import Shipment from "../pages/Shipment.tsx";
 import ShipmentDetail from "../pages/ShipmentDetail.tsx";
 import NewShipment from "../components/New Shipment/NewShipment.tsx";
 
+
+
 type AppRouterProps = {
   customerLocations: CustomerLocation[];
   setCustomerLocations: Dispatch<SetStateAction<CustomerLocation[]>>;

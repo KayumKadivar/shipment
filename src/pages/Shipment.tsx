@@ -8,29 +8,31 @@ import {
   TruckOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Space, Typography } from "antd";
+import { Alert, Button, Card, Space, Spin, Typography } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
-import ShipmentEditModal, {
-  type ShipmentEditValues,
-} from "../components/shipment/ShipmentEditModal";
 import ShipmentTable from "../components/shipment/ShipmentTable";
 import { fetchShipments } from "../store/shipmentSlice";
+import { resetShipmentStatusSearch, searchShipmentsByStatus } from "../store/shipmentStatusSearchSlice";
+import { fetchShipmentStatusCounts } from "../store/shipmentStatusCountsSlice";
 import type { ShipmentRecord } from "../types/shipment.types";
 
 const PAGE_SIZE = 20;
 
 const stats = [
-  { label: "Quotes", value: "38", note: "12 awaiting response", dot: "#888" },
-  { label: "Booked", value: "64", note: "+8 vs yesterday", dot: "#df2027", positive: true },
-  { label: "Pickup Req.", value: "29", note: "5 pending confirmation", dot: "#2f55c7" },
-  { label: "In Transit", value: "87", note: "23 out for delivery", dot: "#ff5a1f" },
-  { label: "Delivered", value: "29", note: "On-time 96%", dot: "#2fbf71", positive: true },
+  { label: "Expired", dot: "#888" },
+  { label: "In Transit", dot: "#ff5a1f" },
+  { label: "Booked", dot: "#df2027" },
+  { label: "Delivered", dot: "#2fbf71" },
+  { label: "Out For Delivery", dot: "#0891b2" },
+  { label: "Pickup Requested", dot: "#2f55c7" },
+  { label: "Pickup Failed", dot: "#dc2626" },
+  { label: "Pickup Succeed", dot: "#17864b" },
 ];
 
 const filters = [
-  { label: "Booked", icon: <FileTextOutlined />, active: true },
+  { label: "Booked", icon: <FileTextOutlined /> },
   { label: "In Transit", icon: <TruckOutlined /> },
   { label: "Delivered", icon: <CheckOutlined /> },
   { label: "Pickup Requested", icon: <ClockCircleOutlined /> },
@@ -43,22 +45,47 @@ const filters = [
 function Shipment() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const {
     shipmentsLoading,
     shipmentsError,
     hasNextShipmentsPage,
-  } = useAppSelector((state) => state.shipment);
+  } = useAppSelector((state) => selectedStatus ? {
+    shipmentsLoading: state.shipmentStatusSearch.loading,
+    shipmentsError: state.shipmentStatusSearch.error,
+    hasNextShipmentsPage: state.shipmentStatusSearch.hasNextPage,
+  } : {
+    shipmentsLoading: state.shipment.shipmentsLoading,
+    shipmentsError: state.shipment.shipmentsError,
+    hasNextShipmentsPage: state.shipment.hasNextShipmentsPage,
+  }, (previous, next) => previous.shipmentsLoading === next.shipmentsLoading
+    && previous.shipmentsError === next.shipmentsError
+    && previous.hasNextShipmentsPage === next.hasNextShipmentsPage);
+  const statusCounts = useAppSelector((state) => state.shipmentStatusCounts);
   const [shipments, setShipments] = useState<ShipmentRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [editingShipment, setEditingShipment] = useState<ShipmentRecord | null>(null);
   const activeRequestRef = useRef<{ abort: () => void } | null>(null);
+  const statusCountsRequestRef = useRef<{ abort: () => void } | null>(null);
+
+  /** Replaces any pending count lookup without affecting table pagination. */
+  const requestStatusCounts = useCallback(() => {
+    statusCountsRequestRef.current?.abort();
+    const request = dispatch(fetchShipmentStatusCounts());
+    statusCountsRequestRef.current = request;
+    return request;
+  }, [dispatch]);
+
+  useEffect(() => {
+    void requestStatusCounts();
+    return () => statusCountsRequestRef.current?.abort();
+  }, [requestStatusCounts]);
 
   const requestShipments = useCallback(
     (pageNumber: number) => {
       activeRequestRef.current?.abort();
-      const request = dispatch(
-        fetchShipments({ pageNumber, pageSize: PAGE_SIZE }),
-      );
+      const request = selectedStatus
+        ? dispatch(searchShipmentsByStatus({ statusCodes: [selectedStatus], pageNumber, pageSize: PAGE_SIZE }))
+        : dispatch(fetchShipments({ pageNumber, pageSize: PAGE_SIZE }));
       activeRequestRef.current = request;
       void request
         .unwrap()
@@ -81,18 +108,33 @@ function Shipment() {
         });
       return request;
     },
-    [dispatch],
+    [dispatch, selectedStatus],
   );
 
   useEffect(() => {
     void requestShipments(currentPage);
-    return () => activeRequestRef.current?.abort();
+    return () => {
+      activeRequestRef.current?.abort();
+      activeRequestRef.current = null;
+    };
   }, [currentPage, requestShipments]);
 
   const changePage = (page: number) => {
-    setEditingShipment(null);
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
     setShipments([]);
     setCurrentPage(page);
+  };
+
+  /** Changes the single active filter and invalidates the previous table request. */
+  const changeStatus = (status: string | null) => {
+    if (selectedStatus === status) return;
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    dispatch(resetShipmentStatusSearch());
+    setShipments([]);
+    setCurrentPage(1);
+    setSelectedStatus(status);
   };
 
   const setShipmentSelected = (key: string, selected: boolean) => {
@@ -112,15 +154,6 @@ function Shipment() {
     );
   };
 
-  const saveEditedShipment = (values: ShipmentEditValues) => {
-    setShipments((currentShipments) =>
-      currentShipments.map((shipment) =>
-        shipment.key === editingShipment?.key ? { ...shipment, ...values } : shipment,
-      ),
-    );
-    setEditingShipment(null);
-  };
-
   return (
     <section className="shipments-page">
       <div className="shipments-header">
@@ -133,8 +166,11 @@ function Shipment() {
         <Space wrap>
           <Button
             icon={<ReloadOutlined />}
-            loading={shipmentsLoading}
-            onClick={() => requestShipments(currentPage)}>
+            loading={shipmentsLoading || statusCounts.loading}
+            onClick={() => {
+              requestShipments(currentPage);
+              requestStatusCounts();
+            }}>
             Refresh
           </Button>
           <Button icon={<ClockCircleOutlined />}>Quick Quote</Button>
@@ -142,22 +178,45 @@ function Shipment() {
         </Space>
       </div>
 
-      <div className="shipment-stats">
+      {statusCounts.loading ? (
+        <div className="shipment-status-counts-feedback" role="status">
+          <Spin size="small" /> Loading shipment status counts...
+        </div>
+      ) : null}
+      {statusCounts.error ? (
+        <Alert
+          className="shipment-status-counts-feedback"
+          type="error"
+          showIcon
+          title="Unable to load shipment status counts"
+          description={statusCounts.error}
+          action={<Button onClick={requestStatusCounts}>Retry counts</Button>}
+        />
+      ) : null}
+      <div className="shipment-stats" aria-label="Shipment status counts" aria-busy={statusCounts.loading}>
         {stats.map((stat) => (
           <Card key={stat.label} className="shipment-stat-card">
             <span className="stat-label">
               <i style={{ background: stat.dot }} />
               {stat.label}
             </span>
-            <strong>{stat.value}</strong>
-            <small className={stat.positive ? "positive" : ""}>{stat.note}</small>
+            <strong>
+              {statusCounts.data && !statusCounts.loading && !statusCounts.error
+                ? statusCounts.data.find((item) => item.shipmentStatus === stat.label)?.shipmentCount ?? 0
+                : "—"}
+            </strong>
           </Card>
         ))}
       </div>
 
       <div className="shipment-filters">
+        <Button className={selectedStatus === null ? "active" : ""} aria-pressed={selectedStatus === null}
+          onClick={() => changeStatus(null)}>All</Button>
         {filters.map((filter) => (
-          <Button key={filter.label} className={filter.active ? "active" : ""} icon={filter.icon}>
+          <Button key={filter.label}
+            className={selectedStatus === (filter.label === "Out for Delivery" ? "Out For Delivery" : filter.label) ? "active" : ""}
+            aria-pressed={selectedStatus === (filter.label === "Out for Delivery" ? "Out For Delivery" : filter.label)}
+            onClick={() => changeStatus(filter.label === "Out for Delivery" ? "Out For Delivery" : filter.label)} icon={filter.icon}>
             {filter.label}
           </Button>
         ))}
@@ -186,16 +245,11 @@ function Shipment() {
         onPageChange={changePage}
         onShipmentSelected={setShipmentSelected}
         onVisibleShipmentsSelected={setVisibleShipmentsSelected}
-        onEdit={setEditingShipment}
-        onOpenShipment={(loadNumber) =>
-          navigate(`/shipments/${encodeURIComponent(loadNumber)}`)
+        onOpenShipment={(loadNumber, clientCode) =>
+          navigate(`/shipments/${encodeURIComponent(loadNumber)}`, {
+            state: { loadNumber, clientCode },
+          })
         }
-      />
-
-      <ShipmentEditModal
-        shipment={editingShipment}
-        onCancel={() => setEditingShipment(null)}
-        onSave={saveEditedShipment}
       />
     </section>
   );

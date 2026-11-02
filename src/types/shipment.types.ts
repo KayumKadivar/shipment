@@ -1,3 +1,5 @@
+import type { GetRatesRequest } from "./GetRatesRequest";
+
 export type ShipmentProduct = {
   productDescription: string | null;
   productClass: string | null;
@@ -9,7 +11,18 @@ export type ShipmentProduct = {
   length: number | null;
   width: number | null;
   height: number | null;
+  pcf: number | null;
   packageType: string | null;
+  skuNumber: string | null;
+  accountNumber: string | null;
+  linearFeet: number | null;
+  hazmatProperShippingName: string | null;
+  hazmatClass: string | null;
+  hazmatUnNaNumber: string | null;
+  hazmatPhone: string | null;
+  hazmatGroup: string | null;
+  hazmatContact: string | null;
+  stackable: boolean | null;
 };
 
 export type ShipmentAccessorialCostDetail = {
@@ -27,6 +40,8 @@ export type ShipmentRate = {
 };
 
 export type ShipmentDetails = {
+  createLoadInTms: boolean;
+  sendCarrierPickupReq: boolean;
   loadNumber: string;
   proNumber: string | null;
   bolStatus: string | null;
@@ -46,16 +61,30 @@ export type ShipmentDetails = {
   pickUpCloseTime: string | null;
   pickupTime: string | null;
   clientCode: string | null;
+  ladingID: number;
   clientName: string | null;
   clientEmail: string | null;
+  clientAddress1: string | null;
+  clientAddress2: string | null;
+  clientCountryCode: string | null;
+  clientCityName: string | null;
+  clientPhone: string | null;
+  clientStateCode: string | null;
+  clientZipCode: string | null;
   originName: string | null;
   originAddress1: string | null;
   originAddress2: string | null;
+  orgCompanyName: string | null;
+  orgContactFirstName: string | null;
+  orgContactLastName: string | null;
   orgCityName: string | null;
   orgStateCode: string | null;
   orgPostalCode: string | null;
   orgCountryCode: string | null;
+  orgPhoneAreaCode: string | null;
   orgPhoneNumber: string | null;
+  orgWhoPhoneNumber: string | null;
+  originFax: string | null;
   originEmail: string | null;
   orgContactPerson: string | null;
   orgWhoEntered: string | null;
@@ -69,6 +98,7 @@ export type ShipmentDetails = {
   destCountryCode: string | null;
   destPhoneNo: string | null;
   destEmail: string | null;
+  destFaxNo: string | null;
   destContact: string | null;
   destNote: string | null;
   billToName: string | null;
@@ -81,6 +111,7 @@ export type ShipmentDetails = {
   billToFaxNo: string | null;
   carrierBolNo: string | null;
   pickupNo: string | null;
+  poNumber: string | null;
   saasQuoteNumber: string | null;
   brokerRefNo: string | null;
   ref1Name: string | null;
@@ -94,6 +125,19 @@ export type ShipmentDetails = {
   carrierNote: string | null;
   shipmentValue: number | null;
   valuePerPound: number | null;
+  isTestMode: boolean;
+  brokerCode: string | null;
+  bolDispatchNotes: string[] | null;
+  paymentTerms: string | null;
+  totalLength: number | null;
+  totalWidth: number | null;
+  totalHeight: number | null;
+  wiseTechTransactionNo: string | null;
+  originPortCode: string | null;
+  destinationPortCode: string | null;
+  codAmount: number | null;
+  totalLinearFeet: number | null;
+  tariffType: number | null;
   products: ShipmentProduct[];
   accessorials: string[] | null;
   buyRate: ShipmentRate | null;
@@ -106,11 +150,47 @@ export type ShipmentApiResponse = {
   data: ShipmentDetails | null;
 };
 
+/** A product line formatted for the shipment rating API. */
+export type ShipmentRerateProduct = {
+  class: string;
+  weight: number;
+  weightUnit: string;
+  units: number;
+  cubicFeet: number;
+  hazMat: boolean;
+  hazMatClass?: string;
+  hazMatUN?: string;
+  hazMatProperShippingName?: string;
+  hazMatPackingGroup?: string;
+  hazMatPhone?: string;
+  hazMatContact?: string;
+  nmfc?: string;
+  description?: string;
+  pallets: number;
+  pieces: number;
+  length: number;
+  width: number;
+  height: number;
+  packageType?: string;
+  linearFeet: number;
+  stackable: boolean;
+};
+
+/** The latest accepted Load-tab values used to request a new shipment rate. */
+export type ShipmentRerateLoadValues = {
+  shipments: ShipmentRerateProduct[];
+  accessorialCodes: string[];
+};
+
+/** Request body accepted by the shipment rating endpoint. */
+export type ShipmentRerateRequest = GetRatesRequest;
+
 export type ShipmentListItem = {
   bolNo: string | null;
   customerName: string | null;
   clientCode: string | null;
   statusId: number;
+  shipmentStatus?: string | null;
   isPickupSuccess: boolean;
   aljexProNumber: string | null;
   pickupDate: string | null;
@@ -150,6 +230,8 @@ export type FetchShipmentsArgs = {
 };
 
 export type ShipmentRecord = {
+  /** Raw owning client code from the shipment list API, before display formatting. */
+  clientCode?: string | null;
   key: string;
   customer: string;
   status: string;
