@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Modal, Input, Select, Spin, Alert, Empty } from 'antd';
 import { SearchOutlined, BarsOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { CarrierCard, type CarrierRate, type SortOption, type ViewMode } from '../../pages/Rate';
@@ -29,41 +29,69 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [activeTab, setActiveTab] = useState<'valid' | 'error'>('valid');
 
-  // Split rates into valid (price > 0 and no error warning) and error rates
-  const { validRates, errorRates } = useMemo(() => {
-    const valid: CarrierRate[] = [];
-    const withError: CarrierRate[] = [];
+  const isRateValid = (r: CarrierRate): boolean => (Number(r.price) || 0) > 0;
 
-    rates.forEach((r) => {
-      if (r.warning || Number(r.price) <= 0) {
-        withError.push(r);
-      } else {
-        valid.push(r);
-      }
-    });
-
-    return { validRates: valid, errorRates: withError };
+  const totalValidCount = useMemo(() => {
+    return (rates || []).filter(isRateValid).length;
   }, [rates]);
 
-  const targetRates = activeTab === 'valid' ? (validRates.length > 0 ? validRates : rates) : errorRates;
+  const totalErrorCount = useMemo(() => {
+    return (rates || []).filter((r) => !isRateValid(r)).length;
+  }, [rates]);
 
-  const visibleRates = useMemo(() => {
+  useEffect(() => {
+    if (open) {
+      if (totalValidCount > 0) {
+        setActiveTab('valid');
+      } else if (totalErrorCount > 0) {
+        setActiveTab('error');
+      } else {
+        setActiveTab('valid');
+      }
+    }
+  }, [open, totalValidCount, totalErrorCount]);
+
+  useEffect(() => {
+    if (!open) {
+      setSearch('');
+    }
+  }, [open]);
+
+  const filteredRates = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const filtered = targetRates.filter((rate) =>
+    if (!query) return rates || [];
+    return (rates || []).filter((rate) =>
       [rate.name, rate.code, rate.service].some((val) =>
         (val || '').toLowerCase().includes(query)
       )
     );
+  }, [rates, search]);
 
-    return [...filtered].sort((a, b) => {
-      if (sortBy === 'rate-desc') return b.price - a.price;
+  const validRates = useMemo(() => {
+    return filteredRates.filter(isRateValid);
+  }, [filteredRates]);
+
+  const errorRates = useMemo(() => {
+    return filteredRates.filter((r) => !isRateValid(r));
+  }, [filteredRates]);
+
+  const displayValidCount = search.trim() ? validRates.length : totalValidCount;
+  const displayErrorCount = search.trim() ? errorRates.length : totalErrorCount;
+
+  const targetRates = activeTab === 'valid' ? validRates : errorRates;
+
+  const visibleRates = useMemo(() => {
+    return [...targetRates].sort((a, b) => {
+      if (sortBy === 'rate-desc') return (Number(b.price) || 0) - (Number(a.price) || 0);
       if (sortBy === 'transit') {
-        if (a.transitDays === b.transitDays) return a.price - b.price;
-        return a.transitDays - b.transitDays;
+        if (a.transitDays === b.transitDays) {
+          return (Number(a.price) || 0) - (Number(b.price) || 0);
+        }
+        return (Number(a.transitDays) || 0) - (Number(b.transitDays) || 0);
       }
-      return a.price - b.price;
+      return (Number(a.price) || 0) - (Number(b.price) || 0);
     });
-  }, [targetRates, search, sortBy]);
+  }, [targetRates, sortBy]);
 
   return (
     <Modal
@@ -110,15 +138,15 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
                   className={activeTab === 'valid' ? 'active' : ''}
                   onClick={() => setActiveTab('valid')}
                 >
-                  LTL <span>{validRates.length}</span>
+                  LTL <span>{displayValidCount}</span>
                 </button>
-                {errorRates.length > 0 && (
+                {(totalErrorCount > 0 || search.trim()) && (
                   <button
                     type="button"
                     className={`rate-tab-with-error ${activeTab === 'error' ? 'active' : ''}`}
                     onClick={() => setActiveTab('error')}
                   >
-                    With Error <span>{errorRates.length}</span>
+                    With Error <span>{displayErrorCount}</span>
                   </button>
                 )}
               </div>
@@ -164,7 +192,7 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
 
               {/* Count */}
               <p className="rate-results-count carrier-modal-count">
-                Showing {visibleRates.length} of {targetRates.length} carriers
+                Showing {visibleRates.length} of {activeTab === 'valid' ? displayValidCount : displayErrorCount} {activeTab === 'valid' ? 'carriers' : 'error carriers'}
               </p>
 
               {/* Cards list */}
@@ -182,7 +210,15 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
                   ))}
                 </div>
               ) : (
-                <Empty description="No matching carrier rates found." />
+                <Empty
+                  description={
+                    search.trim()
+                      ? `No ${activeTab === 'valid' ? 'LTL' : 'error'} carriers match your search.`
+                      : activeTab === 'valid'
+                      ? 'No valid LTL carrier rates available.'
+                      : 'No carriers with errors.'
+                  }
+                />
               )}
             </>
           )}
