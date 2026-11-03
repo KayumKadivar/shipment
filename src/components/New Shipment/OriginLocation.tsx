@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin, DatePicker } from 'antd';
 import type { FormInstance } from 'antd';
 import dayjs from 'dayjs';
+import './newshipment.css';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import { formatPhoneNumber } from '../../utils/formatPhoneNumber';
@@ -197,8 +198,8 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
         closeTime: closeTimeFormatted,
         pickupOpenTime: openTimeFormatted,
         pickupCloseTime: closeTimeFormatted,
-        pickupDate: initialData.pickupDate || "",
-        expPickupDate: initialData.expPickupDate || initialData.pickupDate || "",
+        pickupDate: initialData.pickupDate || form.getFieldValue("pickupDate") || dayjs().format("MM/DD/YYYY"),
+        expPickupDate: initialData.expPickupDate || initialData.pickupDate || form.getFieldValue("expPickupDate") || dayjs().format("MM/DD/YYYY"),
         shipperNotes: initialData.shipperNotes || "",
       });
     }
@@ -491,6 +492,8 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
           closeTime: "05:00 PM",
           pickupOpenTime: "08:00 AM",
           pickupCloseTime: "05:00 PM",
+          expPickupDate: dayjs().format("MM/DD/YYYY"),
+          pickupDate: dayjs().format("MM/DD/YYYY"),
         }}
         onValuesChange={(_, all) => {
           if (onChange) onChange(all);
@@ -520,7 +523,11 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
           >
             <Input
               placeholder="Company name"
-              suffix={loadingCompany ? <Spin size="small" /> : null}
+              suffix={
+                <span className={`company-search-spinner-wrap ${loadingCompany ? "is-loading" : ""}`}>
+                  <Spin size="small" />
+                </span>
+              }
             />
           </AutoComplete>
         </Form.Item>

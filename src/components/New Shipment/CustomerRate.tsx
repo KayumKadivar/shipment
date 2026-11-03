@@ -39,17 +39,29 @@ export interface CustomerRateProps {
     carrierCode?: string;
     service?: string;
     price?: number;
+    sellPrice?: number;
     grossCharge?: number;
+    grossSellAmount?: number;
     discount?: number;
+    discountSell?: number;
     fuelSurcharge?: number;
+    fuelSell?: number;
+    markupAmount?: number;
+    ppsFreight?: number;
+    ppsFuel?: number;
+    markupType?: string;
+    rate?: string | number;
+    minimum?: string | number;
     grossCode?: string;
     discountCode?: string;
     fuelCode?: string;
     accessorialCharges?: {
       accessorialDescription?: string;
       accessorialCharge?: number;
+      sellCharge?: number;
       code?: string;
     }[];
+    quoteCostDetails?: any[];
   };
   clientCode?: string;
   isCorporate?: boolean;
@@ -269,8 +281,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       return;
     }
 
-    if (carrierData && (carrierData as any).markupType) {
-      const raw = String((carrierData as any).markupType).toLowerCase();
+    if (carrierData && ((carrierData as any).markupType || (carrierData as any).markupAmount != null || (carrierData as any).ppsFreight != null)) {
+      const raw = String((carrierData as any).markupType || "").toLowerCase();
       if (raw.includes("netsell")) {
         setIsNetSellRateEnabled(true);
         setIsMarkupEnabled(false);
@@ -629,6 +641,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       code: string;
       description: string;
       buyAmount: number;
+      initialCustomerAmount?: number;
       isCustom?: boolean;
     }[] = [];
 
@@ -643,11 +656,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       // 1. FREIGHT Charge
       if (!removedLineIds.includes("line-gross")) {
         const customBuy = editedAmounts["line-gross"]?.buyAmount;
+        const initialCust = activeCarrier.grossSellAmount !== undefined
+          ? Number(activeCarrier.grossSellAmount)
+          : undefined;
         rawItems.push({
           id: "line-gross",
           code: "FRT",
           description: editedAmounts["line-gross"]?.description || "Freight",
           buyAmount: customBuy !== undefined ? customBuy : gross,
+          initialCustomerAmount: initialCust,
         });
       }
 
@@ -657,30 +674,39 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         !removedLineIds.includes("line-discount")
       ) {
         const customBuy = editedAmounts["line-discount"]?.buyAmount;
+        const initialCust = activeCarrier.discountSell !== undefined
+          ? -Math.abs(Number(activeCarrier.discountSell))
+          : undefined;
         rawItems.push({
           id: "line-discount",
           code: "DSC",
           description:
             editedAmounts["line-discount"]?.description || "Discount",
           buyAmount: customBuy !== undefined ? customBuy : -Math.abs(discount),
+          initialCustomerAmount: initialCust,
         });
       }
 
       // 3. FUEL Surcharge
       if (!removedLineIds.includes("line-fuel")) {
         const customBuy = editedAmounts["line-fuel"]?.buyAmount;
+        const initialCust = activeCarrier.fuelSell !== undefined
+          ? Number(activeCarrier.fuelSell)
+          : undefined;
         rawItems.push({
           id: "line-fuel",
           code: "FSC",
           description:
             editedAmounts["line-fuel"]?.description || "Fuel surcharge",
           buyAmount: customBuy !== undefined ? customBuy : fuel,
+          initialCustomerAmount: initialCust,
         });
       }
 
       // 4. Accessorial charges
       accessorials.forEach((acc, idx) => {
         const amt = Number(acc.accessorialCharge) || 0;
+        const sellAmt = (acc as any).sellCharge !== undefined ? Number((acc as any).sellCharge) : (amt > 0 ? amt : undefined);
         const accId = `line-acc-${idx}`;
         if (amt > 0 && !removedLineIds.includes(accId)) {
           const customBuy = editedAmounts[accId]?.buyAmount;
@@ -692,6 +718,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               acc.accessorialDescription ||
               "",
             buyAmount: customBuy !== undefined ? customBuy : amt,
+            initialCustomerAmount: sellAmt,
           });
         }
       });
@@ -733,8 +760,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       const overrideBuy = editedAmounts[item.id]?.buyAmount;
 
       let currentBuy = overrideBuy !== undefined ? overrideBuy : item.buyAmount;
-      let calculatedCust = currentBuy;
-      let calculatedMarkup = 0;
+      let baseCust = item.initialCustomerAmount !== undefined ? item.initialCustomerAmount : currentBuy;
+      let calculatedCust = baseCust;
+      let calculatedMarkup = baseCust - currentBuy;
       let isEligible = false;
 
       if (isNetSellActive) {
@@ -748,7 +776,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           calculatedCust = 0;
           calculatedMarkup = 0;
         }
-      } else {
+      } else if (isMarkupActive) {
         if (isFreight) {
           isEligible = true;
           calculatedMarkup = ppsFreight;
@@ -1201,8 +1229,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setIsDescInputDirty(false);
   };
 
-  const handleApplyMarkup = () => {
-    if (isNetSellRateEnabled) {
+  const handleApplyMarkup = (incomingConfig?: any) => {
+    const isNetSell = incomingConfig ? incomingConfig.isNetSellRateEnabled : isNetSellRateEnabled;
+    if (isNetSell) {
       setEditedAmounts({});
       setEditedCellKeys([]);
     } else {
@@ -1217,11 +1246,13 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         return next;
       });
     }
-
-    const numRate = Math.max(0, Number(markupRate) || 0);
-    const numMin = Math.max(0, Number(markup) || 0);
+    const numRate = incomingConfig.numericMarkupRate;
+    const numMin = incomingConfig.numericMarkup;
     const numMarkup = numRate > 0 ? numRate : numMin;
-    const numNetSell = Math.max(0, Number(netSellRate) || 0);
+    const numNetSell = incomingConfig.numericNetSellRate;
+    const activeIsMarkup = incomingConfig.isMarkupEnabled;
+    const activeOption = incomingConfig.markupDropdownOption;
+    const activeIsNetSell = incomingConfig.isNetSellRateEnabled;
 
     const currentFreightBuy =
       lineItems
@@ -1240,27 +1271,27 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     let ppsFreight = 0;
     let ppsFuel = 0;
 
-    if (isNetSellRateEnabled) {
+    if (activeIsNetSell) {
       ppsFreight = numNetSell;
       ppsFuel = 0;
-    } else if (isMarkupEnabled && (numRate > 0 || numMin > 0)) {
+    } else if (activeIsMarkup && (numRate > 0 || numMin > 0)) {
       const rateToUse = numRate > 0 ? numRate : numMin;
       let calculatedMarkup = 0;
 
-      if (markupDropdownOption === "Flat") {
+      if (activeOption === "Flat") {
         calculatedMarkup = rateToUse;
-      } else if (markupDropdownOption === "% Freight") {
+      } else if (activeOption === "% Freight") {
         calculatedMarkup = currentFreightBuy * (rateToUse / 100);
         if (calculatedMarkup < numMin) {
           calculatedMarkup = numMin;
         }
-      } else if (markupDropdownOption === "% Freight + Fuel") {
+      } else if (activeOption === "% Freight + Fuel") {
         calculatedMarkup =
           (currentFreightBuy + currentFuelBuy) * (rateToUse / 100);
         if (calculatedMarkup < numMin) {
           calculatedMarkup = numMin;
         }
-      } else if (markupDropdownOption === "% Freight + Fuel + Accessorial") {
+      } else if (activeOption === "% Freight + Fuel + Accessorial") {
         calculatedMarkup = currentTotalBuy * (rateToUse / 100);
         if (calculatedMarkup < numMin) {
           calculatedMarkup = numMin;
@@ -1291,11 +1322,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     }
 
     setAppliedMarkupConfig({
-      isMarkupEnabled,
-      markupDropdownOption,
+      isMarkupEnabled: activeIsMarkup,
+      markupDropdownOption: activeOption,
       numericMarkup: numMin,
       numericMarkupRate: numRate,
-      isNetSellRateEnabled,
+      isNetSellRateEnabled: activeIsNetSell,
       numericNetSellRate: numNetSell,
       ppsFreight,
       ppsFuel,

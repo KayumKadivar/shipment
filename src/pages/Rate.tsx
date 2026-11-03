@@ -768,39 +768,80 @@ function Rate() {
       : (storeIsCorporate ?? false);
 
   // Markup UI State
-  const [isMarkupEnabled, setIsMarkupEnabled] = useState(false);
+  const [isMarkupEnabled, setIsMarkupEnabled] = useState(true);
   const [markupDropdownOption, setMarkupDropdownOption] = useState("% Freight + Fuel");
-  const [markupRate, setMarkupRate] = useState("0");
+  const [markupRate, setMarkupRate] = useState("25");
   const [isMarkupRateDirty, setIsMarkupRateDirty] = useState(false);
-  const [markup, setMarkup] = useState("0");
+  const [markup, setMarkup] = useState("50");
   const [isNetSellRateEnabled, setIsNetSellRateEnabled] = useState(false);
   const [netSellRate, setNetSellRate] = useState("");
   const [isNetSellDirty, setIsNetSellDirty] = useState(false);
 
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<AppliedMarkupConfig>({
-    isMarkupEnabled: false,
+    isMarkupEnabled: true,
     markupDropdownOption: "% Freight + Fuel",
-    numericMarkup: 0,
-    numericMarkupRate: 0,
+    numericMarkup: 50,
+    numericMarkupRate: 25,
     isNetSellRateEnabled: false,
     numericNetSellRate: 0,
   });
+  const [carrierMarkupMap, setCarrierMarkupMap] = useState<Record<string, AppliedMarkupConfig>>({});
 
-  const handleApplyMarkup = () => {
-    const numRate = Math.max(0, Number(markupRate) || 0);
-    const numMin = Math.max(0, Number(markup) || 0);
-    const numNetSell = Math.max(0, Number(netSellRate) || 0);
+  const getRateMarkupConfig = (rate: CarrierRate): AppliedMarkupConfig => {
+    const nameKey = (rate.name || "").trim().toLowerCase();
+    return (
+      carrierMarkupMap[rate.id] ||
+      (rate.code ? carrierMarkupMap[rate.code] : undefined) ||
+      (nameKey ? carrierMarkupMap[nameKey] : undefined) ||
+      appliedMarkupConfig
+    );
+  };
+
+  const handleApplyMarkup = (incomingConfig?: AppliedMarkupConfig) => {
+    const numRate = incomingConfig ? incomingConfig.numericMarkupRate : Math.max(0, Number(markupRate) || 0);
+    const numMin = incomingConfig ? incomingConfig.numericMarkup : Math.max(0, Number(markup) || 0);
+    const numNetSell = incomingConfig ? incomingConfig.numericNetSellRate : Math.max(0, Number(netSellRate) || 0);
+    const activeIsMarkup = incomingConfig ? incomingConfig.isMarkupEnabled : isMarkupEnabled;
+    const activeOption = incomingConfig ? incomingConfig.markupDropdownOption : markupDropdownOption;
+    const activeIsNetSell = incomingConfig ? incomingConfig.isNetSellRateEnabled : isNetSellRateEnabled;
     const currentSearch = search.trim().toLowerCase();
 
-    setAppliedMarkupConfig({
-      isMarkupEnabled,
-      markupDropdownOption,
+    const newConfig: AppliedMarkupConfig = {
+      isMarkupEnabled: activeIsMarkup,
+      markupDropdownOption: activeOption,
       numericMarkup: numMin,
       numericMarkupRate: numRate,
-      isNetSellRateEnabled,
+      isNetSellRateEnabled: activeIsNetSell,
       numericNetSellRate: numNetSell,
-      targetCarrierFilter: currentSearch,
-    });
+    };
+
+    if (currentSearch) {
+      const matchingRates = (ratesFromStore || []).filter((r) =>
+        [r.name, r.code, r.service].some((val) =>
+          (val || "").toLowerCase().includes(currentSearch)
+        )
+      );
+
+      setCarrierMarkupMap((prev) => {
+        const next = { ...prev };
+        matchingRates.forEach((r) => {
+          const key = r.id || r.code;
+          if (isMarkupEnabled || isNetSellRateEnabled) {
+            next[key] = { ...newConfig };
+            if (r.code) next[r.code] = { ...newConfig };
+            if (r.name) next[r.name.trim().toLowerCase()] = { ...newConfig };
+          } else {
+            delete next[key];
+            if (r.code) delete next[r.code];
+            if (r.name) delete next[r.name.trim().toLowerCase()];
+          }
+        });
+        return next;
+      });
+    } else {
+      setAppliedMarkupConfig(newConfig);
+      setCarrierMarkupMap({});
+    }
 
     setIsMarkupRateDirty(false);
     setIsNetSellDirty(false);
@@ -916,7 +957,7 @@ function Rate() {
   const visibleRates = useMemo(() => {
     const query = search.trim().toLowerCase();
     const ratesWithMarkup = (ratesFromStore || []).map((rate) =>
-      applyMarkupToRate(rate, appliedMarkupConfig)
+      applyMarkupToRate(rate, getRateMarkupConfig(rate))
     );
     const matches = ratesWithMarkup.filter((rate) =>
       [rate.name, rate.code, rate.service].some((value) =>
@@ -936,7 +977,7 @@ function Rate() {
       }
       return p1 - p2;
     });
-  }, [search, sortBy, ratesFromStore, appliedMarkupConfig]);
+  }, [search, sortBy, ratesFromStore, appliedMarkupConfig, carrierMarkupMap]);
 
   const validRates = useMemo(() => {
     return visibleRates.filter((rate) => (rate.price ?? 0) > 0);
@@ -1001,22 +1042,12 @@ function Rate() {
           marginType: marginTypeToPass,
           marginPercent: marginValToPass,
           isNetSellRate: isNetSellRateEnabled,
-          calculatedRates: (ratesFromStore || []).map((r) => applyMarkupToRate(r, appliedMarkupConfig)),
+          calculatedRates: (ratesFromStore || []).map((r) => applyMarkupToRate(r, getRateMarkupConfig(r))),
           rawQuote: rawQuote || undefined,
         })
       ).unwrap();
 
       await new Promise((resolve) => setTimeout(resolve, 800));
-
-      setAppliedMarkupConfig({
-        isMarkupEnabled: false,
-        markupDropdownOption: "% Freight + Fuel",
-        numericMarkup: 0,
-        numericMarkupRate: 0,
-        isNetSellRateEnabled: false,
-        numericNetSellRate: 0,
-        targetCarrierFilter: "",
-      });
 
       const token = reduxApp?.token;
       const headers: Record<string, string> = {
@@ -1055,6 +1086,7 @@ function Rate() {
   };
 
   const handleShipIt = (rate: CarrierRate) => {
+    const carrierConfig = getRateMarkupConfig(rate);
     navigate("/shipments/new", {
       state: {
         quote: {
@@ -1097,15 +1129,18 @@ function Rate() {
         selectedCarrier: {
           ...rate,
           price: rate.sellPrice !== undefined ? rate.sellPrice : rate.price,
-          markupType: appliedMarkupConfig.isNetSellRateEnabled
+          markupType: carrierConfig.isNetSellRateEnabled
             ? "netSellRate"
-            : appliedMarkupConfig.markupDropdownOption,
-          rate: appliedMarkupConfig.isNetSellRateEnabled
-            ? String(appliedMarkupConfig.numericNetSellRate)
-            : String(appliedMarkupConfig.numericMarkupRate),
-          minimum: String(appliedMarkupConfig.numericMarkup),
+            : carrierConfig.markupDropdownOption,
+          rate: carrierConfig.isNetSellRateEnabled
+            ? String(carrierConfig.numericNetSellRate)
+            : String(carrierConfig.numericMarkupRate),
+          minimum: String(carrierConfig.numericMarkup),
           markup: rate.markupAmount ?? 0,
-          grossSellAmount: rate.grossSell,
+          grossSellAmount: rate.grossSell ?? rate.grossSellAmount,
+          sellPrice: rate.sellPrice,
+          fuelSell: rate.fuelSell,
+          discountSell: rate.discountSell,
           ppsFreight: rate.ppsFreight,
           ppsFuel: rate.ppsFuel,
         },
@@ -1336,6 +1371,8 @@ function Rate() {
                         setIsMarkupEnabled(checked);
                         if (checked) {
                           setIsNetSellRateEnabled(false);
+                          if (!markupRate || markupRate === "0") setMarkupRate("25");
+                          if (!markup || markup === "0") setMarkup("50");
                         }
                       }}
                       className="markup-checkbox"
@@ -1380,7 +1417,7 @@ function Rate() {
                               setMarkupRate(val);
                               setIsMarkupRateDirty(true);
                             }}
-                            onPressEnter={handleApplyMarkup}
+                            onPressEnter={() => handleApplyMarkup()}
                           />
                         </div>
                         <div className="markup-input-wrap">
@@ -1430,13 +1467,13 @@ function Rate() {
                             setNetSellRate(val);
                             setIsNetSellDirty(true);
                           }}
-                          onPressEnter={handleApplyMarkup}
+                          onPressEnter={() => handleApplyMarkup()}
                         />
                       </div>
                     )}
                     {isCorporate && (
                       <Col>
-                        <Button danger type="primary" onClick={handleApplyMarkup}>
+                        <Button danger type="primary" onClick={() => handleApplyMarkup()}>
                           Apply
                         </Button>
                       </Col>

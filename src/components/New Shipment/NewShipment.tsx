@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import dayjs from 'dayjs';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { setProductItems, addProductRow, removeProductRow, updateProductRow, updateProductHazmat, setWeightUnit, resetProductItems, type ProductItem } from '../../store/productSlice';
 import { setSelectedAccessorials, fetchAccessorials, clearSelectedAccessorials } from '../../store/accessorialsSlice';
@@ -117,8 +118,19 @@ interface ShipmentPrefillCarrier {
   service?: string;
   price?: number;
   grossCharge?: number;
+  grossSellAmount?: number;
+  grossSell?: number;
+  sellPrice?: number;
   discount?: number;
+  discountSell?: number;
   fuelSurcharge?: number;
+  fuelSell?: number;
+  markupAmount?: number;
+  ppsFreight?: number;
+  ppsFuel?: number;
+  markupType?: string;
+  rate?: string | number;
+  minimum?: string | number;
   carrierName?: string;
   scac?: string;
   serviceLevel?: string;
@@ -490,6 +502,7 @@ const NewShipment: React.FC = () => {
   }, [quote, accessorialsList, dispatch]); // accessorialsMatchedRef guards against repeated dispatch
 
   const [originData, setOriginData] = useState<any>(() => {
+    const today = dayjs().format("MM/DD/YYYY");
     return {
       companyName: "",
       address1: "",
@@ -498,12 +511,13 @@ const NewShipment: React.FC = () => {
       city: quote?.originCity || "",
       state: quote?.originStateCode || "",
       country: quote?.originCountry || "USA",
-      pickupDate: quote?.pickupDate ? new Date(quote.pickupDate).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : "",
-      expPickupDate: quote?.pickupDate ? new Date(quote.pickupDate).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : "",
+      pickupDate: quote?.pickupDate ? dayjs(quote.pickupDate).format("MM/DD/YYYY") : today,
+      expPickupDate: quote?.pickupDate ? dayjs(quote.pickupDate).format("MM/DD/YYYY") : today,
     };
   });
 
   const [destinationData, setDestinationData] = useState<any>(() => {
+    const today = dayjs().format("MM/DD/YYYY");
     return {
       companyName: "",
       address1: "",
@@ -512,6 +526,8 @@ const NewShipment: React.FC = () => {
       city: quote?.destinationCity || "",
       state: quote?.destinationStateCode || "",
       country: quote?.destinationCountry || "USA",
+      deliveryDate: today,
+      expDeliveryDate: today,
     };
   });
 
@@ -828,9 +844,12 @@ const NewShipment: React.FC = () => {
     );
 
     let grossCharge = Number(rawCarrier.grossCharge ?? matchingQuoteResult?.grossCharge) || 0;
+    let grossSellAmount = Number(rawCarrier.grossSellAmount ?? rawCarrier.grossSell ?? matchingQuoteResult?.grossSellAmount) || undefined;
     let discount = Number(rawCarrier.discount ?? matchingQuoteResult?.discount) || 0;
+    let discountSell = Number(rawCarrier.discountSell ?? matchingQuoteResult?.discountSell) || undefined;
     let fuelSurcharge = Number(rawCarrier.fuelSurcharge ?? matchingQuoteResult?.fuelSurcharge) || 0;
-    const accessorialCharges: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[] = [];
+    let fuelSell = Number(rawCarrier.fuelSell ?? matchingQuoteResult?.fuelSell) || undefined;
+    const accessorialCharges: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
 
     const costDetails = rawCarrier.quoteCostDetails || rawCarrier.costDetails || matchingQuoteResult?.quoteCostDetails;
     if (Array.isArray(costDetails) && costDetails.length > 0) {
@@ -838,6 +857,7 @@ const NewShipment: React.FC = () => {
         const code = (cd.accCode || cd.code || "").trim().toUpperCase();
         const name = (cd.accName || cd.name || cd.description || "").trim().toLowerCase();
         const amount = Number(cd.amount ?? cd.charge) || 0;
+        const sellAmount = cd.sellAmount != null ? Number(cd.sellAmount) : (cd.sellCharge != null ? Number(cd.sellCharge) : undefined);
 
         if (
           code === "GROSS" ||
@@ -849,6 +869,9 @@ const NewShipment: React.FC = () => {
           name === "freight"
         ) {
           grossCharge = amount;
+          if (sellAmount !== undefined) {
+            grossSellAmount = sellAmount;
+          }
         } else if (
           code === "DISC" ||
           code === "DSC" ||
@@ -856,6 +879,9 @@ const NewShipment: React.FC = () => {
           name.includes("discount")
         ) {
           discount = Math.abs(amount);
+          if (sellAmount !== undefined) {
+            discountSell = Math.abs(sellAmount);
+          }
         } else if (
           code === "FUEL" ||
           code === "FSC" ||
@@ -863,20 +889,27 @@ const NewShipment: React.FC = () => {
           name.includes("fuel")
         ) {
           fuelSurcharge = amount;
+          if (sellAmount !== undefined) {
+            fuelSell = sellAmount;
+          }
         } else {
           accessorialCharges.push({
             code: cd.accCode || cd.code || "ACC",
             accessorialDescription: cd.accName || cd.name || cd.description || "Accessorial",
             accessorialCharge: amount,
+            sellCharge: sellAmount !== undefined ? sellAmount : amount,
           });
         }
       });
     } else if (Array.isArray(rawCarrier.accessorialCharges)) {
       rawCarrier.accessorialCharges.forEach((ac: any) => {
+        const amt = Number(ac.accessorialCharge ?? ac.amount) || 0;
+        const sellAmt = ac.sellCharge != null ? Number(ac.sellCharge) : (ac.sellAmount != null ? Number(ac.sellAmount) : amt);
         accessorialCharges.push({
           code: ac.code || ac.accessorialCode || "ACC",
           accessorialDescription: ac.accessorialDescription || ac.description || ac.accName || "Accessorial",
-          accessorialCharge: Number(ac.accessorialCharge ?? ac.amount) || 0,
+          accessorialCharge: amt,
+          sellCharge: sellAmt,
         });
       });
     }
@@ -890,18 +923,33 @@ const NewShipment: React.FC = () => {
       grossCharge = price;
     }
 
+    const sellPrice = rawCarrier.sellPrice !== undefined
+      ? Number(rawCarrier.sellPrice)
+      : (grossSellAmount !== undefined ? grossSellAmount : undefined);
+
     return {
       carrierName: rawCarrier.name || rawCarrier.carrierName || matchingQuoteResult?.carrierName || "",
       carrierCode: rawCarrier.code || rawCarrier.scac || matchingQuoteResult?.scac || "",
       service: rawCarrier.service || rawCarrier.serviceLevel || matchingQuoteResult?.serviceLevel || "",
       price: price > 0 ? price : (grossCharge - discount + fuelSurcharge),
+      sellPrice,
       grossCharge,
+      grossSellAmount,
       discount,
+      discountSell,
       fuelSurcharge,
+      fuelSell,
+      markupAmount: rawCarrier.markupAmount ?? rawCarrier.markup,
+      ppsFreight: rawCarrier.ppsFreight,
+      ppsFuel: rawCarrier.ppsFuel,
+      markupType: rawCarrier.markupType,
+      rate: rawCarrier.rate,
+      minimum: rawCarrier.minimum,
       accessorialCharges,
       grossCode: "FRT",
       discountCode: "DSC",
       fuelCode: "FSC",
+      quoteCostDetails: costDetails,
     };
   }, [rawCarrier, quote]);
 
@@ -1383,14 +1431,14 @@ const NewShipment: React.FC = () => {
         rateDetails.buyRate.fuel > 0
           ? rateDetails.buyRate
           : {
-              freight: Number(carrierRateData?.grossCharge) || (Number(carrierRateData?.price) > 0 ? Number(carrierRateData?.price) : 0),
-              fuel: Number(carrierRateData?.fuelSurcharge) || 0,
-              discount: Number(carrierRateData?.discount) || 0,
+              freight: Number(carrierRateData?.grossSellAmount ?? carrierRateData?.grossCharge) || (Number(carrierRateData?.sellPrice ?? carrierRateData?.price) > 0 ? Number(carrierRateData?.sellPrice ?? carrierRateData?.price) : 0),
+              fuel: Number(carrierRateData?.fuelSell ?? carrierRateData?.fuelSurcharge) || 0,
+              discount: Number(carrierRateData?.discountSell ?? carrierRateData?.discount) || 0,
               accesorialCostDetails: (carrierRateData?.accessorialCharges || []).map((ac: any) => ({
                 accCode: ac.code || "ACC",
-                ratedCost: Number(ac.accessorialCharge) || 0,
+                ratedCost: Number(ac.sellCharge ?? ac.accessorialCharge) || 0,
                 description: ac.accessorialDescription || "",
-                billedCost: Number(ac.accessorialCharge) || 0,
+                billedCost: Number(ac.sellCharge ?? ac.accessorialCharge) || 0,
               })),
             };
 

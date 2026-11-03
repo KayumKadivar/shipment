@@ -15,6 +15,8 @@ export const COST_NAME_DISC = "Discount";
 export const COST_NAME_FUEL = "Fuel Surcharge";
 
 export interface RateAccessorialCharge {
+  sellCharge?: number;
+  sellAmount?: number;
   accessorialCode?: string;
   accCode?: string;
   accessorialDescription?: string;
@@ -165,7 +167,7 @@ export interface QuoteFormData {
   destState: string;
   destCountry: string;
   packages: QuoteFormPackage[];
-  selectedAccessorials: string[];
+  selectedAccessorials: (string | number)[];
   selectedClientCode?: string;
 }
 
@@ -737,7 +739,7 @@ const customerRateSlice = createSlice({
             : undefined;
           let discount = Number(rate.discount) || 0;
           let fuelSurcharge = Number(rate.fuelSurcharge) || 0;
-          const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[] = [];
+          const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
 
           const costDetails = rate.quoteCostDetails || rate.costDetails;
           if (Array.isArray(costDetails) && costDetails.length > 0) {
@@ -780,6 +782,7 @@ const customerRateSlice = createSlice({
                   code: cd.accCode || cd.code || "ACC",
                   accessorialDescription: cd.accName || cd.name || cd.description || "Accessorial",
                   accessorialCharge: amount,
+                  sellCharge: cd.sellAmount != null ? Number(cd.sellAmount) : amount,
                 });
               }
             });

@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import type { FormInstance } from 'antd';
+import './newshipment.css';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import { formatDisplayTime, TIME_OPTIONS } from './OriginLocation';
@@ -172,8 +173,8 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         closeTime: closeTimeFormatted,
         delOpenTime: openTimeFormatted,
         delCloseTime: closeTimeFormatted,
-        deliveryDate: initialData.deliveryDate || "",
-        expDeliveryDate: initialData.expDeliveryDate || initialData.deliveryDate || "",
+        deliveryDate: initialData.deliveryDate || form.getFieldValue("deliveryDate") || dayjs().format("MM/DD/YYYY"),
+        expDeliveryDate: initialData.expDeliveryDate || initialData.deliveryDate || form.getFieldValue("expDeliveryDate") || dayjs().format("MM/DD/YYYY"),
         consigneeNotes: initialData.consigneeNotes || "",
       });
     }
@@ -466,6 +467,8 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
           closeTime: "05:00 PM",
           delOpenTime: "08:00 AM",
           delCloseTime: "05:00 PM",
+          expDeliveryDate: dayjs().format("MM/DD/YYYY"),
+          deliveryDate: dayjs().format("MM/DD/YYYY"),
         }}
         onValuesChange={(_, all) => {
           if (onChange) onChange(all);
@@ -495,7 +498,11 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
           >
             <Input
               placeholder="Company name"
-              suffix={loadingCompany ? <Spin size="small" /> : null}
+              suffix={
+                <span className={`company-search-spinner-wrap ${loadingCompany ? "is-loading" : ""}`}>
+                  <Spin size="small" />
+                </span>
+              }
             />
           </AutoComplete>
         </Form.Item>

@@ -1,6 +1,7 @@
 import { useAppSelector } from "../../app/hooks";
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, Form, Input, Row, Col, Button, AutoComplete, Spin } from 'antd';
+import './newshipment.css';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import axios from 'axios';
@@ -408,7 +409,11 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
           >
             <Input
               placeholder="Company Name"
-              suffix={loadingCompany ? <Spin size="small" /> : null}
+              suffix={
+                <span className={`company-search-spinner-wrap ${loadingCompany ? "is-loading" : ""}`}>
+                  <Spin size="small" />
+                </span>
+              }
             />
           </AutoComplete>
         </Form.Item>

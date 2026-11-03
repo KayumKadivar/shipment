@@ -1285,3 +1285,16 @@
   color: #1f2937;
   display: block;
 }
+/* Company search loading spinner */
+.company-search-spinner-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  visibility: hidden;
+}
+
+.company-search-spinner-wrap.is-loading {
+  visibility: visible;
+}

@@ -21,7 +21,7 @@ import {
 } from "antd";
 import type { FormItemProps } from "antd";
 import CountrySelect from "../components/CountrySelect";
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import { usePostalLookup } from "../hooks/usePostalLookup";
@@ -583,9 +583,18 @@ function NewQuote() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [accessorialSearch, setAccessorialSearch] = useState("");
-  const [selectedAccessorials, setSelectedAccessorials] = useState<string[]>(
+  const [selectedAccessorials, setSelectedAccessorials] = useState<(string | number)[]>(
     () => quoteFormData?.selectedAccessorials || [],
   );
+  const accessorialListRef = useRef<HTMLDivElement>(null);
+  const accessorialScrollTopRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (accessorialListRef.current && accessorialScrollTopRef.current !== null) {
+      accessorialListRef.current.scrollTop = accessorialScrollTopRef.current;
+      accessorialScrollTopRef.current = null;
+    }
+  }, [selectedAccessorials]);
 
   const { data: accessorialOptions } = useAppSelector(
     (state) => state.accessorials,
@@ -928,14 +937,23 @@ function NewQuote() {
 
   const visibleAccessorials = useMemo(() => {
     const query = accessorialSearch.trim().toLowerCase();
-    const options = accessorialOptions.map((a) => a.accessorialName);
     const filtered = query
-      ? options.filter((option) => option.toLowerCase().includes(query))
-      : options;
+      ? (accessorialOptions || []).filter((item) =>
+          (item.accessorialName || item.description || '').toLowerCase().includes(query),
+        )
+      : (accessorialOptions || []);
 
     const selectedSet = new Set(selectedAccessorials);
-    const selected = filtered.filter((opt) => selectedSet.has(opt));
-    const unselected = filtered.filter((opt) => !selectedSet.has(opt));
+    const selected = filtered.filter(
+      (item) =>
+        selectedSet.has(item.accessorialID) ||
+        selectedSet.has(item.accessorialName),
+    );
+    const unselected = filtered.filter(
+      (item) =>
+        !selectedSet.has(item.accessorialID) &&
+        !selectedSet.has(item.accessorialName),
+    );
 
     return [...selected, ...unselected];
   }, [accessorialSearch, accessorialOptions, selectedAccessorials]);
@@ -1217,7 +1235,11 @@ function NewQuote() {
       hazmatGroup: firstHazmat?.hazMatPackingGroup || "",
       shipments,
       accessorialCodes: accessorialOptions
-        .filter((a) => selectedAccessorials.includes(a.accessorialName))
+        .filter(
+          (a) =>
+            selectedAccessorials.includes(a.accessorialID) ||
+            selectedAccessorials.includes(a.accessorialName),
+        )
         .map((a) => a.accesorialCode || a.accessorialName),
       profileCode:
         profileCode ||
@@ -1481,27 +1503,47 @@ function NewQuote() {
                   allowClear
                   onChange={(event) => setAccessorialSearch(event.target.value)}
                 />
-                <div className="quote-accessorial-list">
-                  {visibleAccessorials.map((option) => {
-                    const checked = selectedAccessorials.includes(option);
+                <div className="quote-accessorial-list" ref={accessorialListRef}>
+                  {visibleAccessorials.map((item, idx) => {
+                    const itemKey =
+                      item.accessorialID !== undefined && item.accessorialID !== null
+                        ? `acc-${item.accessorialID}`
+                        : `acc-idx-${idx}`;
+                    const checked =
+                      selectedAccessorials.includes(item.accessorialID) ||
+                      (item.accessorialID === undefined &&
+                        selectedAccessorials.includes(item.accessorialName));
+                    const selectId =
+                      item.accessorialID !== undefined
+                        ? item.accessorialID
+                        : item.accessorialName;
                     return (
-                      <label
-                        className={checked ? "is-checked" : ""}
-                        key={option}
+                      <div
+                        className={`quote-accessorial-item ${checked ? "is-checked" : ""}`}
+                        key={itemKey}
                       >
                         <Checkbox
                           checked={checked}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            if (accessorialListRef.current) {
+                              accessorialScrollTopRef.current = accessorialListRef.current.scrollTop;
+                            }
+                            (event.target as any)?.blur?.();
                             setSelectedAccessorials((current) =>
                               event.target.checked
-                                ? [...current, option]
-                                : current.filter((value) => value !== option),
-                            )
-                          }
+                                ? [...current, selectId]
+                                : current.filter(
+                                    (value) =>
+                                      value !== selectId &&
+                                      value !== item.accessorialID &&
+                                      value !== item.accessorialName,
+                                  ),
+                            );
+                          }}
                         >
-                          {option}
+                          {item.accessorialName || item.description}
                         </Checkbox>
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
