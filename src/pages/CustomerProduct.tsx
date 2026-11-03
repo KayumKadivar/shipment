@@ -1,3 +1,4 @@
+import { setProductClient } from "../store/clientContextSlice";
 import {
   DeleteOutlined,
   DownloadOutlined,
@@ -163,6 +164,8 @@ function CustomerProductPage({
   products,
   setProducts,
 }: CustomerProductPageProps) {
+  const reduxApp = useAppSelector((state) => state.app);
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { loading, totalCount, packageTypes, loadingPackageTypes } = useAppSelector(
@@ -187,7 +190,6 @@ function CustomerProductPage({
   
   const loggedInClientCode =
     useAppSelector((state) => state.app.clientCode) ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
     DEFAULT_CLIENT_CODE;
 
   const defaultLoggedClient = useMemo(() => {
@@ -201,7 +203,9 @@ function CustomerProductPage({
     );
   }, [clients, loggedInClientCode]);
 
-  const [selectedClientCode, setSelectedClientCode] = useState<string>("");
+  const [selectedClientCode, setSelectedClientCode] = useState<string>(
+    () => reduxClientContext.customerProduct_selectedClientCode || "",
+  );
 
   useEffect(() => {
     dispatch(fetchClientsAndSubclients());
@@ -216,13 +220,12 @@ function CustomerProductPage({
   }, [clients, selectedClientCode, defaultLoggedClient]);
 
   useEffect(() => {
-    try {
-      sessionStorage.removeItem("customerProduct_selectedClientCode");
-      sessionStorage.removeItem("customerProduct_selectedClientName");
-    } catch {
-      // ignore
-    }
-  }, []);
+    dispatch(setProductClient({
+      clientCode: activeClientCode || null,
+      clientName: clients.find((client) => client.clientCode === activeClientCode)?.clientName || null,
+    }));
+  }, [activeClientCode, clients, dispatch]);
+
 
   useEffect(() => {
     if (defaultLoggedClient) {
@@ -320,9 +323,10 @@ function CustomerProductPage({
     const selectedClient = clients.find(c => c.clientCode === activeClientCode);
     const clientName =
       selectedClient?.clientName ||
-      (typeof localStorage !== "undefined" ? localStorage.getItem("clientName") : null) ||
+      reduxApp?.clientName ||
       "DEV TESTING";
 
+    dispatch(setProductClient({ clientCode: activeClientCode || null, clientName }));
     navigate("/customer-products/add", {
       state: {
         clientName,

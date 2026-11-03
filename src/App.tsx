@@ -6,7 +6,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
 import Navbar from "./components/Navbar.tsx";
@@ -58,10 +58,29 @@ const antTheme: ThemeConfig = {
 
 function App() {
   const [collapsed, setCollapsed] = useState(false);
-  const isAuthenticated = useAppSelector((state) => state.app.isAuthenticated);
+  const isAuthenticated = useAppSelector(
+    (state) => state.app.isAuthenticated && Boolean(state.app.token),
+  );
+  const [isLoginComplete, setIsLoginComplete] = useState(isAuthenticated);
   const [messageApi, messageContext] = message.useMessage();
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    if (
+      !isAuthenticated &&
+      (location.pathname !== "/" || location.search || location.hash)
+    ) {
+      navigate("/", { replace: true });
+    }
+  }, [
+    isAuthenticated,
+    location.pathname,
+    location.search,
+    location.hash,
+    navigate,
+  ]);
 
   const customerLocations = useAppSelector(
     (state) => state.customerLocation.locations,
@@ -93,11 +112,10 @@ function App() {
   );
 
   const loggedInClientCode =
-    useAppSelector((state) => state.app.clientCode) ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null);
+    useAppSelector((state) => state.app.clientCode);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && isLoginComplete) {
       if (loggedInClientCode) {
         dispatch(fetchAccessorials(loggedInClientCode));
       }
@@ -107,28 +125,24 @@ function App() {
       dispatch(fetchServiceLevel());
       dispatch(fetchPaymentTerm());
     }
-  }, [isAuthenticated, loggedInClientCode, dispatch]);
+  }, [isAuthenticated, isLoginComplete, loggedInClientCode, dispatch]);
 
   const handleLogout = () => {
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch (e) {
-      console.error("Storage clear error on logout:", e);
-    }
     dispatch(logout());
     dispatch(clearQuoteFormData());
     dispatch(clearRates());
     setCollapsed(false);
+    setIsLoginComplete(false);
     window.location.href = "/";
   };
 
-  const handleLogin = () => {
+  const handleLogin = useCallback(() => {
     dispatch(login());
     dispatch(clearQuoteFormData());
     dispatch(clearRates());
+    setIsLoginComplete(true);
     navigate("/shipments", { replace: true });
-  };
+  }, [dispatch, navigate]);
 
   const handleCreateLocation = async (values: Omit<CustomerLocation, "key">) => {
     try {
@@ -153,7 +167,7 @@ function App() {
   return (
     <ConfigProvider theme={antTheme}>
       {messageContext}
-      {!isAuthenticated ? (
+      {!isAuthenticated || !isLoginComplete ? (
         <Login onLogin={handleLogin} />
       ) : (
         <Layout className='shipment-shell'>

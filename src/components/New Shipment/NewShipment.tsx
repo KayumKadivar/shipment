@@ -161,6 +161,8 @@ const isValidNMFC = (val: string): boolean => {
 };
 
 const NewShipment: React.FC = () => {
+  const reduxApp = useAppSelector((state) => state.app);
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const location = useLocation();
@@ -190,7 +192,6 @@ const NewShipment: React.FC = () => {
 
   const loggedInClientCode =
     useAppSelector((state) => state.app.clientCode) ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
     DEFAULT_CLIENT_CODE;
 
   const defaultLoggedClient = useMemo(() => {
@@ -295,35 +296,7 @@ const NewShipment: React.FC = () => {
     return s;
   };
 
-  const createProductsSnapshot = (prods: ProductItem[]) => {
-    return prods.map((p) => ({
-      id: String(p.id ?? ""),
-      pallets: p.pallets,
-      pieces: p.pieces,
-      packageType: p.packageType,
-      class: p.class,
-      weight: p.weight,
-      length: p.length,
-      width: p.width,
-      height: p.height,
-      nmfc: p.nmfc,
-      hazmat: p.hazmat,
-      description: p.description,
-      stackable: p.stackable,
-    }));
-  };
-
-  const updateRatedSnapshot = () => {
-    initialProductsSnapshotRef.current = createProductsSnapshot(items);
-    initialAccessorialsSnapshotRef.current = [...(selectedAccessorialIds || [])].sort((a, b) => a - b);
-  };
-
   const hasRefactorChanges = (): boolean => {
-    // If rate has never been fetched / snapshot never taken, compulsory to rate at least once
-    if (initialProductsSnapshotRef.current === null) {
-      return true;
-    }
-
     // 1. Check Accessorials
     if (initialAccessorialsSnapshotRef.current !== null) {
       const initAcc = initialAccessorialsSnapshotRef.current;
@@ -338,28 +311,27 @@ const NewShipment: React.FC = () => {
       }
     }
 
-    // 2. Check Products (Units, Pieces, PackageType, Class, Weight, Length, Width, Height, NMFC, Hazmat, Stackable, Description, Add/Delete line)
-    const initProds = initialProductsSnapshotRef.current;
-    if (items.length !== initProds.length) {
-      return true;
-    }
-    for (let i = 0; i < items.length; i++) {
-      const cur = items[i];
-      const init = initProds[i];
-      if (!init) return true;
+    // 2. Check Products (Units, Pieces, Class, Weight, Length, Width, Height, NMFC, Hazmat, Add/Delete line)
+    if (initialProductsSnapshotRef.current !== null) {
+      const initProds = initialProductsSnapshotRef.current;
+      if (items.length !== initProds.length) {
+        return true;
+      }
+      for (let i = 0; i < items.length; i++) {
+        const cur = items[i];
+        const init = initProds[i];
+        if (!init) return true;
 
-      if (normalizeValue(cur.pallets) !== normalizeValue(init.pallets)) return true;
-      if (normalizeValue(cur.pieces) !== normalizeValue(init.pieces)) return true;
-      if (String(cur.packageType ?? "").trim() !== String(init.packageType ?? "").trim()) return true;
-      if (normalizeValue(cur.class) !== normalizeValue(init.class)) return true;
-      if (normalizeValue(cur.weight) !== normalizeValue(init.weight)) return true;
-      if (normalizeValue(cur.length) !== normalizeValue(init.length)) return true;
-      if (normalizeValue(cur.width) !== normalizeValue(init.width)) return true;
-      if (normalizeValue(cur.height) !== normalizeValue(init.height)) return true;
-      if (String(cur.nmfc ?? "").trim() !== String(init.nmfc ?? "").trim()) return true;
-      if (Boolean(cur.hazmat) !== Boolean(init.hazmat)) return true;
-      if (Boolean(cur.stackable) !== Boolean(init.stackable)) return true;
-      if (String(cur.description ?? "").trim() !== String(init.description ?? "").trim()) return true;
+        if (normalizeValue(cur.pallets) !== normalizeValue(init.pallets)) return true;
+        if (normalizeValue(cur.pieces) !== normalizeValue(init.pieces)) return true;
+        if (normalizeValue(cur.class) !== normalizeValue(init.class)) return true;
+        if (normalizeValue(cur.weight) !== normalizeValue(init.weight)) return true;
+        if (normalizeValue(cur.length) !== normalizeValue(init.length)) return true;
+        if (normalizeValue(cur.width) !== normalizeValue(init.width)) return true;
+        if (normalizeValue(cur.height) !== normalizeValue(init.height)) return true;
+        if (String(cur.nmfc ?? "").trim() !== String(init.nmfc ?? "").trim()) return true;
+        if (Boolean(cur.hazmat) !== Boolean(init.hazmat)) return true;
+      }
     }
 
     return false;
@@ -452,12 +424,35 @@ const NewShipment: React.FC = () => {
       });
       dispatch(setProductItems(mapped));
       if (initialProductsSnapshotRef.current === null) {
-        initialProductsSnapshotRef.current = createProductsSnapshot(mapped);
+        initialProductsSnapshotRef.current = mapped.map((p) => ({
+          id: String(p.id ?? ""),
+          pallets: p.pallets,
+          pieces: p.pieces,
+          class: p.class,
+          weight: p.weight,
+          length: p.length,
+          width: p.width,
+          height: p.height,
+          nmfc: p.nmfc,
+          hazmat: p.hazmat,
+        }));
       }
     } else {
       dispatch(resetProductItems());
-      // For new shipment without quote, initialProductsSnapshotRef remains null
-      // so user is required to click Rate button at least once
+      if (initialProductsSnapshotRef.current === null) {
+        initialProductsSnapshotRef.current = [{
+          id: "1",
+          pallets: "1",
+          pieces: "1",
+          class: "",
+          weight: "",
+          length: "",
+          width: "",
+          height: "",
+          nmfc: "",
+          hazmat: false,
+        }];
+      }
     }
   }, [quote, dispatch]);
 
@@ -533,12 +528,12 @@ const NewShipment: React.FC = () => {
       const clientCode =
         selectedClientCode ||
         quote?.clientCode ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
+        reduxClientContext?.customerLocation_selectedClientCode ||
+        reduxClientContext?.quotes_selectedClientCode ||
         DEFAULT_CLIENT_CODE ||
         "Devts";
 
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",
@@ -667,7 +662,7 @@ const NewShipment: React.FC = () => {
     };
 
     fetchLocationsData();
-  }, [quote, selectedClientCode]);
+  }, [quote, selectedClientCode, originForm, destinationForm, reduxApp?.token, reduxClientContext?.customerLocation_selectedClientCode, reduxClientContext?.quotes_selectedClientCode]);
 
   const fetchProducts = async (query: string) => {
     const trimmed = (query || "").trim();
@@ -685,7 +680,7 @@ const NewShipment: React.FC = () => {
 
     setLoadingProducts(true);
     try {
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",
@@ -695,8 +690,8 @@ const NewShipment: React.FC = () => {
       const clientCodeToUse =
         selectedClientCode ||
         quote?.clientCode ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        reduxClientContext?.quotes_selectedClientCode ||
+        reduxClientContext?.customerLocation_selectedClientCode ||
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
@@ -815,7 +810,6 @@ const NewShipment: React.FC = () => {
     setSelectedCarrierRate(rate);
     setIsRateModalOpen(false);
     setHasRateChanged(false);
-    updateRatedSnapshot();
     setSelectedCarrierInfo({
       carrierId: rate.code || "",
       carrierName: rate.name || "",
@@ -1015,7 +1009,6 @@ const NewShipment: React.FC = () => {
       setIsRateModalOpen(true);
       const res = await dispatch(fetchCarrierRates(payload));
       if (fetchCarrierRates.fulfilled.match(res)) {
-        updateRatedSnapshot();
         const rates = res.payload;
         if (!rates || rates.length === 0) {
           message.warning("No carrier rates returned from the API for the selected route.");
@@ -1321,16 +1314,12 @@ const NewShipment: React.FC = () => {
       const clientCodeToUse =
         selectedClientCode ||
         quote?.clientCode ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        reduxClientContext?.quotes_selectedClientCode ||
+        reduxClientContext?.customerLocation_selectedClientCode ||
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
-      const loggedInUser =
-        localStorage.getItem("userName") ||
-        sessionStorage.getItem("userName") ||
-        localStorage.getItem("user") ||
-        "Portal User";
+      const loggedInUser = reduxApp?.username || "Portal User";
 
       const rawPhone = originVals.phone || originData.phone || "";
       const phoneDigits = rawPhone.replace(/\D/g, "");
@@ -1534,7 +1523,7 @@ const NewShipment: React.FC = () => {
       console.log(JSON.stringify(payload, null, 2));
       console.log("=== BookShipment Payload (Object) ===", payload);
 
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",
@@ -1671,6 +1660,7 @@ const NewShipment: React.FC = () => {
 
   const handleRefactorModalOk = () => {
     setIsRefactorModalOpen(false);
+    checkMarkupAndSave();
   };
 
   const handleRefactorModalCancel = () => {

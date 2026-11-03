@@ -618,8 +618,7 @@ export function CarrierCard({
     isCorporate !== undefined
       ? isCorporate
       : (storeIsCorporate ??
-        (typeof localStorage !== "undefined" &&
-          localStorage.getItem("isCorporate") === "true"));
+        false);
 
   return (
     <article
@@ -736,6 +735,8 @@ const normalizeMarkupType = (
 };
 
 function Rate() {
+  const reduxApp = useAppSelector((state) => state.app);
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
@@ -751,8 +752,8 @@ function Rate() {
   const clients = useAppSelector((state) => state.customerLocation?.clients) || [];
   const clientCodeToUse =
     quoteRequest?.clientCode ||
-    sessionStorage.getItem("quotes_selectedClientCode") ||
-    sessionStorage.getItem("customerLocation_selectedClientCode") ||
+    reduxClientContext?.quotes_selectedClientCode ||
+    reduxClientContext?.customerLocation_selectedClientCode ||
     DEFAULT_CLIENT_CODE;
   const selectedClient = clientCodeToUse
     ? clients.find((c) => c.clientCode === clientCodeToUse)
@@ -764,9 +765,7 @@ function Rate() {
   const isCorporate =
     typeof clientCorporateFlag === "boolean"
       ? clientCorporateFlag
-      : (storeIsCorporate ??
-        (typeof localStorage !== "undefined" &&
-          localStorage.getItem("isCorporate") === "true"));
+      : (storeIsCorporate ?? false);
 
   // Markup UI State
   const [isMarkupEnabled, setIsMarkupEnabled] = useState(false);
@@ -849,14 +848,14 @@ function Rate() {
     const fetchClientMarkup = async () => {
       const clientCodeToUse =
         quoteRequest?.clientCode ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        reduxClientContext?.quotes_selectedClientCode ||
+        reduxClientContext?.customerLocation_selectedClientCode ||
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
       if (!clientCodeToUse) return;
 
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",
@@ -912,7 +911,7 @@ function Rate() {
     };
 
     fetchClientMarkup();
-  }, [quoteRequest?.clientCode]);
+  }, [quoteRequest?.clientCode, reduxApp?.token, reduxClientContext?.customerLocation_selectedClientCode, reduxClientContext?.quotes_selectedClientCode]);
 
   const visibleRates = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -1019,7 +1018,7 @@ function Rate() {
         targetCarrierFilter: "",
       });
 
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",

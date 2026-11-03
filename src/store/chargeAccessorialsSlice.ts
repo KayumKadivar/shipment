@@ -1,3 +1,4 @@
+import type { RootState } from "../app/store";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 import {
@@ -47,10 +48,10 @@ const initialState: ChargeAccessorialsState = {
   currentRequestId: null,
 };
 
-function resolveClientCode(clientCode: string | null | undefined) {
+function resolveClientCode(clientCode: string | null | undefined, appClientCode?: string | null) {
   return (
     clientCode?.trim() ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+    appClientCode ||
     DEFAULT_CLIENT_CODE
   );
 }
@@ -58,11 +59,11 @@ function resolveClientCode(clientCode: string | null | undefined) {
 export const fetchChargeAccessorials = createAsyncThunk<
   { clientCode: string; data: ChargeAccessorial[] },
   string | null | undefined,
-  { rejectValue: string }
+  { rejectValue: string; pendingMeta: { clientCode: string } }
 >(
   "chargeAccessorials/fetchChargeAccessorials",
-  async (clientCode, { rejectWithValue }) => {
-    const resolvedClientCode = resolveClientCode(clientCode);
+  async (clientCode, { getState, rejectWithValue }) => {
+    const resolvedClientCode = resolveClientCode(clientCode, (getState() as RootState)?.app?.clientCode);
 
     try {
       const response = await axios.get<ChargeAccessorialApiResponse>(
@@ -106,6 +107,11 @@ export const fetchChargeAccessorials = createAsyncThunk<
       );
     }
   },
+  {
+    getPendingMeta: ({ arg }, { getState }) => ({
+      clientCode: resolveClientCode(arg, (getState() as RootState)?.app?.clientCode),
+    }),
+  },
 );
 
 const chargeAccessorialsSlice = createSlice({
@@ -118,7 +124,7 @@ const chargeAccessorialsSlice = createSlice({
         state.data = [];
         state.loading = true;
         state.error = null;
-        state.requestedClientCode = resolveClientCode(action.meta.arg);
+        state.requestedClientCode = action.meta.clientCode;
         state.currentRequestId = action.meta.requestId;
       })
       .addCase(fetchChargeAccessorials.fulfilled, (state, action) => {

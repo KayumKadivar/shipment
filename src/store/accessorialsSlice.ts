@@ -1,3 +1,4 @@
+import type { RootState } from "../app/store";
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import type { LocationAccessorial } from "../types/customerLocation.types";
 import axios from "axios";
@@ -40,15 +41,13 @@ export const fetchAccessorials = createAsyncThunk<
   "accessorials/fetchAccessorials",
   async (clientCode: string | void, { getState, rejectWithValue }) => {
     try {
-      const state = getState() as any;
+      const state = getState() as RootState;
       const code =
         (typeof clientCode === "string" && clientCode.trim()) ||
         state.app?.clientCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
         state.app?.profileCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) ||
         DEFAULT_CLIENT_CODE;
-      const token = localStorage.getItem("authToken");
+      const token = (getState() as RootState)?.app?.token;
 
       const response = await axios.get<AccessorialApiResponse>(
         `${API_BASE_URL}/GetAccessorials?srvToken=${SRV_TOKEN}&clientCode=${code}`,

@@ -1,6 +1,6 @@
 import { EyeInvisibleOutlined, EyeTwoTone } from "@ant-design/icons";
-import { Alert, Button, Checkbox, Input } from "antd";
-import { useState, type AnimationEvent, type FormEvent } from "react";
+import { Alert, Button, Input } from "antd";
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 
 import loginLogoDown from "../assets/login-logo-down.svg";
 import loginLogo from "../assets/login-logo.png";
@@ -8,36 +8,28 @@ import nicoLogo from "../assets/nico1.png";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { loginUser } from "../store/appSlice";
 
-const REMEMBER_USERNAME_PREFERENCE_KEY = "rememberUsername";
-const REMEMBERED_USERNAME_KEY = "rememberedUsername";
+/** Duration shared by the post-login transition timer and progress animations. */
+const LOGIN_PROGRESS_DURATION_MS = 3000;
 
 type LoginProps = {
   onLogin: () => void;
 };
 
 function Login({ onLogin }: LoginProps) {
-  const rememberUsernameByDefault =
-    localStorage.getItem(REMEMBER_USERNAME_PREFERENCE_KEY) !== "false";
-  const [username, setUsername] = useState(() =>
-    rememberUsernameByDefault
-      ? localStorage.getItem(REMEMBERED_USERNAME_KEY) ?? ""
-      : "",
-  );
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [rememberMe, setRememberMe] = useState(rememberUsernameByDefault);
 
   const dispatch = useAppDispatch();
   const isSubmitting = useAppSelector((state) => state.app.loading);
 
-  const handleProgressAnimationEnd = (
-    event: AnimationEvent<HTMLDivElement>,
-  ) => {
-    if (event.animationName === "login-progress-fill") {
-      onLogin();
-    }
-  };
+  useEffect(() => {
+    if (!isLoggingIn) return;
+
+    const timer = window.setTimeout(onLogin, LOGIN_PROGRESS_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [isLoggingIn, onLogin]);
 
   const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -61,16 +53,6 @@ function Login({ onLogin }: LoginProps) {
         })
       ).unwrap();
 
-      localStorage.setItem(
-        REMEMBER_USERNAME_PREFERENCE_KEY,
-        String(rememberMe),
-      );
-      if (rememberMe) {
-        localStorage.setItem(REMEMBERED_USERNAME_KEY, username.trim());
-      } else {
-        localStorage.removeItem(REMEMBERED_USERNAME_KEY);
-      }
-
       // Show sync animation screen after successful API login
       setIsLoggingIn(true);
     } catch (error: unknown) {
@@ -86,6 +68,7 @@ function Login({ onLogin }: LoginProps) {
     return (
       <main
         className='login-page login-page--progress'
+        style={{ "--login-progress-duration": `${LOGIN_PROGRESS_DURATION_MS}ms` } as CSSProperties}
         aria-label='Login in progress'
         aria-busy='true'
         aria-live='polite'>
@@ -96,10 +79,7 @@ function Login({ onLogin }: LoginProps) {
 
           <div className='login-progress-row'>
             <div className='login-progress-track' aria-hidden='true'>
-              <div
-                className='login-progress-fill'
-                onAnimationEnd={handleProgressAnimationEnd}
-              />
+              <div className='login-progress-fill' />
               <div className='login-progress-dot' />
             </div>
             <p className='login-progress-status'>SYNCING CARRIER RATES...</p>
@@ -160,13 +140,6 @@ function Login({ onLogin }: LoginProps) {
           </label>
 
           <div className='login-options'>
-            <Checkbox
-              className='login-remember'
-              checked={rememberMe}
-              disabled={isSubmitting}
-              onChange={(event) => setRememberMe(event.target.checked)}>
-              Remember me
-            </Checkbox>
 
             <button className='login-link' type='button'>
               Forgot Password?

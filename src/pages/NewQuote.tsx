@@ -1,3 +1,4 @@
+import { setQuoteClient } from "../store/clientContextSlice";
 import {
   DeleteOutlined,
   PlusOutlined,
@@ -565,6 +566,8 @@ const ItemFormItem: React.FC<FormItemProps> = ({
 };
 
 function NewQuote() {
+  const reduxApp = useAppSelector((state) => state.app);
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const [form] = Form.useForm();
@@ -593,11 +596,10 @@ function NewQuote() {
 
   const loggedInClientCode =
     useAppSelector((state) => state.app.clientCode) ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
     DEFAULT_CLIENT_CODE;
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
-    () => quoteFormData?.selectedClientCode || "",
+    () => quoteFormData?.selectedClientCode || reduxClientContext.quotes_selectedClientCode || "",
   );
 
   useEffect(() => {
@@ -656,19 +658,16 @@ function NewQuote() {
   }, [clients, selectedClientCode, defaultLoggedClient]);
 
   useEffect(() => {
+    dispatch(setQuoteClient(activeClientCode || null));
+  }, [activeClientCode, dispatch]);
+
+  useEffect(() => {
     const codeToUse = activeClientCode || loggedInClientCode;
     if (codeToUse) {
       dispatch(fetchAccessorials(codeToUse));
     }
   }, [dispatch, activeClientCode, loggedInClientCode]);
 
-  useEffect(() => {
-    try {
-      sessionStorage.removeItem("quotes_selectedClientCode");
-    } catch {
-      // ignore
-    }
-  }, []);
 
   useEffect(() => {
     if (defaultLoggedClient) {
@@ -682,11 +681,11 @@ function NewQuote() {
     const list = [...clients];
 
     const fallbackCode =
-      (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+      reduxApp?.clientCode ||
       DEFAULT_CLIENT_CODE ||
       "DEVTS";
     const fallbackName =
-      (typeof localStorage !== "undefined" ? localStorage.getItem("clientName") : null) ||
+      reduxApp?.clientName ||
       fallbackCode;
 
     if (list.length === 0) {
@@ -709,7 +708,7 @@ function NewQuote() {
         searchValue: `${displayName} ${client.clientCode || ""}`.trim(),
       };
     });
-  }, [clients]);
+  }, [clients, reduxApp?.clientCode, reduxApp?.clientName]);
 
   const handleClientChange = (value: string) => {
     setSelectedClientCode(value || defaultLoggedClient);
@@ -726,7 +725,7 @@ function NewQuote() {
   const fetchProducts = async (query = "") => {
     setLoadingProducts(true);
     try {
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",
@@ -736,8 +735,8 @@ function NewQuote() {
       const clientCodeToUse =
         selectedClientCode ||
         activeClientCode ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        reduxClientContext?.quotes_selectedClientCode ||
+        reduxClientContext?.customerLocation_selectedClientCode ||
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
@@ -1223,7 +1222,7 @@ function NewQuote() {
       profileCode:
         profileCode ||
         clients.find((c) => c.clientCode === activeClientCode)?.profileCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) ||
+        reduxApp?.profileCode ||
         "",
       clientCode: activeClientCode || "",
       clientName:
@@ -1233,15 +1232,15 @@ function NewQuote() {
         "",
       ratingClientCode:
         clients.find((c) => c.clientCode === activeClientCode)?.ratingClientCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("ratingClientCode") : null) ||
+        reduxApp?.ratingClientCode ||
         activeClientCode ||
         "",
       ratingProfileCode:
         clients.find((c) => c.clientCode === activeClientCode)?.ratingProfileCode ||
         profileCode ||
         clients.find((c) => c.clientCode === activeClientCode)?.profileCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("ratingProfileCode") : null) ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) ||
+        reduxApp?.ratingProfileCode ||
+        reduxApp?.profileCode ||
         "",
       scac: undefined,
       shipmentDate: pickupDate || new Date().toISOString(),

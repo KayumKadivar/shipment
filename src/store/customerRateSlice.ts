@@ -1,3 +1,4 @@
+import type { RootState } from "../app/store";
 import { createGetRatesRequest } from "../lib/createGetRatesRequest";
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
@@ -239,22 +240,22 @@ export const fetchCarrierRates = createAsyncThunk<
   { rejectValue: string }
 >(
   "customerRate/fetchCarrierRates",
-  async (payload, { rejectWithValue }) => {
+  async (payload, { getState, rejectWithValue }) => {
     try {
-      const token = localStorage.getItem("authToken");
+      const token = (getState() as RootState)?.app?.token;
 
       const ratingClientCode =
         payload.ratingClientCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("ratingClientCode") : null) ||
+        (getState() as RootState)?.app?.ratingClientCode ||
         payload.clientCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+        (getState() as RootState)?.app?.clientCode ||
         "";
 
       const ratingProfileCode =
         payload.ratingProfileCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("ratingProfileCode") : null) ||
+        (getState() as RootState)?.app?.ratingProfileCode ||
         payload.profileCode ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null) || "";
+        (getState() as RootState)?.app?.profileCode || "";
 
       const requestPayload = createGetRatesRequest({
         ...payload,
@@ -394,9 +395,9 @@ export const searchCarriers = createAsyncThunk<
   { rejectValue: string }
 >(
   "customerRate/searchCarriers",
-  async (searchText: string = "", { rejectWithValue }) => {
+  async (searchText: string = "", { getState, rejectWithValue }) => {
     try {
-      const token = localStorage.getItem("authToken");
+      const token = (getState() as RootState)?.app?.token;
       const headers: Record<string, string> = {
         accept: "application/json, text/plain, */*",
       };
@@ -438,10 +439,10 @@ export const saveCustomerQuote = createAsyncThunk<
 >(
   "customerRate/saveCustomerQuote",
   async (args, { getState, rejectWithValue }) => {
-    try {
       const safeArgs = (args || {}) as SaveCustomerQuoteArgs;
+    try {
       const { rates, rawQuote } = getState().customerRate;
-      const token = localStorage.getItem("authToken");
+      const token = (getState() as RootState)?.app?.token;
 
       const baseQuote = safeArgs.rawQuote || rawQuote || {};
       const calculatedRates = safeArgs.calculatedRates || rates || [];
@@ -456,13 +457,13 @@ export const saveCustomerQuote = createAsyncThunk<
       const fallbackBrokerCode =
         (baseQuote.clientCode && String(baseQuote.clientCode).trim()) ||
         (baseQuote.profileCode && String(baseQuote.profileCode).trim()) ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode")?.trim() : null) ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("profileCode")?.trim() : null) ||
+        (getState() as RootState)?.app?.clientCode?.trim() ||
+        (getState() as RootState)?.app?.profileCode?.trim() ||
         "NICO";
 
       const fallbackBrokerName =
         (baseQuote.clientName && String(baseQuote.clientName).trim()) ||
-        (typeof localStorage !== "undefined" ? localStorage.getItem("clientName")?.trim() : null) ||
+        (getState() as RootState)?.app?.clientName?.trim() ||
         "NICO Logistics";
 
       let quoteResults = baseQuote.quoteResults;

@@ -56,26 +56,18 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
   return error.message || fallback;
 }
 
-const storedToken = typeof localStorage !== "undefined" ? localStorage.getItem("authToken") : null;
-const storedUsername = typeof localStorage !== "undefined" ? localStorage.getItem("username") : null;
-const storedProfileCode = typeof localStorage !== "undefined" ? localStorage.getItem("profileCode") : null;
-const storedIsCorporate = typeof localStorage !== "undefined" ? localStorage.getItem("isCorporate") : null;
-const storedClientCode = typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null;
-const storedClientName = typeof localStorage !== "undefined" ? localStorage.getItem("clientName") : null;
-const storedRatingClientCode = typeof localStorage !== "undefined" ? localStorage.getItem("ratingClientCode") : null;
-const storedRatingProfileCode = typeof localStorage !== "undefined" ? localStorage.getItem("ratingProfileCode") : null;
 
 const initialState: AppState = {
-  isAuthenticated: Boolean(storedToken),
-  token: storedToken || null,
-  username: storedUsername || null,
+  isAuthenticated: false,
+  token: null,
+  username: null,
   countries: [],
-  profileCode: storedProfileCode || null,
-  isCorporate: storedIsCorporate !== null ? storedIsCorporate === "true" : null,
-  clientCode: storedClientCode || null,
-  clientName: storedClientName || null,
-  ratingClientCode: storedRatingClientCode || null,
-  ratingProfileCode: storedRatingProfileCode || null,
+  profileCode: null,
+  isCorporate: null,
+  clientCode: null,
+  clientName: null,
+  ratingClientCode: null,
+  ratingProfileCode: null,
   loading: false,
   error: null,
 };
@@ -135,8 +127,6 @@ export const loginUser = createAsyncThunk<
 
     if (response.data?.isSuccess && response.data.data) {
       const token = response.data.data;
-      localStorage.setItem("authToken", token);
-      localStorage.setItem("username", username.trim());
       let profileCode: string | null = null;
       let isCorporate: boolean | null = null;
       let clientCode: string | null = null;
@@ -200,17 +190,11 @@ export const loginUser = createAsyncThunk<
               ratingClientCode = logged.ratingClientCode ?? null;
               ratingProfileCode = logged.ratingProfileCode ?? null;
 
-              if (profileCode) localStorage.setItem("profileCode", profileCode);
-              if (clientCode) localStorage.setItem("clientCode", clientCode);
-              if (clientName) localStorage.setItem("clientName", clientName);
-              if (ratingClientCode) localStorage.setItem("ratingClientCode", ratingClientCode);
-              if (ratingProfileCode) localStorage.setItem("ratingProfileCode", ratingProfileCode);
             }
           } else {
             // Fallback for legacy object format
             if (clientRes.data.data.profiles?.length > 0) {
               profileCode = clientRes.data.data.profiles[0].profileCode;
-              localStorage.setItem("profileCode", profileCode as string);
             }
           }
         }
@@ -218,11 +202,6 @@ export const loginUser = createAsyncThunk<
         // A profile is optional for authentication; protected screens can still load.
       }
 
-      if (isCorporate !== null) {
-        localStorage.setItem("isCorporate", String(isCorporate));
-      } else {
-        localStorage.removeItem("isCorporate");
-      }
 
       return {
         token,
@@ -272,35 +251,27 @@ const appSlice = createSlice({
       if (action.payload) {
         if (action.payload.token) {
           state.token = action.payload.token;
-          localStorage.setItem("authToken", action.payload.token);
         }
         if (action.payload.username) {
           state.username = action.payload.username;
-          localStorage.setItem("username", action.payload.username);
         }
         if (typeof action.payload.isCorporate === "boolean") {
           state.isCorporate = action.payload.isCorporate;
-          localStorage.setItem("isCorporate", String(action.payload.isCorporate));
         }
         if (action.payload.profileCode) {
           state.profileCode = action.payload.profileCode;
-          localStorage.setItem("profileCode", action.payload.profileCode);
         }
         if (action.payload.clientCode) {
           state.clientCode = action.payload.clientCode;
-          localStorage.setItem("clientCode", action.payload.clientCode);
         }
         if (action.payload.clientName) {
           state.clientName = action.payload.clientName;
-          localStorage.setItem("clientName", action.payload.clientName);
         }
         if (action.payload.ratingClientCode) {
           state.ratingClientCode = action.payload.ratingClientCode;
-          localStorage.setItem("ratingClientCode", action.payload.ratingClientCode);
         }
         if (action.payload.ratingProfileCode) {
           state.ratingProfileCode = action.payload.ratingProfileCode;
-          localStorage.setItem("ratingProfileCode", action.payload.ratingProfileCode);
         }
       }
     },
@@ -315,12 +286,6 @@ const appSlice = createSlice({
       state.ratingClientCode = null;
       state.ratingProfileCode = null;
       state.error = null;
-      try {
-        localStorage.clear();
-        sessionStorage.clear();
-      } catch (e) {
-        console.error("Storage clear error in logout reducer:", e);
-      }
     },
     clearLoginError(state) {
       state.error = null;

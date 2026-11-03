@@ -1,3 +1,4 @@
+import { useAppSelector } from "../../app/hooks";
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Card,
@@ -126,6 +127,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   hasRateChanged = false,
   onRateChanged,
 }) => {
+  const reduxApp = useAppSelector((state) => state.app);
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const dispatch = useDispatch<AppDispatch>();
   const customerRate = useSelector((state: RootState) => state.customerRate);
   const accessorialsList =
@@ -153,9 +156,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       ? propIsCorporate
       : typeof clientCorporateFlag === "boolean"
         ? clientCorporateFlag
-        : (storeIsCorporate ??
-          (typeof localStorage !== "undefined" &&
-            localStorage.getItem("isCorporate") === "true"));
+        : (storeIsCorporate ?? false);
 
   const customerRateAccessorialsFetchedRef = useRef(false);
   useEffect(() => {
@@ -314,15 +315,15 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     const fetchClientMarkup = async () => {
       const clientCodeToUse =
         clientCode ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
+        reduxClientContext?.customerLocation_selectedClientCode ||
+        reduxClientContext?.quotes_selectedClientCode ||
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
       if (!clientCodeToUse || fetchedMarkupClientRef.current === clientCodeToUse) return;
       fetchedMarkupClientRef.current = clientCodeToUse;
 
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",
@@ -389,7 +390,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     };
 
     fetchClientMarkup();
-  }, [clientCode, clientMarkupConfig, carrierData]);
+  }, [clientCode, clientMarkupConfig, carrierData, reduxApp?.token, reduxClientContext?.customerLocation_selectedClientCode, reduxClientContext?.quotes_selectedClientCode]);
 
   // Carrier inputs and autocomplete state
   const [carrierName, setCarrierName] = useState<string>("");
@@ -508,7 +509,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
     setLoadingCarriers(true);
     try {
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         accept: "application/json, text/plain, */*",
       };

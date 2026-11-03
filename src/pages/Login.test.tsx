@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
-  waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -41,7 +41,9 @@ describe("Login", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   const fillAndSubmitLogin = (
@@ -57,30 +59,15 @@ describe("Login", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   };
 
-  it("Login_whenFirstVisited_checksRememberMeByDefault", () => {
+  it("Login_whenFirstVisited_doesNotOfferRememberMe", () => {
     render(<Login onLogin={vi.fn()} />);
-
-    expect((screen.getByLabelText(/username/i) as HTMLInputElement).value).toBe(
-      "",
-    );
-    expect(
-      (screen.getByRole("checkbox", { name: "Remember me" }) as HTMLInputElement)
-        .checked,
-    ).toBe(true);
+    expect(screen.queryByRole("checkbox", { name: "Remember me" })).toBeNull();
   });
 
-  it("Login_whenRememberedUsernameExists_prefillsUsername", () => {
-    localStorage.setItem("rememberUsername", "true");
+  it("Login_whenRememberedUsernameExists_ignoresBrowserStorage", () => {
     localStorage.setItem("rememberedUsername", "remembered-user");
-
     render(<Login onLogin={vi.fn()} />);
-
-    expect((screen.getByLabelText(/username/i) as HTMLInputElement).value).toBe(
-      "remembered-user",
-    );
-    expect((screen.getByLabelText(/password/i) as HTMLInputElement).value).toBe(
-      "",
-    );
+    expect((screen.getByLabelText(/username/i) as HTMLInputElement).value).toBe("");
   });
 
   it("Login_whenRendered_usesSvgPoweredByInlandLogo", () => {
@@ -91,29 +78,16 @@ describe("Login", () => {
     ).toContain("login-logo-down.svg");
   });
 
-  it("Login_whenSuccessfulAndRememberMeChecked_savesTrimmedUsername", async () => {
+  it("Login_whenStorageIsUnavailable_submitsTrimmedCredentials", async () => {
+    const accessStorage = vi.fn(() => { throw new Error("Storage unavailable"); });
+    vi.stubGlobal("localStorage", { getItem: accessStorage, setItem: accessStorage });
     render(<Login onLogin={vi.fn()} />);
-
-    fillAndSubmitLogin("  remembered-user  ");
-
+    fillAndSubmitLogin("  test-user  ");
     await screen.findByLabelText("Login in progress");
-
-    expect(localStorage.getItem("rememberUsername")).toBe("true");
-    expect(localStorage.getItem("rememberedUsername")).toBe("remembered-user");
-  });
-
-  it("Login_whenSuccessfulAndRememberMeIsUnchecked_removesRememberedUsername", async () => {
-    localStorage.setItem("rememberUsername", "true");
-    localStorage.setItem("rememberedUsername", "old-user");
-    render(<Login onLogin={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole("checkbox", { name: "Remember me" }));
-    fillAndSubmitLogin("new-user");
-
-    await screen.findByLabelText("Login in progress");
-
-    expect(localStorage.getItem("rememberUsername")).toBe("false");
-    expect(localStorage.getItem("rememberedUsername")).toBeNull();
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { username: "test-user", password: "test-password" },
+    }));
+    expect(accessStorage).not.toHaveBeenCalled();
   });
 
   it("Login_whenAuthenticationFails_doesNotChangeRememberedUsername", async () => {
@@ -133,14 +107,12 @@ describe("Login", () => {
   });
 
   it("Login_whenProgressAnimationCompletes_callsOnLoginOnlyAfterFullAnimation", async () => {
+    vi.useFakeTimers();
     const onLogin = vi.fn();
     const { container } = render(<Login onLogin={onLogin} />);
 
-    fillAndSubmitLogin();
-
-    await waitFor(() => {
-      expect(container.querySelector(".login-progress-fill")).not.toBeNull();
-    });
+    await act(async () => fillAndSubmitLogin());
+    expect(screen.getByLabelText("Login in progress").style.getPropertyValue("--login-progress-duration")).toBe("3000ms");
 
     expect(onLogin).not.toHaveBeenCalled();
 
@@ -155,6 +127,35 @@ describe("Login", () => {
       animationEndEvent,
     );
 
+    expect(onLogin).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(2999));
+    expect(onLogin).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
     expect(onLogin).toHaveBeenCalledOnce();
+    act(() => vi.advanceTimersByTime(5000));
+    expect(onLogin).toHaveBeenCalledOnce();
+  });
+
+  it("Login_whenUnmountedDuringProgress_cancelsCompletion", async () => {
+    vi.useFakeTimers();
+    const onLogin = vi.fn();
+    const { unmount } = render(<Login onLogin={onLogin} />);
+    await act(async () => fillAndSubmitLogin());
+    expect(screen.getByLabelText("Login in progress")).toBeTruthy();
+    unmount();
+    act(() => vi.advanceTimersByTime(3000));
+    expect(onLogin).not.toHaveBeenCalled();
+  });
+
+  it("Login_whenAuthenticationFails_doesNotStartProgress", async () => {
+    vi.useFakeTimers();
+    dispatchMock.mockReturnValue({ unwrap: vi.fn().mockRejectedValue("Invalid credentials") });
+    const onLogin = vi.fn();
+    render(<Login onLogin={onLogin} />);
+    await act(async () => fillAndSubmitLogin());
+    expect(screen.queryByLabelText("Login in progress")).toBeNull();
+    expect(screen.getByText("Invalid credentials")).toBeTruthy();
+    act(() => vi.advanceTimersByTime(3000));
+    expect(onLogin).not.toHaveBeenCalled();
   });
 });

@@ -54,7 +54,7 @@ describe("customer rate API behavior", () => {
     await fetchCarrierRates({
       ratingProfileCode: "BUY-PROFILE", ratingClientCode: "BUY-CLIENT",
       profileCode: "SELL-PROFILE", clientCode: "CLIENT", isAudit: true,
-    })(vi.fn(), vi.fn(), undefined);
+    })(vi.fn(), vi.fn(() => ({ app: { token: "redux-token", ratingProfileCode: "REDUX-PROFILE", ratingClientCode: "REDUX-CLIENT" } })), undefined);
     const body = postRequest.mock.calls[0][1];
     expect(body).toMatchObject({ ratingProfileCode: "BUY-PROFILE", ratingClientCode: "BUY-CLIENT", clientCode: "CLIENT" });
     expect(body).not.toHaveProperty("profileCode");
@@ -66,7 +66,7 @@ describe("customer rate API behavior", () => {
       ratingProfileCode: "STORED-PROFILE", ratingClientCode: "STORED-CLIENT",
     })[key as "ratingProfileCode" | "ratingClientCode"] ?? null) });
     const postRequest = vi.spyOn(axios, "post").mockResolvedValue(createAxiosResponse({ data: [] }));
-    await fetchCarrierRates({ profileCode: "LEGACY", clientCode: "CLIENT" })(vi.fn(), vi.fn(), undefined);
+    await fetchCarrierRates({ profileCode: "LEGACY", clientCode: "CLIENT" })(vi.fn(), vi.fn(() => ({ app: { ratingProfileCode: "STORED-PROFILE", ratingClientCode: "STORED-CLIENT" } })), undefined);
     expect(postRequest.mock.calls[0][1]).toMatchObject({ ratingProfileCode: "STORED-PROFILE", ratingClientCode: "STORED-CLIENT" });
   });
 

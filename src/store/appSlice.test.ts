@@ -55,6 +55,7 @@ describe("app authentication state", () => {
     expect(state.clientName).toBeNull();
     expect(state.ratingClientCode).toBeNull();
     expect(state.ratingProfileCode).toBeNull();
+    expect(localStorage.getItem).not.toHaveBeenCalled();
   });
 
   it("appReducer_whenStoredCredentialsAreAbsent_startsUnauthenticated", async () => {
@@ -101,6 +102,33 @@ describe("app authentication state", () => {
     expect(state.isAuthenticated).toBe(true);
   });
 
+  it("loginUser_whenStorageIsUnavailable_authenticatesAndAuthorizesProfileLookup", async () => {
+    const accessStorage = vi.fn(() => { throw new Error("Storage unavailable"); });
+    vi.stubGlobal("localStorage", { getItem: accessStorage, setItem: accessStorage });
+    vi.stubGlobal("sessionStorage", { getItem: accessStorage, setItem: accessStorage });
+    vi.spyOn(axios, "create").mockReturnValue({
+      post: vi.fn().mockResolvedValue({ data: { isSuccess: true, data: "new-token" } }),
+    } as unknown as ReturnType<typeof axios.create>);
+    const get = vi.spyOn(axios, "get").mockResolvedValue({ data: { data: [] } });
+    const { loginUser } = await import("./appSlice");
+    const action = await loginUser({ username: " user ", password: "password" })(vi.fn(), vi.fn(), undefined);
+    expect(action.payload).toMatchObject({ username: "user", token: "new-token" });
+    expect(get).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer new-token" }),
+    }));
+    expect(accessStorage).not.toHaveBeenCalled();
+  });
+
+  it("loginUser_whenCredentialsAreRejected_preservesServerMessage", async () => {
+    vi.spyOn(axios, "create").mockReturnValue({
+      post: vi.fn().mockResolvedValue({ data: { isSuccess: false, message: "Invalid credentials" } }),
+    } as unknown as ReturnType<typeof axios.create>);
+    const { loginUser } = await import("./appSlice");
+    const action = await loginUser({ username: "user", password: "password" })(vi.fn(), vi.fn(), undefined);
+    expect(action.type).toBe("app/loginUser/rejected");
+    expect(action.payload).toBe("Invalid credentials");
+  });
+
   it.each([
     [false, true],
     [true, false],
@@ -118,7 +146,8 @@ describe("app authentication state", () => {
 
     expect(action.type).toBe("app/loginUser/fulfilled");
     expect(action.payload).toMatchObject({ isCorporate: responseFlag });
-    expect(localStorage.getItem("isCorporate")).toBe(String(responseFlag));
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(localStorage.removeItem).not.toHaveBeenCalled();
   });
 
   it.each([true, false])("loginUser_EmptyClientList_PreservesResponseFlag_%s", async (responseFlag) => {
@@ -133,7 +162,8 @@ describe("app authentication state", () => {
     const action = await loginUser({ username: "user", password: "test-password" })(vi.fn(), vi.fn(), undefined);
 
     expect(action.payload).toMatchObject({ isCorporate: responseFlag });
-    expect(localStorage.getItem("isCorporate")).toBe(String(responseFlag));
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(localStorage.removeItem).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -150,7 +180,8 @@ describe("app authentication state", () => {
     const action = await loginUser({ username: "user", password: "test-password" })(vi.fn(), vi.fn(), undefined);
 
     expect(action.payload).toMatchObject({ isCorporate: false });
-    expect(localStorage.getItem("isCorporate")).toBe("false");
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(localStorage.removeItem).not.toHaveBeenCalled();
   });
 
   it.each(["missing", "failed"])("loginUser_ProfileFlag_%s_ClearsStaleCorporateFlag", async (scenario) => {
@@ -166,6 +197,7 @@ describe("app authentication state", () => {
 
     expect(action.type).toBe("app/loginUser/fulfilled");
     expect(action.payload).toMatchObject({ isCorporate: null });
-    expect(localStorage.getItem("isCorporate")).toBeNull();
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(localStorage.removeItem).not.toHaveBeenCalled();
   });
 });

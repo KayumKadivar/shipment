@@ -50,11 +50,12 @@ const isValidNMFC = (val: string): boolean => {
 };
 
 function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const navigate = useNavigate();
   const location = useLocation();
  const clientName =
     location.state?.clientName ||
-    sessionStorage.getItem("customerProduct_selectedClientName");
+    reduxClientContext?.customerProduct_selectedClientName;
   
   const dispatch = useAppDispatch();
   const { packageTypes, loadingPackageTypes } = useAppSelector(

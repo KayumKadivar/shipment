@@ -1,5 +1,6 @@
 import { configureStore } from "@reduxjs/toolkit";
 import appReducer from "../store/appSlice.ts";
+import clientContextReducer from "../store/clientContextSlice.ts";
 import productReducer from "../store/productSlice.ts";
 import accessorialsReducer from "../store/accessorialsSlice.ts";
 import chargeAccessorialsReducer from "../store/chargeAccessorialsSlice.ts";
@@ -26,6 +27,7 @@ import paymentTermReducer from "../store/paymentTermSlice.ts";
 export const store = configureStore({
   reducer: {
     app: appReducer,
+    clientContext: clientContextReducer,
     product: productReducer,
     accessorials: accessorialsReducer,
     chargeAccessorials: chargeAccessorialsReducer,

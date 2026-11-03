@@ -55,6 +55,8 @@ const normalizeMarkupType = (
 };
 
 function QuoteRateDetail() {
+  const reduxApp = useAppSelector((state) => state.app);
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const navigate = useNavigate();
   const { reference } = useParams<{ reference: string }>();
   const dispatch = useAppDispatch();
@@ -69,8 +71,8 @@ function QuoteRateDetail() {
   // isCorporate check (matching CustomerRate.tsx)
   const clientCodeToUse =
     apiQuote?.clientCode ||
-    sessionStorage.getItem("quotes_selectedClientCode") ||
-    sessionStorage.getItem("customerLocation_selectedClientCode") ||
+    reduxClientContext?.quotes_selectedClientCode ||
+    reduxClientContext?.customerLocation_selectedClientCode ||
     DEFAULT_CLIENT_CODE;
   const selectedClient = clientCodeToUse
     ? clients.find((c) => c.clientCode === clientCodeToUse)
@@ -82,9 +84,7 @@ function QuoteRateDetail() {
   const isCorporate =
     typeof clientCorporateFlag === "boolean"
       ? clientCorporateFlag
-      : (storeIsCorporate ??
-        (typeof localStorage !== "undefined" &&
-          localStorage.getItem("isCorporate") === "true"));
+      : (storeIsCorporate ?? false);
 
   // Markup UI State
   const [isMarkupEnabled, setIsMarkupEnabled] = useState(false);
@@ -152,24 +152,24 @@ function QuoteRateDetail() {
       dispatch(fetchQuoteById(reference));
     }
     const clientCodeForAccessorials =
-      (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
+      reduxApp?.clientCode ||
       DEFAULT_CLIENT_CODE;
     dispatch(fetchAccessorials(clientCodeForAccessorials));
     dispatch(fetchClientsAndSubclients());
-  }, [dispatch, reference]);
+  }, [dispatch, reference, reduxApp?.clientCode]);
 
   useEffect(() => {
     const fetchClientMarkup = async () => {
       const clientCodeToUse =
         apiQuote?.clientCode ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        reduxClientContext?.quotes_selectedClientCode ||
+        reduxClientContext?.customerLocation_selectedClientCode ||
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
       if (!clientCodeToUse) return;
 
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",
@@ -225,7 +225,7 @@ function QuoteRateDetail() {
     };
 
     fetchClientMarkup();
-  }, [apiQuote?.clientCode]);
+  }, [apiQuote?.clientCode, reduxApp?.token, reduxClientContext?.customerLocation_selectedClientCode, reduxClientContext?.quotes_selectedClientCode]);
 
   const originCountry = apiQuote?.originCountry || "USA";
   const destCountry = apiQuote?.destinationCountry || "USA";
@@ -431,12 +431,12 @@ function QuoteRateDetail() {
 
       const clientCodeToUse =
         apiQuote?.clientCode ||
-        sessionStorage.getItem("quotes_selectedClientCode") ||
-        sessionStorage.getItem("customerLocation_selectedClientCode") ||
+        reduxClientContext?.quotes_selectedClientCode ||
+        reduxClientContext?.customerLocation_selectedClientCode ||
         DEFAULT_CLIENT_CODE ||
         "DEVTS";
 
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",

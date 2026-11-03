@@ -1,3 +1,4 @@
+import { useAppSelector } from "../../app/hooks";
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, Form, Input, Row, Col, Button, AutoComplete, Spin } from 'antd';
 import CountrySelect from '../../components/CountrySelect';
@@ -11,6 +12,8 @@ interface BillToLocationProps {
 }
 
 const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange }) => {
+  const reduxApp = useAppSelector((state) => state.app);
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const [form] = Form.useForm();
   const { searchPostals, lookupPostal, loadingPostal } = usePostalLookup();
   const [loading, setLoading] = useState(false);
@@ -110,7 +113,7 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
     searchCompanyTimeoutRef.current = setTimeout(async () => {
       setLoadingCompany(true);
       try {
-        const token = localStorage.getItem("authToken");
+        const token = reduxApp?.token;
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
           accept: "application/json, text/plain, */*",
@@ -119,8 +122,8 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
 
         const clientCodeToUse =
           clientCode ||
-          sessionStorage.getItem("customerLocation_selectedClientCode") ||
-          sessionStorage.getItem("quotes_selectedClientCode") ||
+          reduxClientContext?.customerLocation_selectedClientCode ||
+          reduxClientContext?.quotes_selectedClientCode ||
           DEFAULT_CLIENT_CODE ||
           "DEVTS";
 
@@ -198,11 +201,11 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
     if (!zip || zip.trim().length < 3) return;
     const cleanZip = zip.split(' - ')[0].trim();
     const country = form.getFieldValue("country") || "USA";
-    const clientCodeToUse = clientCode || sessionStorage.getItem("customerLocation_selectedClientCode") || sessionStorage.getItem("quotes_selectedClientCode") || DEFAULT_CLIENT_CODE || "Devts";
+    const clientCodeToUse = clientCode || reduxClientContext?.customerLocation_selectedClientCode || reduxClientContext?.quotes_selectedClientCode || DEFAULT_CLIENT_CODE || "Devts";
 
     setLoading(true);
     try {
-      const token = localStorage.getItem("authToken");
+      const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         accept: "application/json, text/plain, */*",

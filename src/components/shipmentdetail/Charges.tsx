@@ -427,6 +427,7 @@ function Charges({
   onEditorStateChange,
   reratedRate,
 }: ChargesProps) {
+  const reduxApp = useAppSelector((state) => state.app);
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [messageApi, messageContext] = message.useMessage();
@@ -465,7 +466,7 @@ function Charges({
   useEffect(() => {
     if (!isCorporate || !shipment.clientCode) return;
     const controller = new AbortController();
-    const token = localStorage.getItem("authToken");
+    const token = reduxApp?.token;
     axios.get(
       `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(shipment.clientCode)}`,
       {
@@ -482,7 +483,7 @@ function Charges({
         // Client defaults are optional; saved rates remain authoritative until Apply.
       });
     return () => controller.abort();
-  }, [shipment.clientCode, isCorporate]);
+  }, [shipment.clientCode, isCorporate, reduxApp?.token]);
 
   const [appliedReratedRate, setAppliedReratedRate] =
     useState<ShipmentRerateRate | null>(null);

@@ -1,3 +1,4 @@
+import type { RootState } from "../app/store";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 import { API_BASE_URL } from "../config/apiConfig";
@@ -39,12 +40,10 @@ export const fetchServiceLevel = createAsyncThunk<
   }
 >(
   "serviceLevel/fetchServiceLevel",
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
       const token =
-        typeof localStorage !== "undefined"
-          ? localStorage.getItem("authToken")
-          : null;
+        (getState() as RootState)?.app?.token;
       const headers: Record<string, string> = {
         Accept: "application/json, text/plain, */*",
       };

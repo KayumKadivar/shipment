@@ -1,3 +1,4 @@
+import { useAppSelector } from "../../app/hooks";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Form, Input, Row, Col, Button, Select, AutoComplete, Spin, DatePicker } from 'antd';
 import dayjs from 'dayjs';
@@ -46,6 +47,8 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
   onLocationSelect,
   onChange,
 }) => {
+  const reduxApp = useAppSelector((state) => state.app);
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const [internalForm] = Form.useForm();
   const form = externalForm || internalForm;
   const { searchPostals, loadingPostal } = usePostalLookup();
@@ -211,7 +214,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
     searchCompanyTimeoutRef.current = setTimeout(async () => {
       setLoadingCompany(true);
       try {
-        const token = localStorage.getItem("authToken");
+        const token = reduxApp?.token;
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
           accept: "application/json, text/plain, */*",
@@ -220,8 +223,8 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
 
         const clientCodeToUse =
           clientCode ||
-          sessionStorage.getItem("customerLocation_selectedClientCode") ||
-          sessionStorage.getItem("quotes_selectedClientCode") ||
+          reduxClientContext?.customerLocation_selectedClientCode ||
+          reduxClientContext?.quotes_selectedClientCode ||
           DEFAULT_CLIENT_CODE ||
           "DEVTS";
 

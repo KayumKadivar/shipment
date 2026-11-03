@@ -1,3 +1,4 @@
+import { setLocationClient } from "../store/clientContextSlice";
 import {
   DeleteOutlined,
   DownloadOutlined,
@@ -161,6 +162,7 @@ function CustomerLocationPage({
   locations,
   setLocations,
 }: CustomerLocationPageProps) {
+  const reduxClientContext = useAppSelector((state) => state.clientContext);
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   const { loading, clients, totalCount } = useAppSelector(
@@ -187,7 +189,6 @@ function CustomerLocationPage({
 
   const loggedInClientCode =
     useAppSelector((state) => state.app.clientCode) ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("clientCode") : null) ||
     DEFAULT_CLIENT_CODE;
 
   const defaultLoggedClient = useMemo(() => {
@@ -201,7 +202,9 @@ function CustomerLocationPage({
     );
   }, [clients, loggedInClientCode]);
 
-  const [selectedClientCode, setSelectedClientCode] = useState<string>("");
+  const [selectedClientCode, setSelectedClientCode] = useState<string>(
+    () => reduxClientContext.customerLocation_selectedClientCode || "",
+  );
 
   useEffect(() => {
     dispatch(fetchClientsAndSubclients());
@@ -215,12 +218,8 @@ function CustomerLocationPage({
   }, [clients, selectedClientCode, defaultLoggedClient]);
 
   useEffect(() => {
-    try {
-      sessionStorage.removeItem("customerLocation_selectedClientCode");
-    } catch {
-      // ignore
-    }
-  }, []);
+    dispatch(setLocationClient(activeClientCode || null));
+  }, [activeClientCode, dispatch]);
 
   useEffect(() => {
     if (defaultLoggedClient) {
@@ -313,6 +312,7 @@ function CustomerLocationPage({
   };
 
   const openAddForm = () => {
+    dispatch(setLocationClient(activeClientCode || null));
     const selectedClient = clients.find(c => c.clientCode === activeClientCode);
     navigate("/customer-location/add", {
       state: {

@@ -1,3 +1,4 @@
+import type { RootState } from "../app/store";
 import {
   createAsyncThunk,
   createSlice,
@@ -247,12 +248,9 @@ export const saveCustomerLocation = createAsyncThunk(
   "customerLocation/saveCustomerLocation",
   async (
     payloadData: Omit<CustomerLocation, "key"> & { clientID?: string },
-    { rejectWithValue }
-    // { rejectWithValue, getState }
+    { getState, rejectWithValue }
   ) => {
     try {
-      // const state = getState() as RootState;
-      // const allAccessorials = state.accessorials.data;
 
       const payload = {
         locationId: 0,
@@ -263,7 +261,7 @@ export const saveCustomerLocation = createAsyncThunk(
         stateCode: payloadData.stateCode || payloadData.state || "",
         countryCode: payloadData.countryCode || payloadData.country || "",
         zipCode: payloadData.zipCode || payloadData.postal || "",
-        clientCode: (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("customerLocation_selectedClientCode") : null) || DEFAULT_CLIENT_CODE,
+        clientCode: (getState() as RootState)?.clientContext?.customerLocation_selectedClientCode || DEFAULT_CLIENT_CODE,
         contactName: payloadData.contactName || "",
         contactPhone: payloadData.phone || "",
         contactEmail: payloadData.email || "",
@@ -310,7 +308,7 @@ export const updateCustomerLocation = createAsyncThunk(
     payloadData: Omit<Partial<CustomerLocation>, "locationId"> & {
       locationId: string | number;
     },
-    { rejectWithValue }
+    { getState, rejectWithValue }
   ) => {
     try {
       const payload = {
@@ -322,7 +320,7 @@ export const updateCustomerLocation = createAsyncThunk(
         stateCode: payloadData.stateCode || payloadData.state || "",
         countryCode: payloadData.countryCode || payloadData.country || "",
         zipCode: payloadData.zipCode || payloadData.postal || "",
-        clientCode: (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("customerLocation_selectedClientCode") : null) || DEFAULT_CLIENT_CODE,
+        clientCode: (getState() as RootState)?.clientContext?.customerLocation_selectedClientCode || DEFAULT_CLIENT_CODE,
         contactName: payloadData.contactName || "",
         contactPhone: payloadData.phone || (payloadData as any).contactPhone || "",
         contactEmail: payloadData.email || (payloadData as any).contactEmail || "",
@@ -416,7 +414,7 @@ export const getAllCustomerLocations = createAsyncThunk<
   { rejectValue: string }
 >(
   "customerLocation/getAllCustomerLocations",
-  async (params, { rejectWithValue }) => {
+  async (params, { getState, rejectWithValue }) => {
     try {
       let clientCode = DEFAULT_CLIENT_CODE;
       let searchText = "";
@@ -432,7 +430,7 @@ export const getAllCustomerLocations = createAsyncThunk<
         clientCode = params;
       }
 
-      const token = localStorage.getItem("authToken");
+      const token = (getState() as RootState)?.app?.token;
 
       let response;
 

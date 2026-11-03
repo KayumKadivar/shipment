@@ -1,3 +1,4 @@
+import type { RootState } from "../app/store";
 import {
   createAsyncThunk,
   createSlice,
@@ -82,7 +83,7 @@ export const saveCustomerProduct = createAsyncThunk(
   "customerProduct/saveCustomerProduct",
   async (
     payloadData: Omit<CustomerProduct, "key"> & { clientID?: string | number },
-    { rejectWithValue }
+    { getState, rejectWithValue }
   ) => {
     try {
       const payload = {
@@ -95,7 +96,7 @@ export const saveCustomerProduct = createAsyncThunk(
         isHazmat: payloadData.isHazmat ?? false,
         hazmatUN: "",
         packagingGroup: payloadData.packageGroup || "",
-        clientCode: sessionStorage.getItem("customerProduct_selectedClientCode") || "1",
+        clientCode: (getState() as RootState)?.clientContext?.customerProduct_selectedClientCode || "1",
         length: payloadData.length || 0,
         height: payloadData.height || 0,
         width: payloadData.width || 0,
@@ -138,7 +139,7 @@ export const updateCustomerProduct = createAsyncThunk(
   "customerProduct/updateCustomerProduct",
   async (
     payloadData: Partial<CustomerProduct> & { productID: string | number },
-    { rejectWithValue }
+    { getState, rejectWithValue }
   ) => {
     try {
       const payload = {
@@ -151,7 +152,7 @@ export const updateCustomerProduct = createAsyncThunk(
         isHazmat: payloadData.isHazmat ?? false,
         hazmatUN: "",
         packagingGroup: payloadData.packageGroup || "",
-        clientCode: sessionStorage.getItem("customerProduct_selectedClientCode") || "1",
+        clientCode: (getState() as RootState)?.clientContext?.customerProduct_selectedClientCode || "1",
         length: payloadData.length || 0,
         height: payloadData.height || 0,
         width: payloadData.width || 0,
@@ -563,9 +564,9 @@ export const searchCustomerProducts = createAsyncThunk<
 // ============================================================
 export const getProductPackageTypes = createAsyncThunk(
   "customerProduct/getProductPackageTypes",
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     try {
-      const token = localStorage.getItem("authToken");
+      const token = (getState() as RootState)?.app?.token;
       const response = await axios.get<PackageTypesApiResponse>(
         `${API_BASE_URL}/ProductPackageType`,
         {
