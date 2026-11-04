@@ -17,7 +17,19 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE_URL, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
-import { fetchCarrierLogo, saveCustomerQuote, clearQuoteFormData } from "../store/customerRateSlice";
+import {
+  fetchCarrierLogo,
+  saveCustomerQuote,
+  clearQuoteFormData,
+  setRates,
+  setRawQuote,
+  COST_CODE_GROSS,
+  COST_CODE_DISC,
+  COST_CODE_FUEL,
+  COST_NAME_GROSS,
+  COST_NAME_DISC,
+  COST_NAME_FUEL,
+} from "../store/customerRateSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import "../components/New Shipment/newshipment.css";
 // import abfLogo from "../assets/image 55.png";
@@ -55,142 +67,12 @@ export type CarrierRate = SendRateItem & {
   isNetSellActive?: boolean;
 };
 
-export interface AppliedMarkupConfig {
-  isMarkupEnabled: boolean;
-  markupDropdownOption: string;
-  numericMarkup: number;
-  numericMarkupRate: number;
-  isNetSellRateEnabled: boolean;
-  numericNetSellRate: number;
-  targetCarrierFilter?: string;
-}
+import {
+  applyMarkupToRate,
+  type AppliedMarkupConfig,
+} from "../utils/markupCalculator";
 
-export function applyMarkupToRate(rate: CarrierRate, config: AppliedMarkupConfig): CarrierRate {
-  if (config.targetCarrierFilter) {
-    const filter = config.targetCarrierFilter.trim().toLowerCase();
-    const isMatch = [rate.name, rate.code, rate.service].some((value) =>
-      (value || "").toLowerCase().includes(filter)
-    );
-    if (!isMatch) {
-      const defaultGrossSell = rate.grossSellAmount != null ? rate.grossSellAmount : rate.grossCharge;
-      const existingMarkup = rate.grossSellAmount != null ? (rate.grossSellAmount - (rate.grossCharge ?? 0)) : 0;
-      const defaultSellPrice = rate.sellPrice !== undefined ? rate.sellPrice : (rate.price + existingMarkup);
-      return {
-        ...rate,
-        sellPrice: defaultSellPrice,
-        grossSell: defaultGrossSell,
-        fuelSell: rate.fuelSell ?? rate.fuelSurcharge,
-        discountSell: rate.discountSell ?? rate.discount,
-        markupAmount: existingMarkup,
-        ppsFreight: existingMarkup,
-        ppsFuel: 0,
-        isNetSellActive: false,
-      };
-    }
-  }
-
-  const numRate = Math.max(0, config.numericMarkupRate || 0);
-  const numMin = Math.max(0, config.numericMarkup || 0);
-  const numNetSell = Math.max(0, config.numericNetSellRate || 0);
-
-  const grossBuy = Number(rate.grossCharge) || 0;
-  const fuelBuy = Number(rate.fuelSurcharge) || 0;
-  const discountBuy = Number(rate.discount) || 0;
-  const netFreightBuy = Math.max(0, grossBuy - discountBuy);
-  const totalBuy = Number(rate.price) || 0;
-
-  if (config.isNetSellRateEnabled) {
-    const ppsFreight = numNetSell;
-    const ppsFuel = 0;
-    const finalPrice = numNetSell;
-    return {
-      ...rate,
-      sellPrice: finalPrice,
-      grossSell: ppsFreight,
-      fuelSell: 0,
-      discountSell: 0,
-      markupAmount: finalPrice - totalBuy,
-      ppsFreight,
-      ppsFuel,
-      isNetSellActive: true,
-    };
-  }
-
-  if (config.isMarkupEnabled && (numRate > 0 || numMin > 0)) {
-    const rateToUse = numRate > 0 ? numRate : numMin;
-    let calculatedMarkup = 0;
-
-    if (config.markupDropdownOption === "Flat") {
-      calculatedMarkup = rateToUse;
-    } else if (config.markupDropdownOption === "% Freight") {
-      calculatedMarkup = netFreightBuy * (rateToUse / 100);
-      if (calculatedMarkup < numMin) {
-        calculatedMarkup = numMin;
-      }
-    } else if (config.markupDropdownOption === "% Freight + Fuel") {
-      calculatedMarkup = (netFreightBuy + fuelBuy) * (rateToUse / 100);
-      if (calculatedMarkup < numMin) {
-        calculatedMarkup = numMin;
-      }
-    } else if (config.markupDropdownOption === "% Freight + Fuel + Accessorial") {
-      calculatedMarkup = totalBuy * (rateToUse / 100);
-      if (calculatedMarkup < numMin) {
-        calculatedMarkup = numMin;
-      }
-    }
-
-    const totalMarkupToDistribute = Math.round(calculatedMarkup * 100) / 100;
-    const baseTotal = netFreightBuy + fuelBuy;
-
-    let ppsFreight = 0;
-    let ppsFuel = 0;
-
-    if (totalMarkupToDistribute > 0 && baseTotal > 0) {
-      const freightPercent = Math.round((netFreightBuy / baseTotal) * 10000) / 100;
-      const fuelPercent = Math.round((fuelBuy / baseTotal) * 10000) / 100;
-
-      ppsFreight = Math.round(((totalMarkupToDistribute * freightPercent) / 100) * 100) / 100;
-      ppsFuel = Math.round(((totalMarkupToDistribute * fuelPercent) / 100) * 100) / 100;
-
-      if (Math.abs(ppsFreight + ppsFuel - totalMarkupToDistribute) > 0.0001) {
-        ppsFuel = Math.round((totalMarkupToDistribute - ppsFreight) * 100) / 100;
-      }
-    } else {
-      ppsFreight = totalMarkupToDistribute;
-      ppsFuel = 0;
-    }
-
-    const grossSell = Math.round((grossBuy + ppsFreight) * 100) / 100;
-    const fuelSell = Math.round((fuelBuy + ppsFuel) * 100) / 100;
-    const sellPrice = Math.round((totalBuy + totalMarkupToDistribute) * 100) / 100;
-
-    return {
-      ...rate,
-      sellPrice,
-      grossSell,
-      fuelSell,
-      discountSell: discountBuy,
-      markupAmount: totalMarkupToDistribute,
-      ppsFreight,
-      ppsFuel,
-    };
-  }
-
-  const defaultGrossSell = rate.grossSellAmount != null ? rate.grossSellAmount : rate.grossCharge;
-  const existingMarkup = rate.grossSellAmount != null ? (rate.grossSellAmount - (rate.grossCharge ?? 0)) : 0;
-  const defaultSellPrice = rate.sellPrice !== undefined ? rate.sellPrice : (rate.price + existingMarkup);
-
-  return {
-    ...rate,
-    sellPrice: defaultSellPrice,
-    grossSell: defaultGrossSell,
-    fuelSell: rate.fuelSell ?? rate.fuelSurcharge,
-    discountSell: rate.discountSell ?? rate.discount,
-    markupAmount: existingMarkup,
-    ppsFreight: existingMarkup,
-    ppsFuel: 0,
-  };
-}
+export { applyMarkupToRate, type AppliedMarkupConfig };
 
 export type SortOption = "rate-asc" | "rate-desc" | "transit";
 export type QuoteMode = "ltl" | "volume";
@@ -482,6 +364,9 @@ export const formatDateTimeDisplay = (val?: string | null): string => {
 };
 
 export const getGrossSellAmount = (rate: CarrierRate): string | number | undefined => {
+  if (rate.grossSell !== undefined && rate.grossSell !== null) {
+    return rate.grossSell;
+  }
   if (rate.grossSellAmount !== undefined && rate.grossSellAmount !== null) {
     return rate.grossSellAmount;
   }
@@ -768,8 +653,8 @@ function Rate() {
       : (storeIsCorporate ?? false);
 
   // Markup UI State
-  const [isMarkupEnabled, setIsMarkupEnabled] = useState(false);
-  const [markupDropdownOption, setMarkupDropdownOption] = useState("% Freight + Fuel");
+  const [isMarkupEnabled, setIsMarkupEnabled] = useState(true);
+  const [markupDropdownOption, setMarkupDropdownOption] = useState<string>("");
   const [markupRate, setMarkupRate] = useState("0");
   const [isMarkupRateDirty, setIsMarkupRateDirty] = useState(false);
   const [markup, setMarkup] = useState("0");
@@ -779,7 +664,7 @@ function Rate() {
 
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<AppliedMarkupConfig>({
     isMarkupEnabled: false,
-    markupDropdownOption: "% Freight + Fuel",
+    markupDropdownOption: "",
     numericMarkup: 0,
     numericMarkupRate: 0,
     isNetSellRateEnabled: false,
@@ -886,6 +771,39 @@ function Rate() {
   }, [dispatch]);
 
   useEffect(() => {
+    if (rawQuote) {
+      const quoteMarginType = (rawQuote as any).marganType || rawQuote.marginType;
+      const quoteMarginVal = (rawQuote as any).marginPercent != null ? String((rawQuote as any).marginPercent) : undefined;
+      if (quoteMarginType) {
+        const raw = String(quoteMarginType).toLowerCase();
+        if (raw.includes("netsell")) {
+          setIsNetSellRateEnabled(true);
+          setIsMarkupEnabled(false);
+          const val = quoteMarginVal ?? "0";
+          setNetSellRate(val);
+        } else {
+          setIsMarkupEnabled(true);
+          setIsNetSellRateEnabled(false);
+          let opt = quoteMarginType;
+          if (raw.includes("flat")) {
+            opt = "Flat";
+          } else if (raw.includes("acc")) {
+            opt = "% Freight + Fuel + Accessorial";
+          } else if (raw.includes("fuel")) {
+            opt = "% Freight + Fuel";
+          } else if (raw.includes("freight") || raw.includes("%")) {
+            opt = "% Freight";
+          }
+          setMarkupDropdownOption(opt);
+          const rateVal = quoteMarginVal ?? "0";
+          setMarkupRate(rateVal);
+          setMarkup(rateVal);
+        }
+      }
+    }
+  }, [rawQuote]);
+
+  useEffect(() => {
     const fetchClientMarkup = async () => {
       const clientCodeToUse =
         quoteRequest?.clientCode ||
@@ -916,12 +834,12 @@ function Rate() {
             const raw = String(config.markupType).toLowerCase();
             const isNetSell = raw.includes("netsell");
             if (isNetSell) {
-              setIsNetSellRateEnabled(false);
+              setIsNetSellRateEnabled(true);
               setIsMarkupEnabled(false);
               const rateVal = config.rate != null ? String(config.rate) : "0";
               setNetSellRate(rateVal);
             } else {
-              setIsMarkupEnabled(false);
+              setIsMarkupEnabled(true);
               setIsNetSellRateEnabled(false);
               let opt = "Flat";
               if (raw.includes("flat")) {
@@ -1037,15 +955,32 @@ function Rate() {
           ? Number(markupRate) || Number(markup) || 0
           : Number(markupRate) || 0;
 
+      const currentConfig: AppliedMarkupConfig = {
+        isMarkupEnabled: isNetSellRateEnabled ? false : isMarkupEnabled,
+        markupDropdownOption: isNetSellRateEnabled ? "" : markupDropdownOption,
+        numericMarkup: isNetSellRateEnabled ? 0 : (Number(markup) || 0),
+        numericMarkupRate: isNetSellRateEnabled ? 0 : (Number(markupRate) || 0),
+        isNetSellRateEnabled,
+        numericNetSellRate: isNetSellRateEnabled ? (Number(netSellRate) || 0) : 0,
+      };
+
+      setAppliedMarkupConfig(currentConfig);
+
+      const calculatedRatesToSave = (ratesFromStore || []).map((r) =>
+        applyMarkupToRate(r, carrierMarkupMap[r.id] || carrierMarkupMap[r.code] || currentConfig)
+      );
+
       await dispatch(
         saveCustomerQuote({
           marginType: marginTypeToPass,
           marginPercent: marginValToPass,
           isNetSellRate: isNetSellRateEnabled,
-          calculatedRates: (ratesFromStore || []).map((r) => applyMarkupToRate(r, getRateMarkupConfig(r))),
+          calculatedRates: calculatedRatesToSave,
           rawQuote: rawQuote || undefined,
         })
       ).unwrap();
+
+      dispatch(setRates(calculatedRatesToSave));
 
       await new Promise((resolve) => setTimeout(resolve, 800));
 
@@ -1070,7 +1005,126 @@ function Rate() {
       const quoteReqId = rawQuote?.quoteRequestId;
       if (quoteReqId) {
         try {
-          await axios.get(`${API_BASE_URL}/Quote/${quoteReqId}`, { headers });
+          const res = await axios.get(`${API_BASE_URL}/Quote/${quoteReqId}`, { headers });
+          if (res.data?.isSuccess && res.data?.data) {
+            const savedData = res.data.data;
+            dispatch(setRawQuote(savedData));
+
+            if (Array.isArray(savedData.quoteResults) && savedData.quoteResults.length > 0) {
+              const updatedRates = savedData.quoteResults.map((result: any, index: number) => {
+                let grossCharge = Number(result.grossCharge) || 0;
+                let grossSellAmount = (result as any).grossSellAmount != null
+                  ? Number((result as any).grossSellAmount)
+                  : (result as any).sellAmount != null
+                  ? Number((result as any).sellAmount)
+                  : undefined;
+                let discount = Number(result.discount) || 0;
+                let fuelSurcharge = Number(result.fuelSurcharge) || 0;
+                let discountSell = (result as any).discountSell != null ? Number((result as any).discountSell) : undefined;
+                let fuelSell = (result as any).fuelSell != null ? Number((result as any).fuelSell) : undefined;
+                const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
+
+                if (result.quoteCostDetails && Array.isArray(result.quoteCostDetails)) {
+                  result.quoteCostDetails.forEach((cd: any) => {
+                    const code = (cd.accCode || "").trim().toUpperCase();
+                    const name = (cd.accName || "").trim().toLowerCase();
+                    const amount = Number(cd.amount) || 0;
+
+                    if (
+                      code === COST_CODE_GROSS ||
+                      code === "FRT" ||
+                      code === "FREIGHT" ||
+                      code === "BASE" ||
+                      name === COST_NAME_GROSS.toLowerCase() ||
+                      name === "grosscharge" ||
+                      name.includes("freight") ||
+                      name.includes("gross")
+                    ) {
+                      grossCharge = amount;
+                      if (cd.sellAmount != null) {
+                        grossSellAmount = Number(cd.sellAmount);
+                      }
+                    } else if (
+                      code === COST_CODE_DISC ||
+                      code === "DSC" ||
+                      code === "DISCOUNT" ||
+                      name === COST_NAME_DISC.toLowerCase() ||
+                      name.includes("discount")
+                    ) {
+                      discount = Math.abs(amount);
+                      if (cd.sellAmount != null) {
+                        discountSell = Math.abs(Number(cd.sellAmount));
+                      }
+                    } else if (
+                      code === COST_CODE_FUEL ||
+                      code === "FSC" ||
+                      code === "FUEL SURCHARGE" ||
+                      name === COST_NAME_FUEL.toLowerCase() ||
+                      name.includes("fuel")
+                    ) {
+                      fuelSurcharge = amount;
+                      if (cd.sellAmount != null) {
+                        fuelSell = Number(cd.sellAmount);
+                      }
+                    } else {
+                      otherAccessorials.push({
+                        code: cd.accCode || "ACC",
+                        accessorialDescription: cd.accName || cd.accCode || "Accessorial",
+                        accessorialCharge: amount,
+                        sellCharge: (cd as any).sellAmount != null ? Number((cd as any).sellAmount) : amount,
+                      });
+                    }
+                  });
+                }
+
+                const totalAccessorialsBuy = otherAccessorials.reduce((acc, c) => acc + (c.accessorialCharge || 0), 0);
+                const computedBuyPrice = Math.round(((grossCharge - discount + fuelSurcharge) + totalAccessorialsBuy) * 100) / 100;
+                const calculatedPrice = computedBuyPrice > 0
+                  ? computedBuyPrice
+                  : (Number(result.totalShipmentCost) || Number(result.netCharge) || Number(result.price) || 0);
+
+                const calculatedSellPrice =
+                  grossSellAmount !== undefined
+                    ? Math.round((grossSellAmount - (discountSell ?? discount) + (fuelSell ?? fuelSurcharge) + otherAccessorials.reduce((acc, c) => acc + (c.sellCharge ?? c.accessorialCharge ?? 0), 0)) * 100) / 100
+                    : calculatedPrice;
+
+                const existingMatching = (calculatedRatesToSave || []).find(
+                  (cr: any) =>
+                    (result.quoteResultId && String(cr.id) === String(result.quoteResultId)) ||
+                    (result.scac && cr.code && cr.code.toUpperCase() === result.scac.toUpperCase()) ||
+                    (result.carrierName && cr.name && cr.name.toLowerCase() === result.carrierName.toLowerCase())
+                );
+
+                return {
+                  id: String(result.quoteResultId || `${result.scac}-${index}`),
+                  name: result.carrierName || existingMatching?.name || "Unknown Carrier",
+                  code: result.scac || existingMatching?.code || "",
+                  service: result.serviceLevel || result.serviceType || existingMatching?.service || "Standard",
+                  logoKind: "image" as const,
+                  price: calculatedPrice > 0 ? calculatedPrice : 0,
+                  transitDays: parseInt(result.transitDays || "0") || existingMatching?.transitDays || 0,
+                  estimatedDelivery: result.estimatedDeliveryDate || existingMatching?.estimatedDelivery || "",
+                  warning: result.errorMessage?.trim() || result.warning?.trim() || existingMatching?.warning || (calculatedPrice <= 0 ? "Rate unavailable or carrier error." : ""),
+                  quoteExpiry: savedData.requestedDate || existingMatching?.quoteExpiry || "N/A",
+                  liabilityNew: "",
+                  liabilityUsed: "",
+                  grossCharge,
+                  sellPrice: calculatedSellPrice > 0 ? calculatedSellPrice : calculatedPrice,
+                  grossSell: grossSellAmount,
+                  grossSellAmount,
+                  discount,
+                  discountSell,
+                  fuelSurcharge,
+                  fuelSell,
+                  accessorialCharges: otherAccessorials.length > 0 ? otherAccessorials : (existingMatching?.accessorialCharges || []),
+                  quoteCostDetails: result.quoteCostDetails,
+                  rawQuoteResult: result,
+                };
+              });
+
+              dispatch(setRates(updatedRates));
+            }
+          }
         } catch (err) {
           console.error("Error fetching quote by id on save quote:", err);
         }
@@ -1087,45 +1141,62 @@ function Rate() {
 
   const handleShipIt = (rate: CarrierRate) => {
     const carrierConfig = getRateMarkupConfig(rate);
+    const quoteToSend = rawQuote ? { ...rawQuote } : undefined;
+    const fallbackQuote = {
+      quoteRequestId: 0,
+      originZip: quoteRequest?.origZip,
+      originCity: quoteRequest?.origCity,
+      originStateCode: quoteRequest?.origState,
+      originCountry: quoteRequest?.origCountry,
+      destinationZip: quoteRequest?.destZip,
+      destinationCity: quoteRequest?.destCity,
+      destinationStateCode: quoteRequest?.destState,
+      destinationCountry: quoteRequest?.destCountry,
+      pickupDate: quoteRequest?.shipmentDate,
+      clientName: quoteRequest?.clientName,
+      clientCode: quoteRequest?.clientCode || "Devts",
+      profileCode: quoteRequest?.profileCode,
+      quoteProducts: (quoteRequest?.shipments || []).map((s, idx) => ({
+        quoteProductId: idx + 1,
+        pallets: s.pallets || s.units || "",
+        pieces: s.pieces || "",
+        packagingGroup: s.packageType || s.packagingGroup || "",
+        description: s.description || "",
+        productClass: s.class || "",
+        weight: s.weight || "",
+        productNMFC: s.nmfc || "",
+        length: s.length || "",
+        width: s.width || "",
+        height: s.height || "",
+        isHazmat: s.hazMat || s.isHazmat || false,
+        hazmatClass: s.hazmatClass || s.hazMatClass || "",
+        hazmatUN: s.hazmatUN || s.hazMatUN || "",
+        hazmatProperShippingName: s.hazmatProperShippingName || s.hazMatProperShippingName || "",
+        hazmatPhone: s.hazmatPhone || s.hazMatPhone || "",
+        hazmatContactName: s.hazmatContactName || s.hazmatContact || s.hazMatContact || "",
+        hazmatGroup: s.hazmatGroup || s.hazmatPackingGroup || s.hazMatPackingGroup || "",
+        isStackable: s.stackable ?? true,
+      })),
+      quoteAccessorials: (quoteRequest?.accessorialCodes || []).map((code) => ({ accCode: code })),
+    };
+
+    const finalQuote = quoteToSend
+      ? {
+          ...fallbackQuote,
+          ...quoteToSend,
+          clientCode: quoteToSend.clientCode || quoteRequest?.clientCode || "Devts",
+          quoteProducts:
+            quoteToSend.quoteProducts && quoteToSend.quoteProducts.length > 0
+              ? quoteToSend.quoteProducts
+              : fallbackQuote.quoteProducts,
+        }
+      : fallbackQuote;
+
+    const refToSend = rawQuote?.quoteRequestId ? String(rawQuote.quoteRequestId) : undefined;
+
     navigate("/shipments/new", {
       state: {
-        quote: {
-          quoteRequestId: 0,
-          originZip: quoteRequest?.origZip,
-          originCity: quoteRequest?.origCity,
-          originStateCode: quoteRequest?.origState,
-          originCountry: quoteRequest?.origCountry,
-          destinationZip: quoteRequest?.destZip,
-          destinationCity: quoteRequest?.destCity,
-          destinationStateCode: quoteRequest?.destState,
-          destinationCountry: quoteRequest?.destCountry,
-          pickupDate: quoteRequest?.shipmentDate,
-          clientName: quoteRequest?.clientName,
-          clientCode: quoteRequest?.clientCode,
-          profileCode: quoteRequest?.profileCode,
-          quoteProducts: (quoteRequest?.shipments || []).map((s, idx) => ({
-            quoteProductId: idx + 1,
-            pallets: s.pallets || s.units || "",
-            pieces: s.pieces || "",
-            packagingGroup: s.packageType || s.packagingGroup || "",
-            description: s.description || "",
-            productClass: s.class || "",
-            weight: s.weight || "",
-            productNMFC: s.nmfc || "",
-            length: s.length || "",
-            width: s.width || "",
-            height: s.height || "",
-            isHazmat: s.hazMat || s.isHazmat || false,
-            hazmatClass: s.hazmatClass || s.hazMatClass || "",
-            hazmatUN: s.hazmatUN || s.hazMatUN || "",
-            hazmatProperShippingName: s.hazmatProperShippingName || s.hazMatProperShippingName || "",
-            hazmatPhone: s.hazmatPhone || s.hazMatPhone || "",
-            hazmatContactName: s.hazmatContactName || s.hazmatContact || s.hazMatContact || "",
-            hazmatGroup: s.hazmatGroup || s.hazmatPackingGroup || s.hazMatPackingGroup || "",
-            isStackable: s.stackable ?? true,
-          })),
-          quoteAccessorials: (quoteRequest?.accessorialCodes || []).map((code) => ({ accCode: code })),
-        },
+        quote: finalQuote,
         selectedCarrier: {
           ...rate,
           price: rate.sellPrice !== undefined ? rate.sellPrice : rate.price,
@@ -1136,7 +1207,7 @@ function Rate() {
             ? String(carrierConfig.numericNetSellRate)
             : String(carrierConfig.numericMarkupRate),
           minimum: String(carrierConfig.numericMarkup),
-          markup: rate.markupAmount ?? 0,
+          markup: rate.markupAmount ?? (rate.sellPrice !== undefined && rate.price !== undefined ? Math.round((rate.sellPrice - rate.price) * 100) / 100 : 0),
           grossSellAmount: rate.grossSell ?? rate.grossSellAmount,
           sellPrice: rate.sellPrice,
           fuelSell: rate.fuelSell,
@@ -1144,6 +1215,7 @@ function Rate() {
           ppsFreight: rate.ppsFreight,
           ppsFuel: rate.ppsFuel,
         },
+        reference: refToSend,
       },
     });
   };
@@ -1371,8 +1443,6 @@ function Rate() {
                         setIsMarkupEnabled(checked);
                         if (checked) {
                           setIsNetSellRateEnabled(false);
-                          if (!markupRate || markupRate === "0") setMarkupRate("25");
-                          if (!markup || markup === "0") setMarkup("50");
                         }
                       }}
                       className="markup-checkbox"
@@ -1383,7 +1453,8 @@ function Rate() {
                     {isMarkupEnabled && (
                       <>
                         <Select
-                          value={markupDropdownOption}
+                          value={markupDropdownOption || undefined}
+                          placeholder="Select markup type"
                           onChange={(val) => {
                             setMarkupDropdownOption(val);
                           }}

@@ -309,6 +309,10 @@ const NewShipment: React.FC = () => {
   };
 
   const hasRefactorChanges = (): boolean => {
+    if (hasRateChanged) {
+      return true;
+    }
+
     // 1. Check Accessorials
     if (initialAccessorialsSnapshotRef.current !== null) {
       const initAcc = initialAccessorialsSnapshotRef.current;
@@ -951,6 +955,7 @@ const NewShipment: React.FC = () => {
       price: price > 0 ? price : (grossCharge - discount + fuelSurcharge),
       sellPrice,
       grossCharge,
+      grossSell: grossSellAmount,
       grossSellAmount,
       discount,
       discountSell,
@@ -959,8 +964,8 @@ const NewShipment: React.FC = () => {
       markupAmount: rawCarrier.markupAmount ?? rawCarrier.markup,
       ppsFreight: rawCarrier.ppsFreight,
       ppsFuel: rawCarrier.ppsFuel,
-      markupType: rawCarrier.markupType,
-      rate: rawCarrier.rate,
+      markupType: rawCarrier.markupType || (quote as any)?.marginType || (quote as any)?.marganType,
+      rate: rawCarrier.rate ?? (quote as any)?.marginPercent,
       minimum: rawCarrier.minimum,
       accessorialCharges,
       grossCode: "FRT",
@@ -972,6 +977,7 @@ const NewShipment: React.FC = () => {
 
   const handleFetchRatesForShipment = async (scacParam?: string) => {
     setHasRateChanged(false);
+    syncFactorSnapshot();
 
     const originVals = {
       ...(originData || {}),
@@ -1100,6 +1106,8 @@ const NewShipment: React.FC = () => {
       setIsRateModalOpen(true);
       const res = await dispatch(fetchCarrierRates(payload));
       if (fetchCarrierRates.fulfilled.match(res)) {
+        setHasRateChanged(false);
+        syncFactorSnapshot();
         const rates = res.payload;
         if (!rates || rates.length === 0) {
           message.warning("No carrier rates returned from the API for the selected route.");
@@ -1118,11 +1126,13 @@ const NewShipment: React.FC = () => {
 
   const handleAddLine = () => {
     dispatch(addProductRow());
+    setHasRateChanged(true);
   };
 
   const handleRemoveLine = (idToRemove: string) => {
     if (items.length > 1) {
       dispatch(removeProductRow(idToRemove));
+      setHasRateChanged(true);
     }
   };
 
@@ -1155,6 +1165,7 @@ const NewShipment: React.FC = () => {
           hazmatContactName: hazmatForm.hazmatContact,
         })
       );
+      setHasRateChanged(true);
     }
     setIsHazmatModalOpen(false);
     setActiveHazmatItem(null);
@@ -1184,6 +1195,7 @@ const NewShipment: React.FC = () => {
   );
 
   const handleUpdateField = (id: string, field: keyof ProductItem, value: any) => {
+    setHasRateChanged(true);
     if (field === 'stackable') {
       const isStackable = Boolean(value);
       dispatch(updateProductRow({ id, field: 'stackable', value: isStackable }));
@@ -1759,6 +1771,7 @@ const NewShipment: React.FC = () => {
 
   const handleMinMarkupModalOk = () => {
     setIsMinMarkupModalOpen(false);
+    executeSaveShipment();
   };
 
   const handleMinMarkupModalCancel = () => {
@@ -2271,7 +2284,11 @@ const NewShipment: React.FC = () => {
       {/* ══ Carrier Rate Modal Popup (Image 2 UI) ══ */}
       <CarrierRateModal
         open={isRateModalOpen}
-        onClose={() => setIsRateModalOpen(false)}
+        onClose={() => {
+          setIsRateModalOpen(false);
+          setHasRateChanged(false);
+          syncFactorSnapshot();
+        }}
         rates={ratesFromStore}
         loading={ratesLoading}
         error={rateError}

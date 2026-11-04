@@ -24,11 +24,10 @@ import { fetchAccessorials } from "../store/accessorialsSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import "../components/New Shipment/newshipment.css";
 import SendRatesDialog from "../components/rate/SendRatesDialog";
+import { applyMarkupToRate, type AppliedMarkupConfig } from "../utils/markupCalculator";
 import {
   RateMap,
   CarrierCard,
-  applyMarkupToRate,
-  type AppliedMarkupConfig,
   type CarrierRate,
   type SortOption,
   type ViewMode,
@@ -87,8 +86,8 @@ function QuoteRateDetail() {
       : (storeIsCorporate ?? false);
 
   // Markup UI State
-  const [isMarkupEnabled, setIsMarkupEnabled] = useState(false);
-  const [markupDropdownOption, setMarkupDropdownOption] = useState("% Freight + Fuel");
+  const [isMarkupEnabled, setIsMarkupEnabled] = useState(true);
+  const [markupDropdownOption, setMarkupDropdownOption] = useState<string>("");
   const [markupRate, setMarkupRate] = useState("0");
   const [isMarkupRateDirty, setIsMarkupRateDirty] = useState(false);
   const [markup, setMarkup] = useState("0");
@@ -98,7 +97,7 @@ function QuoteRateDetail() {
 
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<AppliedMarkupConfig>({
     isMarkupEnabled: false,
-    markupDropdownOption: "% Freight + Fuel",
+    markupDropdownOption: "",
     numericMarkup: 0,
     numericMarkupRate: 0,
     isNetSellRateEnabled: false,
@@ -200,6 +199,39 @@ function QuoteRateDetail() {
   }, [dispatch, reference, reduxApp?.clientCode]);
 
   useEffect(() => {
+    if (apiQuote) {
+      const quoteMarginType = (apiQuote as any).marganType || apiQuote.marginType;
+      const quoteMarginVal = (apiQuote as any).marginPercent != null ? String((apiQuote as any).marginPercent) : undefined;
+      if (quoteMarginType) {
+        const raw = String(quoteMarginType).toLowerCase();
+        if (raw.includes("netsell")) {
+          setIsNetSellRateEnabled(true);
+          setIsMarkupEnabled(false);
+          const val = quoteMarginVal ?? "0";
+          setNetSellRate(val);
+        } else {
+          setIsMarkupEnabled(true);
+          setIsNetSellRateEnabled(false);
+          let opt = quoteMarginType;
+          if (raw.includes("flat")) {
+            opt = "Flat";
+          } else if (raw.includes("acc")) {
+            opt = "% Freight + Fuel + Accessorial";
+          } else if (raw.includes("fuel")) {
+            opt = "% Freight + Fuel";
+          } else if (raw.includes("freight") || raw.includes("%")) {
+            opt = "% Freight";
+          }
+          setMarkupDropdownOption(opt);
+          const rateVal = quoteMarginVal ?? "0";
+          setMarkupRate(rateVal);
+          setMarkup(rateVal);
+        }
+      }
+    }
+  }, [apiQuote]);
+
+  useEffect(() => {
     const fetchClientMarkup = async () => {
       const clientCodeToUse =
         apiQuote?.clientCode ||
@@ -230,12 +262,12 @@ function QuoteRateDetail() {
             const raw = String(config.markupType).toLowerCase();
             const isNetSell = raw.includes("netsell");
             if (isNetSell) {
-              setIsNetSellRateEnabled(false);
+              setIsNetSellRateEnabled(true);
               setIsMarkupEnabled(false);
               const rateVal = config.rate != null ? String(config.rate) : "0";
               setNetSellRate(rateVal);
             } else {
-              setIsMarkupEnabled(false);
+              setIsMarkupEnabled(true);
               setIsNetSellRateEnabled(false);
               let opt = "Flat";
               if (raw.includes("flat")) {
@@ -865,8 +897,6 @@ function QuoteRateDetail() {
                         setIsMarkupEnabled(checked);
                         if (checked) {
                           setIsNetSellRateEnabled(false);
-                          if (!markupRate || markupRate === "0") setMarkupRate("25");
-                          if (!markup || markup === "0") setMarkup("50");
                         }
                       }}
                       className="markup-checkbox"
@@ -877,7 +907,8 @@ function QuoteRateDetail() {
                     {isMarkupEnabled && (
                       <>
                         <Select
-                          value={markupDropdownOption}
+                          value={markupDropdownOption || undefined}
+                          placeholder="Select markup type"
                           onChange={(val) => {
                             setMarkupDropdownOption(val);
                           }}

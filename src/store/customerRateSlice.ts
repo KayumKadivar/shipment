@@ -699,6 +699,12 @@ const customerRateSlice = createSlice({
   name: "customerRate",
   initialState,
   reducers: {
+    setRates: (state, action: PayloadAction<any[]>) => {
+      state.rates = action.payload;
+    },
+    setRawQuote: (state, action: PayloadAction<any>) => {
+      state.rawQuote = action.payload;
+    },
     clearRates: (state) => {
       state.rates = [];
     },
@@ -799,7 +805,12 @@ const customerRateSlice = createSlice({
             });
           }
 
-          const price = Number(rate.totalShipmentCost) || Number(rate.netCharge) || Number(rate.price) || 0;
+          const totalAccessorialsBuy = otherAccessorials.reduce((acc, c) => acc + (c.accessorialCharge || 0), 0);
+          const computedBuyPrice = Math.round(((grossCharge - discount + fuelSurcharge) + totalAccessorialsBuy) * 100) / 100;
+          const price = computedBuyPrice > 0
+            ? computedBuyPrice
+            : (Number(rate.totalShipmentCost) || Number(rate.netCharge) || Number(rate.price) || 0);
+
           const calculatedSellPrice =
             grossSellAmount !== undefined
               ? Math.round((grossSellAmount - (discountSell ?? discount) + (fuelSell ?? fuelSurcharge) + otherAccessorials.reduce((acc, c) => acc + (c.sellCharge ?? c.accessorialCharge ?? 0), 0)) * 100) / 100
@@ -814,7 +825,7 @@ const customerRateSlice = createSlice({
             name: rate.carrierName || rate.name || "",
             code: rate.scac || rate.carrierCode || "",
             service: rate.serviceLevelDescription || rate.rateType || rate.service || "",
-            price: price > 0 ? price : (grossCharge - discount + fuelSurcharge),
+            price: price > 0 ? price : computedBuyPrice,
             transitDays: Number(rate.transitDays) || 0,
             estimatedDelivery: rate.deliveryDate || rate.estimatedDeliveryDate || "",
             warning: rate.errorMessage?.trim() || (price <= 0 ? "Rate unavailable or capacity rules exceeded." : ""),
@@ -863,6 +874,6 @@ const customerRateSlice = createSlice({
   },
 });
 
-export const { clearRates, setQuoteFormData, clearQuoteFormData, clearRateError, clearCarrierSearchResults } = customerRateSlice.actions;
+export const { setRates, setRawQuote, clearRates, setQuoteFormData, clearQuoteFormData, clearRateError, clearCarrierSearchResults } = customerRateSlice.actions;
 // Export slice reducer
 export default customerRateSlice.reducer;
