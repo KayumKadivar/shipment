@@ -1775,6 +1775,11 @@ function NewQuote() {
                         ]}
                       >
                         <Select
+                          showSearch
+                          optionFilterProp="label"
+                          filterOption={(input, option) =>
+                            (option?.label ?? "").toString().toLowerCase().includes(input.toLowerCase())
+                          }
                           value={item.handlingUnit}
                           options={handlingUnitOptions}
                           aria-label="Handling unit"
@@ -1786,6 +1791,22 @@ function NewQuote() {
                               value,
                             )
                           }
+                          onSearch={(val) => {
+                            if (val && val.trim()) {
+                              const query = val.trim().toLowerCase();
+                              const match = handlingUnitOptions.find((opt) =>
+                                opt.label.toLowerCase().startsWith(query)
+                              );
+                              if (match) {
+                                updateItem(
+                                  quotePackage.id,
+                                  item.id,
+                                  "handlingUnit",
+                                  match.value,
+                                );
+                              }
+                            }
+                          }}
                         />
                       </ItemFormItem>
 
@@ -1860,6 +1881,11 @@ function NewQuote() {
                         ]}
                       >
                         <Select
+                          showSearch
+                          optionFilterProp="label"
+                          filterOption={(input, option) =>
+                            (option?.label ?? "").toString().toLowerCase().includes(input.toLowerCase())
+                          }
                           value={item.freightClass}
                           options={classOptions}
                           aria-label="Freight class"
@@ -1871,6 +1897,24 @@ function NewQuote() {
                               value,
                             )
                           }
+                          onSearch={(val) => {
+                            if (val && val.trim()) {
+                              const query = val.trim().toLowerCase();
+                              const match = classOptions.find((opt) =>
+                                opt.label.toLowerCase() === query ||
+                                opt.value === query ||
+                                opt.label.toLowerCase().startsWith(query)
+                              );
+                              if (match) {
+                                updateItem(
+                                  quotePackage.id,
+                                  item.id,
+                                  "freightClass",
+                                  match.value,
+                                );
+                              }
+                            }
+                          }}
                         />
                       </ItemFormItem>
 

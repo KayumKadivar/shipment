@@ -1594,7 +1594,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
               type="primary"
               className="btn-success"
               onClick={handleRateClick}
-              loading={isRating}
             >
               Rate
             </Button>

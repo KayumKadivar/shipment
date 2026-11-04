@@ -9,7 +9,7 @@ import {
   Row, Col, Flex, message, Spin, AutoComplete, Tooltip, Modal, Form, Typography,
 } from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, UserOutlined, EditOutlined, CloseCircleFilled } from '@ant-design/icons';
 import { fetchClientsAndSubclients } from '../../store/customerLocationSlice';
 import './newshipment.css';
 import OriginLocation from './OriginLocation';
@@ -822,15 +822,32 @@ const NewShipment: React.FC = () => {
 
   const rawCarrier: any = selectedCarrierRate || prefillData?.selectedCarrier || prefillData?.rate || quote?.selectedCarrier || quote?.quoteResults?.[0];
 
+  const syncFactorSnapshot = () => {
+    initialAccessorialsSnapshotRef.current = [...selectedAccessorialIds].sort((a, b) => a - b);
+    initialProductsSnapshotRef.current = items.map((p) => ({
+      id: String(p.id ?? ""),
+      pallets: p.pallets,
+      pieces: p.pieces,
+      class: p.class,
+      weight: p.weight,
+      length: p.length,
+      width: p.width,
+      height: p.height,
+      nmfc: p.nmfc,
+      hazmat: p.hazmat,
+    }));
+  };
+
   const handleSelectRateFromModal = (rate: CarrierRate) => {
     setSelectedCarrierRate(rate);
     setIsRateModalOpen(false);
     setHasRateChanged(false);
+    syncFactorSnapshot();
     setSelectedCarrierInfo({
       carrierId: rate.code || "",
       carrierName: rate.name || "",
     });
-    message.success(`Selected carrier: ${rate.name || rate.code} ($${Number(rate.price).toFixed(2)})`);
+    message.success(`Selected carrier: ${rate.name || rate.code} (${Number(rate.price).toFixed(2)})`);
   };
 
   const carrierRateData = useMemo(() => {
@@ -955,7 +972,27 @@ const NewShipment: React.FC = () => {
 
   const handleFetchRatesForShipment = async (scacParam?: string) => {
     setHasRateChanged(false);
-    const origZip = (originData?.postal || quote?.originZip || "").split(' - ')[0].trim();
+
+    const originVals = {
+      ...(originData || {}),
+      ...(originFormValuesRef.current || {}),
+      ...(originForm?.getFieldsValue?.(true) || {}),
+    };
+
+    const readyTime = (
+      originVals.openTime ||
+      originVals.pickupOpenTime ||
+      originForm?.getFieldValue?.("openTime") ||
+      originForm?.getFieldValue?.("pickupOpenTime") || ""
+    ).trim();
+
+    if (!readyTime) {
+      message.error("Pickup time is required.");
+      originForm.validateFields(['openTime']).catch(() => {});
+      return;
+    }
+
+    const origZip = (originVals.postal || originData?.postal || quote?.originZip || "").split(' - ')[0].trim();
     const destZip = (destinationData?.postal || quote?.destinationZip || "").split(' - ')[0].trim();
 
     if (!origZip || !destZip) {
@@ -1030,7 +1067,13 @@ const NewShipment: React.FC = () => {
       clientCode: selectedClientCode || quote?.clientCode || DEFAULT_CLIENT_CODE,
       clientName: selectedClient?.clientName || quote?.clientName || "",
       scac: scacToUse,
-      shipmentDate: new Date().toISOString(),
+      shipmentDate: toIsoOrCurrent(
+        originForm?.getFieldValue?.("pickupDate") ||
+        originForm?.getFieldValue?.("expPickupDate") ||
+        originFormValuesRef.current?.pickupDate ||
+        originFormValuesRef.current?.expPickupDate ||
+        originData?.pickupDate
+      ),
       zoneCode: undefined,
       miles: 0,
       isBatch: false,
@@ -1708,7 +1751,6 @@ const NewShipment: React.FC = () => {
 
   const handleRefactorModalOk = () => {
     setIsRefactorModalOpen(false);
-    checkMarkupAndSave();
   };
 
   const handleRefactorModalCancel = () => {
@@ -1717,7 +1759,6 @@ const NewShipment: React.FC = () => {
 
   const handleMinMarkupModalOk = () => {
     setIsMinMarkupModalOpen(false);
-    executeSaveShipment();
   };
 
   const handleMinMarkupModalCancel = () => {
@@ -1809,9 +1850,14 @@ const NewShipment: React.FC = () => {
                       openTime: loc.openTime || loc.OpenTime || undefined,
                       closeTime: loc.closeTime || loc.CloseTime || undefined,
                     };
-                    setOriginData((prev: any) => ({ ...prev, ...newOrigin }));
+                    const currentFormVals = originForm.getFieldsValue();
+                    const originDates = {
+                      pickupDate: currentFormVals.pickupDate || originFormValuesRef.current?.pickupDate,
+                      expPickupDate: currentFormVals.expPickupDate || originFormValuesRef.current?.expPickupDate,
+                    };
+                    setOriginData((prev: any) => ({ ...prev, ...newOrigin, ...originDates }));
                     originForm.setFieldsValue(newOrigin);
-                    originFormValuesRef.current = { ...originFormValuesRef.current, ...newOrigin };
+                    originFormValuesRef.current = { ...originFormValuesRef.current, ...newOrigin, ...originDates };
                   }}
                 />
               </Col>
@@ -1839,9 +1885,14 @@ const NewShipment: React.FC = () => {
                       openTime: loc.openTime || loc.OpenTime || undefined,
                       closeTime: loc.closeTime || loc.CloseTime || undefined,
                     };
-                    setDestinationData((prev: any) => ({ ...prev, ...newDest }));
+                    const currentDestVals = destinationForm.getFieldsValue();
+                    const destDates = {
+                      deliveryDate: currentDestVals.deliveryDate || destinationFormValuesRef.current?.deliveryDate,
+                      expDeliveryDate: currentDestVals.expDeliveryDate || destinationFormValuesRef.current?.expDeliveryDate,
+                    };
+                    setDestinationData((prev: any) => ({ ...prev, ...newDest, ...destDates }));
                     destinationForm.setFieldsValue(newDest);
-                    destinationFormValuesRef.current = { ...destinationFormValuesRef.current, ...newDest };
+                    destinationFormValuesRef.current = { ...destinationFormValuesRef.current, ...newDest, ...destDates };
                   }}
                 />
               </Col>
@@ -1957,14 +2008,27 @@ const NewShipment: React.FC = () => {
                 className="quote-item-autocomplete"
               >
                 <Input
+                  id={"product-desc-" + item.id}
                   placeholder="Description"
                   aria-label="Description"
-                  allowClear
+                  allowClear={{
+                    clearIcon: <CloseCircleFilled tabIndex={-1} />,
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Tab" && !e.shiftKey) {
+                      const nextInput = document.getElementById("product-units-" + item.id);
+                      if (nextInput) {
+                        e.preventDefault();
+                        nextInput.focus();
+                      }
+                    }
+                  }}
                 />
               </AutoComplete>
 
               {renderWithTooltip(
                 <Input
+                  id={"product-units-" + item.id}
                   value={item.pallets ?? ''}
                   status={formSubmitted && (!item.pallets || Number(item.pallets) <= 0) ? 'error' : undefined}
                   onChange={(e) => handleUpdateField(item.id, 'pallets', e.target.value)}
@@ -1975,11 +2039,27 @@ const NewShipment: React.FC = () => {
 
               {renderWithTooltip(
                 <Select
+                  showSearch
+                  optionFilterProp="label"
+                  filterOption={(input, option) =>
+                    (option?.label ?? "").toString().toLowerCase().includes(input.toLowerCase())
+                  }
                   value={item.packageType || undefined}
                   placeholder="Package"
                   options={handlingUnitOptions}
                   status={formSubmitted && !item.packageType ? 'error' : undefined}
                   onChange={(val) => handleUpdateField(item.id, 'packageType', val)}
+                  onSearch={(val) => {
+                    if (val && val.trim()) {
+                      const query = val.trim().toLowerCase();
+                      const match = handlingUnitOptions.find((opt) =>
+                        opt.label.toLowerCase().startsWith(query)
+                      );
+                      if (match) {
+                        handleUpdateField(item.id, 'packageType', match.value);
+                      }
+                    }
+                  }}
                 />,
                 "Handling unit is required",
                 Boolean(formSubmitted && !item.packageType)
@@ -2007,11 +2087,29 @@ const NewShipment: React.FC = () => {
 
               {renderWithTooltip(
                 <Select
+                  showSearch
+                  optionFilterProp="label"
+                  filterOption={(input, option) =>
+                    (option?.label ?? "").toString().toLowerCase().includes(input.toLowerCase())
+                  }
                   value={item.class ? String(item.class) : undefined}
                   placeholder="Class"
                   options={classOptions}
                   status={formSubmitted && !item.class ? 'error' : undefined}
                   onChange={(val) => handleUpdateField(item.id, 'class', val)}
+                  onSearch={(val) => {
+                    if (val && val.trim()) {
+                      const query = val.trim().toLowerCase();
+                      const match = classOptions.find((opt) =>
+                        opt.label.toLowerCase() === query ||
+                        opt.value === query ||
+                        opt.label.toLowerCase().startsWith(query)
+                      );
+                      if (match) {
+                        handleUpdateField(item.id, 'class', match.value);
+                      }
+                    }
+                  }}
                 />,
                 "Class is required",
                 Boolean(formSubmitted && !item.class)
@@ -2252,7 +2350,6 @@ const NewShipment: React.FC = () => {
         onCancel={handleRefactorModalCancel}
         okText="OK"
         cancelButtonProps={{ style: { display: 'none' } }}
-        confirmLoading={isSavingShipment}
         centered
         okButtonProps={{ danger: true }}
       >
@@ -2269,7 +2366,6 @@ const NewShipment: React.FC = () => {
         onCancel={handleMinMarkupModalCancel}
         okText="OK"
         cancelButtonProps={{ style: { display: 'none' } }}
-        confirmLoading={isSavingShipment}
         centered
         okButtonProps={{ danger: true }}
       >
