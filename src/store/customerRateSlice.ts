@@ -715,10 +715,8 @@ const customerRateSlice = createSlice({
       state.carrierSearchResults = [];
     },
   },
-  // extraReducers is used to handle extra reducers
   extraReducers: (builder) => {
     builder
-      // fetchCarrierRates.pending: when request is started
       .addCase(fetchCarrierRates.pending, (state, action) => {
         state.loading = true;
         state.error = null;
@@ -739,6 +737,8 @@ const customerRateSlice = createSlice({
             : undefined;
           let discount = Number(rate.discount) || 0;
           let fuelSurcharge = Number(rate.fuelSurcharge) || 0;
+          let discountSell: number | undefined = undefined;
+          let fuelSell: number | undefined = undefined;
           const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
 
           const costDetails = rate.quoteCostDetails || rate.costDetails;
@@ -769,6 +769,9 @@ const customerRateSlice = createSlice({
                 name.includes("discount")
               ) {
                 discount = Math.abs(amount);
+                if (cd.sellAmount != null) {
+                  discountSell = Math.abs(Number(cd.sellAmount));
+                }
               } else if (
                 code === COST_CODE_FUEL ||
                 code === "FSC" ||
@@ -797,6 +800,11 @@ const customerRateSlice = createSlice({
           }
 
           const price = Number(rate.totalShipmentCost) || Number(rate.netCharge) || Number(rate.price) || 0;
+          const calculatedSellPrice =
+            grossSellAmount !== undefined
+              ? Math.round((grossSellAmount - (discountSell ?? discount) + (fuelSell ?? fuelSurcharge) + otherAccessorials.reduce((acc, c) => acc + (c.sellCharge ?? c.accessorialCharge ?? 0), 0)) * 100) / 100
+              : price;
+
           if (!grossCharge && price > 0) {
             grossCharge = price;
           }
@@ -814,9 +822,13 @@ const customerRateSlice = createSlice({
             liabilityNew: "",
             liabilityUsed: "",
             grossCharge,
+            sellPrice: calculatedSellPrice > 0 ? calculatedSellPrice : (price > 0 ? price : 0),
+            grossSell: grossSellAmount,
             grossSellAmount,
             discount,
+            discountSell,
             fuelSurcharge,
+            fuelSell,
             accessorialCharges: otherAccessorials,
             quoteCostDetails: costDetails,
             rawQuoteResult: rate,

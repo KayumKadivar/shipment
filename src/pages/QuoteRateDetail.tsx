@@ -87,20 +87,20 @@ function QuoteRateDetail() {
       : (storeIsCorporate ?? false);
 
   // Markup UI State
-  const [isMarkupEnabled, setIsMarkupEnabled] = useState(true);
+  const [isMarkupEnabled, setIsMarkupEnabled] = useState(false);
   const [markupDropdownOption, setMarkupDropdownOption] = useState("% Freight + Fuel");
-  const [markupRate, setMarkupRate] = useState("25");
+  const [markupRate, setMarkupRate] = useState("0");
   const [isMarkupRateDirty, setIsMarkupRateDirty] = useState(false);
-  const [markup, setMarkup] = useState("50");
+  const [markup, setMarkup] = useState("0");
   const [isNetSellRateEnabled, setIsNetSellRateEnabled] = useState(false);
   const [netSellRate, setNetSellRate] = useState("");
   const [isNetSellDirty, setIsNetSellDirty] = useState(false);
 
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<AppliedMarkupConfig>({
-    isMarkupEnabled: true,
+    isMarkupEnabled: false,
     markupDropdownOption: "% Freight + Fuel",
-    numericMarkup: 50,
-    numericMarkupRate: 25,
+    numericMarkup: 0,
+    numericMarkupRate: 0,
     isNetSellRateEnabled: false,
     numericNetSellRate: 0,
   });
@@ -230,12 +230,12 @@ function QuoteRateDetail() {
             const raw = String(config.markupType).toLowerCase();
             const isNetSell = raw.includes("netsell");
             if (isNetSell) {
-              setIsNetSellRateEnabled(true);
+              setIsNetSellRateEnabled(false);
               setIsMarkupEnabled(false);
               const rateVal = config.rate != null ? String(config.rate) : "0";
               setNetSellRate(rateVal);
             } else {
-              setIsMarkupEnabled(true);
+              setIsMarkupEnabled(false);
               setIsNetSellRateEnabled(false);
               let opt = "Flat";
               if (raw.includes("flat")) {
@@ -294,6 +294,8 @@ function QuoteRateDetail() {
           : undefined;
         let discount = Number(result.discount) || 0;
         let fuelSurcharge = Number(result.fuelSurcharge) || 0;
+        let discountSell = (result as any).discountSell != null ? Number((result as any).discountSell) : undefined;
+        let fuelSell = (result as any).fuelSell != null ? Number((result as any).fuelSell) : undefined;
         const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
 
         if (result.quoteCostDetails && Array.isArray(result.quoteCostDetails)) {
@@ -324,6 +326,9 @@ function QuoteRateDetail() {
               name.includes("discount")
             ) {
               discount = Math.abs(amount);
+              if (cd.sellAmount != null) {
+                discountSell = Math.abs(Number(cd.sellAmount));
+              }
             } else if (
               code === COST_CODE_FUEL ||
               code === "FSC" ||
@@ -333,6 +338,9 @@ function QuoteRateDetail() {
               name.includes("fuel")
             ) {
               fuelSurcharge = amount;
+              if (cd.sellAmount != null) {
+                fuelSell = Number(cd.sellAmount);
+              }
             } else {
               otherAccessorials.push({
                 code: cd.accCode || "ACC",
@@ -350,6 +358,11 @@ function QuoteRateDetail() {
           Number(result.price) ||
           (grossCharge - discount + fuelSurcharge + otherAccessorials.reduce((acc, c) => acc + (c.accessorialCharge || 0), 0));
 
+        const calculatedSellPrice =
+          grossSellAmount !== undefined
+            ? Math.round((grossSellAmount - (discountSell ?? discount) + (fuelSell ?? fuelSurcharge) + otherAccessorials.reduce((acc, c) => acc + (c.sellCharge ?? c.accessorialCharge ?? 0), 0)) * 100) / 100
+            : calculatedPrice;
+
         return {
           id: String(result.quoteResultId || `${result.scac}-${index}`),
           name: result.carrierName || "Unknown Carrier",
@@ -364,9 +377,13 @@ function QuoteRateDetail() {
           liabilityNew: "",
           liabilityUsed: "",
           grossCharge,
+          sellPrice: calculatedSellPrice > 0 ? calculatedSellPrice : calculatedPrice,
+          grossSell: grossSellAmount,
           grossSellAmount,
           discount,
+          discountSell,
           fuelSurcharge,
+          fuelSell,
           accessorialCharges: otherAccessorials,
           quoteCostDetails: result.quoteCostDetails,
           rawQuoteResult: result,

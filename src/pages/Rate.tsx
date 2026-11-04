@@ -768,20 +768,20 @@ function Rate() {
       : (storeIsCorporate ?? false);
 
   // Markup UI State
-  const [isMarkupEnabled, setIsMarkupEnabled] = useState(true);
+  const [isMarkupEnabled, setIsMarkupEnabled] = useState(false);
   const [markupDropdownOption, setMarkupDropdownOption] = useState("% Freight + Fuel");
-  const [markupRate, setMarkupRate] = useState("25");
+  const [markupRate, setMarkupRate] = useState("0");
   const [isMarkupRateDirty, setIsMarkupRateDirty] = useState(false);
-  const [markup, setMarkup] = useState("50");
+  const [markup, setMarkup] = useState("0");
   const [isNetSellRateEnabled, setIsNetSellRateEnabled] = useState(false);
   const [netSellRate, setNetSellRate] = useState("");
   const [isNetSellDirty, setIsNetSellDirty] = useState(false);
 
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<AppliedMarkupConfig>({
-    isMarkupEnabled: true,
+    isMarkupEnabled: false,
     markupDropdownOption: "% Freight + Fuel",
-    numericMarkup: 50,
-    numericMarkupRate: 25,
+    numericMarkup: 0,
+    numericMarkupRate: 0,
     isNetSellRateEnabled: false,
     numericNetSellRate: 0,
   });
@@ -916,12 +916,12 @@ function Rate() {
             const raw = String(config.markupType).toLowerCase();
             const isNetSell = raw.includes("netsell");
             if (isNetSell) {
-              setIsNetSellRateEnabled(true);
+              setIsNetSellRateEnabled(false);
               setIsMarkupEnabled(false);
               const rateVal = config.rate != null ? String(config.rate) : "0";
               setNetSellRate(rateVal);
             } else {
-              setIsMarkupEnabled(true);
+              setIsMarkupEnabled(false);
               setIsNetSellRateEnabled(false);
               let opt = "Flat";
               if (raw.includes("flat")) {
