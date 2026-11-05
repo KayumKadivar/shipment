@@ -88,3 +88,14 @@ textarea,
 select {
   font: inherit;
 }
+
+/* Prevent clear icons from showing focus outlines and skip tab */
+.ant-select-clear,
+.ant-input-clear-icon,
+.ant-picker-clear,
+.ant-cascader-clear,
+.ant-tree-select-clear,
+button[class*="-clear"],
+span[class*="-clear"] {
+  outline: none !important;
+}

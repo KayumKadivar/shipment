@@ -7,7 +7,7 @@ import {
 import type { PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 
-import { API_BASE_URL, DEFAULT_CLIENT_CODE, SRV_TOKEN } from "../config/apiConfig";
+import { API_BASE_URL, SRV_TOKEN } from "../config/apiConfig";
 import type { CustomerLocation, LocationType } from "../types/customerLocation.types";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
@@ -112,30 +112,86 @@ const initialState: CustomerLocationState = {
 export const fetchClientsAndSubclients = createAsyncThunk<
   ClientOption[],
   string | void,
-  { rejectValue: string }
+  { state: RootState; rejectValue: string }
 >(
   "customerLocation/fetchClientsAndSubclients",
-  async (clientCode, { rejectWithValue }) => {
+  async (clientCode, { getState, rejectWithValue }) => {
     try {
-      const codeToUse = clientCode || DEFAULT_CLIENT_CODE;
+      const state = typeof getState === "function" ? (getState() as RootState) : undefined;
+      let codeToUse = (typeof clientCode === "string" && clientCode.trim()) || "";
+
+      // 1. Check Redux state
+      if (!codeToUse && state) {
+        codeToUse =
+          state.app?.ratingProfileCode?.trim() ||
+          state.app?.clientCode?.trim() ||
+          state.customerLocation?.clients?.[0]?.ratingProfileCode?.trim() ||
+          "";
+      }
+
+      // 2. If not yet in state, fetch directly from GetClientAndSubclientWithProfiles API and take 1st ratingProfileCode
+      if (!codeToUse) {
+        try {
+          const token = state?.app?.token;
+          const profileRes = await axios.get(
+            `${API_BASE_URL}/GetClientAndSubclientWithProfiles?srvToken=${SRV_TOKEN}`,
+            {
+              headers: {
+                accept: "*/*",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            }
+          );
+          const rawData = profileRes.data?.data;
+          const list = Array.isArray(rawData)
+            ? rawData
+            : Array.isArray(rawData?.clientAndProfileDetails)
+              ? rawData.clientAndProfileDetails
+              : Array.isArray(rawData?.ClientAndProfileDetails)
+                ? rawData.ClientAndProfileDetails
+                : null;
+
+          if (Array.isArray(list) && list.length > 0) {
+            codeToUse =
+              list[0]?.ratingProfileCode?.trim() ||
+              list[0]?.RatingProfileCode?.trim() ||
+              list[0]?.clientCode?.trim() ||
+              list[0]?.ClientCode?.trim() ||
+              "";
+          }
+        } catch {
+          // fallback
+        }
+      }
+
       let response;
       try {
-        response = await axios.get<ClientLookupApiResponse>(
-          `${API_BASE_URL}/GetClientAndSubclientWithProfiles/GetClientAndSubclientWithProfilesByClientCode`,
-          {
-            params: {
-              srvToken: SRV_TOKEN,
-              clientCode: codeToUse,
+        if (codeToUse) {
+          response = await axios.get<ClientLookupApiResponse>(
+            `${API_BASE_URL}/GetClientAndSubclientWithProfiles/GetClientAndSubclientWithProfilesByClientCode`,
+            {
+              params: {
+                srvToken: SRV_TOKEN,
+                clientCode: codeToUse,
+              },
             },
-          },
-        );
+          );
+        } else {
+          response = await axios.get<ClientLookupApiResponse>(
+            `${API_BASE_URL}/GetClientAndSubclientWithProfiles`,
+            {
+              params: {
+                srvToken: SRV_TOKEN,
+              },
+            },
+          );
+        }
       } catch {
         response = await axios.get<ClientLookupApiResponse>(
           `${API_BASE_URL}/GetClientAndSubclientWithProfiles`,
           {
             params: {
               srvToken: SRV_TOKEN,
-              clientCode: codeToUse,
             },
           },
         );
@@ -261,7 +317,7 @@ export const saveCustomerLocation = createAsyncThunk(
         stateCode: payloadData.stateCode || payloadData.state || "",
         countryCode: payloadData.countryCode || payloadData.country || "",
         zipCode: payloadData.zipCode || payloadData.postal || "",
-        clientCode: (getState() as RootState)?.clientContext?.customerLocation_selectedClientCode || DEFAULT_CLIENT_CODE,
+        clientCode: (getState() as RootState)?.clientContext?.customerLocation_selectedClientCode || "",
         contactName: payloadData.contactName || "",
         contactPhone: payloadData.phone || "",
         contactEmail: payloadData.email || "",
@@ -320,7 +376,7 @@ export const updateCustomerLocation = createAsyncThunk(
         stateCode: payloadData.stateCode || payloadData.state || "",
         countryCode: payloadData.countryCode || payloadData.country || "",
         zipCode: payloadData.zipCode || payloadData.postal || "",
-        clientCode: (getState() as RootState)?.clientContext?.customerLocation_selectedClientCode || DEFAULT_CLIENT_CODE,
+        clientCode: (getState() as RootState)?.clientContext?.customerLocation_selectedClientCode || "",
         contactName: payloadData.contactName || "",
         contactPhone: payloadData.phone || (payloadData as any).contactPhone || "",
         contactEmail: payloadData.email || (payloadData as any).contactEmail || "",
@@ -416,7 +472,7 @@ export const getAllCustomerLocations = createAsyncThunk<
   "customerLocation/getAllCustomerLocations",
   async (params, { getState, rejectWithValue }) => {
     try {
-      let clientCode = DEFAULT_CLIENT_CODE;
+      let clientCode = "";
       let searchText = "";
       let pageNumber = 1;
       let pageSize = 10;

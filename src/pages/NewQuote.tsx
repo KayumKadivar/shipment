@@ -40,8 +40,7 @@ import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import {
   API_BASE_URL,
   SRV_TOKEN,
-  DEFAULT_CLIENT_CODE,
-} from "../config/apiConfig";
+  } from "../config/apiConfig";
 import axios from "axios";
 
 type ItemField =
@@ -601,11 +600,10 @@ function NewQuote() {
   );
   const profileCode = useAppSelector((state) => state.app.profileCode);
   const { clients } = useAppSelector((state) => state.customerLocation);
-  const rateLoading = useAppSelector((state) => state.customerRate.loading);
 
   const loggedInClientCode =
     useAppSelector((state) => state.app.clientCode) ||
-    DEFAULT_CLIENT_CODE;
+    "";
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
     () => quoteFormData?.selectedClientCode || reduxClientContext.quotes_selectedClientCode || "",
@@ -653,8 +651,7 @@ function NewQuote() {
       clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
       clients.find((client) => client.isLoggedClient)?.clientCode ||
       loggedInClientCode ||
-      DEFAULT_CLIENT_CODE ||
-      clients[0]?.clientCode ||
+            clients[0]?.clientCode ||
       ""
     );
   }, [clients, loggedInClientCode]);
@@ -691,8 +688,7 @@ function NewQuote() {
 
     const fallbackCode =
       reduxApp?.clientCode ||
-      DEFAULT_CLIENT_CODE ||
-      "DEVTS";
+       "";
     const fallbackName =
       reduxApp?.clientName ||
       fallbackCode;
@@ -746,8 +742,7 @@ function NewQuote() {
         activeClientCode ||
         reduxClientContext?.quotes_selectedClientCode ||
         reduxClientContext?.customerLocation_selectedClientCode ||
-        DEFAULT_CLIENT_CODE ||
-        "DEVTS";
+         "";
 
       const payload = {
         clientCode: clientCodeToUse,
@@ -2080,7 +2075,6 @@ function NewQuote() {
             <Button
               type="primary"
               htmlType="submit"
-              loading={isSubmitting || rateLoading}
             >
               See Rates
             </Button>

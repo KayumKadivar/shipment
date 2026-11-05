@@ -266,7 +266,7 @@ export const fetchCarrierRates = createAsyncThunk<
       });
 
       const response = await axios.post<RateApiResponse>(
-        `${API_BASE_URL}/Rating/GetQuote`,
+        `${API_BASE_URL}/Rating/GetRates`,
         requestPayload,
         {
           headers: {

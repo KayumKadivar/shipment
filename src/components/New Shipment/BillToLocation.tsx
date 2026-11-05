@@ -5,7 +5,7 @@ import './newshipment.css';
 import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import axios from 'axios';
-import { API_BASE_URL, DEFAULT_CLIENT_CODE } from '../../config/apiConfig';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 interface BillToLocationProps {
   clientCode?: string;
@@ -125,8 +125,7 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
           clientCode ||
           reduxClientContext?.customerLocation_selectedClientCode ||
           reduxClientContext?.quotes_selectedClientCode ||
-          DEFAULT_CLIENT_CODE ||
-          "DEVTS";
+          "";
 
         const response = await axios.post(
           `${API_BASE_URL}/Location/SearchLocations`,
@@ -202,7 +201,7 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
     if (!zip || zip.trim().length < 3) return;
     const cleanZip = zip.split(' - ')[0].trim();
     const country = form.getFieldValue("country") || "USA";
-    const clientCodeToUse = clientCode || reduxClientContext?.customerLocation_selectedClientCode || reduxClientContext?.quotes_selectedClientCode || DEFAULT_CLIENT_CODE || "Devts";
+    const clientCodeToUse = clientCode || reduxClientContext?.customerLocation_selectedClientCode || reduxClientContext?.quotes_selectedClientCode || "";
 
     setLoading(true);
     try {

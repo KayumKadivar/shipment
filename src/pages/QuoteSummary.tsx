@@ -14,7 +14,6 @@ import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { fetchQuotes, searchQuote } from "../store/quoteSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import { clearQuoteFormData } from "../store/customerRateSlice";
-import { DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import {
   type QuoteLoad,
   type QuoteSummaryRecord,
@@ -57,6 +56,13 @@ function QuoteSummary() {
 
   const dispatch = useAppDispatch();
   const { quotes: apiQuotes, totalCount: apiTotalCount, loading } = useAppSelector((state) => state.quote);
+  const ratingProfileCode = useAppSelector(
+    (state) =>
+      state.app?.ratingProfileCode ||
+      state.customerLocation?.clients?.[0]?.ratingProfileCode ||
+      state.app?.clientCode ||
+      ""
+  );
 
   useEffect(() => {
     const hasFilters = Boolean(
@@ -87,7 +93,7 @@ function QuoteSummary() {
           // Fallback to fetchQuotes if search endpoint is unavailable
           dispatch(
             fetchQuotes({
-              clientCode: DEFAULT_CLIENT_CODE,
+              clientCode: ratingProfileCode,
               pageNumber: activePage,
               pageSize: pageSize,
             })
@@ -96,13 +102,13 @@ function QuoteSummary() {
     } else {
       dispatch(
         fetchQuotes({
-          clientCode: DEFAULT_CLIENT_CODE,
-          pageNumber: activePage,
-          pageSize: pageSize,
-        })
+              clientCode: ratingProfileCode,
+              pageNumber: activePage,
+              pageSize: pageSize,
+            })
       );
     }
-  }, [dispatch, activePage, pageSize, appliedFilters]);
+  }, [dispatch, activePage, pageSize, appliedFilters, ratingProfileCode]);
 
   useEffect(() => {
     dispatch(fetchClientsAndSubclients())

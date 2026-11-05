@@ -8,7 +8,7 @@ import CountrySelect from '../../components/CountrySelect';
 import { usePostalLookup } from '../../hooks/usePostalLookup';
 import { formatPhoneNumber } from '../../utils/formatPhoneNumber';
 import axios from 'axios';
-import { API_BASE_URL, DEFAULT_CLIENT_CODE } from '../../config/apiConfig';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 export interface OriginLocationProps {
   form?: FormInstance;
@@ -251,8 +251,7 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
           clientCode ||
           reduxClientContext?.customerLocation_selectedClientCode ||
           reduxClientContext?.quotes_selectedClientCode ||
-          DEFAULT_CLIENT_CODE ||
-          "DEVTS";
+          "";
 
         const response = await axios.post(
           `${API_BASE_URL}/Location/SearchLocations`,
@@ -637,6 +636,7 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
               label="Exp. Pickup Date"
               name="expPickupDate"
               className="location-time-label"
+              rules={[{ required: true, message: "Exp. Pickup Date is required" }]}
               getValueProps={(val) => ({
                 value: val ? (dayjs.isDayjs(val) ? val : dayjs(val).isValid() ? dayjs(val) : null) : null,
               })}
@@ -653,7 +653,7 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
             <Form.Item 
               label="From" 
               name="openTime"
-              rules={[{ required: true, message: "Pickup time is required" }]}
+              rules={[{ required: true, message: "Exp. Pickup From time is required" }]}
             >
               <Select
                 className="location-time-select"
@@ -667,7 +667,11 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
-            <Form.Item label="To" name="closeTime">
+            <Form.Item 
+              label="To" 
+              name="closeTime" 
+              rules={[{ required: true, message: "Exp. Pickup To time is required" }]}
+            >
               <Select
                 className="location-time-select"
                 popupClassName="location-time-dropdown"
@@ -686,6 +690,7 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
               label="Pickup Date"
               name="pickupDate"
               className="location-time-label"
+              rules={[{ required: true, message: "Pickup Date is required" }]}
               getValueProps={(val) => ({
                 value: val ? (dayjs.isDayjs(val) ? val : dayjs(val).isValid() ? dayjs(val) : null) : null,
               })}
@@ -699,7 +704,11 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
-            <Form.Item label="From" name="pickupOpenTime">
+            <Form.Item 
+              label="From" 
+              name="pickupOpenTime"
+              rules={[{ required: true, message: "Pickup From time is required" }]}
+            >
               <Select
                 className="location-time-select"
                 popupClassName="location-time-dropdown"
@@ -707,11 +716,16 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
                 allowClear
                 showSearch
                 options={timeOptions}
+                placeholder="From"
               />
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
-            <Form.Item label="To" name="pickupCloseTime">
+            <Form.Item 
+              label="To" 
+              name="pickupCloseTime"
+              rules={[{ required: true, message: "Pickup To time is required" }]}
+            >
               <Select
                 className="location-time-select"
                 popupClassName="location-time-dropdown"
@@ -719,6 +733,7 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
                 allowClear
                 showSearch
                 options={timeOptions}
+                placeholder="To"
               />
             </Form.Item>
           </Col>

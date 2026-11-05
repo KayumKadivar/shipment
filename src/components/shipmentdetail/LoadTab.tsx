@@ -15,7 +15,6 @@ import {
   type ReactNode,
 } from "react";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import { DEFAULT_CLIENT_CODE } from "../../config/apiConfig";
 import { fetchAccessorials } from "../../store/accessorialsSlice";
 import { fetchPackageTypes } from "../../store/packageTypesSlice";
 import {
@@ -528,7 +527,7 @@ function LoadTab({
       productSearchTimerRef.current = null;
       activeProductSearchRef.current = dispatch(
         searchShipmentProducts({
-          clientCode: shipment.clientCode?.trim() || DEFAULT_CLIENT_CODE,
+          clientCode: shipment.clientCode?.trim() || "",
           searchText,
         }),
       );

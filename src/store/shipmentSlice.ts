@@ -3,9 +3,9 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 import {
   API_BASE_URL,
-  DEFAULT_CLIENT_CODE,
-  SRV_TOKEN,
+    SRV_TOKEN,
 } from "../config/apiConfig";
+import type { RootState } from "../app/store";
 import type {
   FetchShipmentsArgs,
   ShipmentApiResponse,
@@ -47,13 +47,61 @@ const initialState: ShipmentState = {
 export const fetchShipments = createAsyncThunk<
   { shipments: ShipmentRecord[]; pageNumber: number; pageSize: number },
   FetchShipmentsArgs,
-  { rejectValue: string }
+  { state: RootState; rejectValue: string }
 >(
   "shipment/fetchShipments",
-  async ({ pageNumber, pageSize }, { rejectWithValue }) => {
+  async ({ pageNumber, pageSize, clientCode }, { getState, rejectWithValue }) => {
     try {
+      const state = typeof getState === "function" ? (getState() as RootState) : undefined;
+      let targetCode = (typeof clientCode === "string" && clientCode.trim()) || "";
+
+      if (!targetCode && state) {
+        targetCode =
+          state.app?.ratingProfileCode?.trim() ||
+          state.customerLocation?.clients?.[0]?.ratingProfileCode?.trim() ||
+          state.app?.clientCode?.trim() ||
+          "";
+      }
+
+      if (!targetCode) {
+        try {
+          const token = state?.app?.token;
+          const profileRes = await axios.get(
+            `${API_BASE_URL}/GetClientAndSubclientWithProfiles?srvToken=${SRV_TOKEN}`,
+            {
+              headers: {
+                accept: "*/*",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            }
+          );
+          const rawData = profileRes.data?.data;
+          const list = Array.isArray(rawData)
+            ? rawData
+            : Array.isArray(rawData?.clientAndProfileDetails)
+              ? rawData.clientAndProfileDetails
+              : Array.isArray(rawData?.ClientAndProfileDetails)
+                ? rawData.ClientAndProfileDetails
+                : null;
+
+          if (Array.isArray(list) && list.length > 0) {
+            targetCode =
+              list[0]?.ratingProfileCode?.trim() ||
+              list[0]?.RatingProfileCode?.trim() ||
+              list[0]?.clientCode?.trim() ||
+              list[0]?.ClientCode?.trim() ||
+              "";
+          }
+        } catch {
+        }
+      }
+
+      const url = targetCode
+        ? `${API_BASE_URL}/Shipment/GetShipmentsByClientCode/${encodeURIComponent(targetCode)}`
+        : `${API_BASE_URL}/Shipment/GetShipmentsByClientCode`;
+
       const response = await axios.get<ShipmentListApiResponse>(
-        `${API_BASE_URL}/Shipment/GetShipmentsByClientCode/${encodeURIComponent(DEFAULT_CLIENT_CODE)}`,
+        url,
         {
           params: { pageNumber, pageSize },
           headers: {

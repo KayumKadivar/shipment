@@ -30,7 +30,7 @@ import {
   type CarrierSearchResult,
 } from "../../store/customerRateSlice";
 import { fetchAccessorials } from "../../store/accessorialsSlice";
-import { API_BASE_URL, DEFAULT_CLIENT_CODE } from "../../config/apiConfig";
+import { API_BASE_URL } from "../../config/apiConfig";
 import { calculateMarkupDistribution } from "../../utils/markupCalculator";
 import "./newshipment.css";
 
@@ -239,121 +239,16 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   });
 
   useEffect(() => {
-    if (clientMarkupConfig) {
-      if (clientMarkupConfig.markupType) {
-        const raw = String(clientMarkupConfig.markupType).toLowerCase();
-        if (raw.includes("netsell")) {
-          setIsNetSellRateEnabled(true);
-          setIsMarkupEnabled(false);
-          const rateVal =
-            clientMarkupConfig.rate != null
-              ? String(clientMarkupConfig.rate)
-              : "0";
-          setNetSellRate(rateVal);
-        } else {
-          setIsMarkupEnabled(true);
-          setIsNetSellRateEnabled(false);
-          let opt = "Flat";
-          if (raw.includes("flat")) {
-            opt = "Flat";
-          } else if (raw.includes("acc")) {
-            opt = "% Freight + Fuel + Accessorial";
-          } else if (raw.includes("fuel")) {
-            opt = "% Freight + Fuel";
-          } else {
-            opt = "% Freight";
-          }
-          setMarkupDropdownOption(opt);
-          const rateVal =
-            clientMarkupConfig.rate != null
-              ? String(clientMarkupConfig.rate)
-              : "0";
-          setMarkupRate(rateVal);
-          if (clientMarkupConfig.minimum != null) {
-            setMinimumRate(Number(clientMarkupConfig.minimum) || 0);
-          }
-          const val =
-            clientMarkupConfig.minimum != null
-              ? String(clientMarkupConfig.minimum)
-              : clientMarkupConfig.rate != null
-                ? String(clientMarkupConfig.rate)
-                : "0";
-          setMarkup(val);
-        }
-      }
-      return;
-    }
+    const clientCodeToUse =
+      clientCode ||
+      reduxClientContext?.customerLocation_selectedClientCode ||
+      reduxClientContext?.quotes_selectedClientCode ||
+      reduxApp?.clientCode ||
+      "";
 
-    const hasCarrierMarkupInfo =
-      Boolean(carrierData) &&
-      (
-        Boolean((carrierData as any).markupType && String((carrierData as any).markupType).trim() !== "") ||
-        ((carrierData as any).markupAmount != null && Number((carrierData as any).markupAmount) > 0) ||
-        ((carrierData as any).ppsFreight != null && Number((carrierData as any).ppsFreight) > 0) ||
-        ((carrierData as any).grossSell != null && (carrierData as any).grossCharge != null && Number((carrierData as any).grossSell) > Number((carrierData as any).grossCharge)) ||
-        ((carrierData as any).grossSellAmount != null && (carrierData as any).grossCharge != null && Number((carrierData as any).grossSellAmount) > Number((carrierData as any).grossCharge))
-      );
-
-    if (hasCarrierMarkupInfo && carrierData) {
-      const raw = String((carrierData as any).markupType || "").toLowerCase();
-      if (raw.includes("netsell")) {
-        setIsNetSellRateEnabled(true);
-        setIsMarkupEnabled(false);
-        const rateVal =
-          (carrierData as any).markup != null
-            ? String((carrierData as any).markup)
-            : "0";
-        setNetSellRate(rateVal);
-      } else {
-        setIsMarkupEnabled(true);
-        setIsNetSellRateEnabled(false);
-        let opt = "Flat";
-        if (raw.includes("flat")) {
-          opt = "Flat";
-        } else if (raw.includes("acc")) {
-          opt = "% Freight + Fuel + Accessorial";
-        } else if (raw.includes("fuel")) {
-          opt = "% Freight + Fuel";
-        } else if (raw.includes("freight") || raw.includes("%")) {
-          opt = "% Freight";
-        } else if ((carrierData as any).markupAmount != null || (carrierData as any).grossSell != null) {
-          opt = "Flat";
-        }
-        setMarkupDropdownOption(opt);
-        const rateVal =
-          (carrierData as any).rate != null && String((carrierData as any).rate) !== "0"
-            ? String((carrierData as any).rate)
-            : (carrierData as any).markupAmount != null
-              ? String((carrierData as any).markupAmount)
-              : (carrierData as any).grossSell != null && (carrierData as any).grossCharge != null
-                ? String(Number((carrierData as any).grossSell) - Number((carrierData as any).grossCharge))
-                : "0";
-        setMarkupRate(rateVal);
-        if ((carrierData as any).minimum != null) {
-          setMinimumRate(Number((carrierData as any).minimum) || 0);
-        }
-        const val =
-          (carrierData as any).minimum != null
-            ? String((carrierData as any).minimum)
-            : (carrierData as any).markup != null
-              ? String((carrierData as any).markup)
-              : rateVal;
-        setMarkup(val);
-      }
-      return;
-    }
+    if (!clientCodeToUse) return;
 
     const fetchClientMarkup = async () => {
-      const clientCodeToUse =
-        clientCode ||
-        reduxClientContext?.customerLocation_selectedClientCode ||
-        reduxClientContext?.quotes_selectedClientCode ||
-        DEFAULT_CLIENT_CODE ||
-        "DEVTS";
-
-      if (!clientCodeToUse || fetchedMarkupClientRef.current === clientCodeToUse) return;
-      fetchedMarkupClientRef.current = clientCodeToUse;
-
       const token = reduxApp?.token;
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -378,40 +273,57 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
           const rawData = response.data.data;
           const config = Array.isArray(rawData) ? rawData[0] : rawData;
           if (config) {
-            if (config.markupType) {
-              const raw = String(config.markupType).toLowerCase();
-              if (raw.includes("netsell")) {
-                setIsNetSellRateEnabled(true);
-                setIsMarkupEnabled(false);
-                const rateVal = config.rate != null ? String(config.rate) : "0";
-                setNetSellRate(rateVal);
+            const raw = String(config.markupType || "").toLowerCase();
+            if (raw.includes("netsell")) {
+              setIsNetSellRateEnabled(true);
+              setIsMarkupEnabled(false);
+              const rateVal = config.rate != null ? String(config.rate) : "0";
+              setNetSellRate(rateVal);
+              setAppliedMarkupConfig({
+                isMarkupEnabled: false,
+                markupDropdownOption: "",
+                numericMarkup: 0,
+                numericMarkupRate: 0,
+                isNetSellRateEnabled: true,
+                numericNetSellRate: Number(rateVal) || 0,
+                ppsFreight: 0,
+                ppsFuel: 0,
+              });
+            } else {
+              setIsMarkupEnabled(true);
+              setIsNetSellRateEnabled(false);
+              let opt = "Flat";
+              if (raw.includes("flat")) {
+                opt = "Flat";
+              } else if (raw.includes("acc")) {
+                opt = "% Freight + Fuel + Accessorial";
+              } else if (raw.includes("fuel")) {
+                opt = "% Freight + Fuel";
               } else {
-                setIsMarkupEnabled(true);
-                setIsNetSellRateEnabled(false);
-                let opt = "Flat";
-                if (raw.includes("flat")) {
-                  opt = "Flat";
-                } else if (raw.includes("acc")) {
-                  opt = "% Freight + Fuel + Accessorial";
-                } else if (raw.includes("fuel")) {
-                  opt = "% Freight + Fuel";
-                } else {
-                  opt = "% Freight";
-                }
-                setMarkupDropdownOption(opt);
-                const rateVal = config.rate != null ? String(config.rate) : "0";
-                setMarkupRate(rateVal);
-                if (config.minimum != null) {
-                  setMinimumRate(Number(config.minimum) || 0);
-                }
-                const val =
-                  config.minimum != null
-                    ? String(config.minimum)
-                    : config.rate != null
-                      ? String(config.rate)
-                      : "0";
-                setMarkup(val);
+                opt = "% Freight";
               }
+              setMarkupDropdownOption(opt);
+              const rateVal = config.rate != null ? String(config.rate) : "0";
+              setMarkupRate(rateVal);
+              const minVal =
+                config.minimum != null
+                  ? String(config.minimum)
+                  : config.rate != null
+                    ? String(config.rate)
+                    : "0";
+              setMarkup(minVal);
+              setMinimumRate(Number(minVal) || 0);
+
+              setAppliedMarkupConfig({
+                isMarkupEnabled: true,
+                markupDropdownOption: opt,
+                numericMarkup: Number(minVal) || 0,
+                numericMarkupRate: Number(rateVal) || 0,
+                isNetSellRateEnabled: false,
+                numericNetSellRate: 0,
+                ppsFreight: (carrierData as any)?.ppsFreight || 0,
+                ppsFuel: (carrierData as any)?.ppsFuel || 0,
+              });
             }
           }
         }
@@ -421,7 +333,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     };
 
     fetchClientMarkup();
-  }, [clientCode, clientMarkupConfig, carrierData, reduxApp?.token, reduxClientContext?.customerLocation_selectedClientCode, reduxClientContext?.quotes_selectedClientCode]);
+  }, [clientCode, reduxApp?.token, reduxApp?.clientCode, reduxClientContext?.customerLocation_selectedClientCode, reduxClientContext?.quotes_selectedClientCode]);
 
   // Carrier inputs and autocomplete state
   const [carrierName, setCarrierName] = useState<string>("");

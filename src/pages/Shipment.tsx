@@ -62,6 +62,12 @@ function Shipment() {
     && previous.shipmentsError === next.shipmentsError
     && previous.hasNextShipmentsPage === next.hasNextShipmentsPage);
   const statusCounts = useAppSelector((state) => state.shipmentStatusCounts);
+  const ratingProfileCode = useAppSelector(
+    (state) =>
+      state.app?.ratingProfileCode ||
+      state.customerLocation?.clients?.[0]?.ratingProfileCode ||
+      ""
+  );
   const [shipments, setShipments] = useState<ShipmentRecord[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const activeRequestRef = useRef<{ abort: () => void } | null>(null);
@@ -85,7 +91,7 @@ function Shipment() {
       activeRequestRef.current?.abort();
       const request = selectedStatus
         ? dispatch(searchShipmentsByStatus({ statusCodes: [selectedStatus], pageNumber, pageSize: PAGE_SIZE }))
-        : dispatch(fetchShipments({ pageNumber, pageSize: PAGE_SIZE }));
+        : dispatch(fetchShipments({ pageNumber, pageSize: PAGE_SIZE, clientCode: ratingProfileCode }));
       activeRequestRef.current = request;
       void request
         .unwrap()
@@ -108,7 +114,7 @@ function Shipment() {
         });
       return request;
     },
-    [dispatch, selectedStatus],
+    [dispatch, selectedStatus, ratingProfileCode],
   );
 
   useEffect(() => {

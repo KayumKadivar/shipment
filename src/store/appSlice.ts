@@ -173,22 +173,14 @@ export const loginUser = createAsyncThunk<
                 c.clientName?.toLowerCase() === userLower
             );
 
-            const matchByDev = userLower.includes("dev")
-              ? list.find(
-                  (c: any) =>
-                    c.clientCode?.toUpperCase() === "DEVTS" ||
-                    c.profileCode?.toUpperCase() === "DEVTS"
-                )
-              : null;
-
-            const logged = matchByUser || matchByDev || list.find(isItemLogged) || list[0];
+            const logged = matchByUser || list.find(isItemLogged) || list[0];
             if (logged) {
               profileCode = logged.profileCode || null;
               isCorporate = isCorporate ?? (typeof logged.isCorporate === "boolean" ? logged.isCorporate : null);
               clientCode = logged.clientCode || null;
               clientName = logged.clientName || null;
               ratingClientCode = logged.ratingClientCode ?? null;
-              ratingProfileCode = logged.ratingProfileCode ?? null;
+              ratingProfileCode = logged.ratingProfileCode ?? list[0]?.ratingProfileCode ?? null;
 
             }
           } else {

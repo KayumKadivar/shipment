@@ -25,7 +25,7 @@ import InsuranceInfo from './InsuranceInfo';
 import { formatPhoneNumber } from '../../utils/formatPhoneNumber';
 import { calculatePCF } from '../../utils/calculatePCF';
 import axios from 'axios';
-import { API_BASE_URL, DEFAULT_CLIENT_CODE, SRV_TOKEN } from '../../config/apiConfig';
+import { API_BASE_URL, SRV_TOKEN } from '../../config/apiConfig';
 
 const handlingUnitOptions = ["Pallet", "Crate", "Carton", "Drum", "Piece", "Box"].map(
   (value) => ({ value, label: value })
@@ -204,7 +204,7 @@ const NewShipment: React.FC = () => {
 
   const loggedInClientCode =
     useAppSelector((state) => state.app.clientCode) ||
-    DEFAULT_CLIENT_CODE;
+    "";
 
   const defaultLoggedClient = useMemo(() => {
     return (
@@ -212,14 +212,13 @@ const NewShipment: React.FC = () => {
       clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
       clients.find((client) => client.isLoggedClient)?.clientCode ||
       loggedInClientCode ||
-      DEFAULT_CLIENT_CODE ||
-      clients[0]?.clientCode ||
+            clients[0]?.clientCode ||
       ""
     );
   }, [quote, clients, loggedInClientCode]);
 
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
-    () => quote?.clientCode || loggedInClientCode || DEFAULT_CLIENT_CODE || ""
+    () => quote?.clientCode || loggedInClientCode || ""
   );
 
   const clientsFetchedRef = useRef(false);
@@ -308,11 +307,7 @@ const NewShipment: React.FC = () => {
     return s;
   };
 
-  const hasRefactorChanges = (): boolean => {
-    if (hasRateChanged) {
-      return true;
-    }
-
+  const hasFactorDifferences = (): boolean => {
     // 1. Check Accessorials
     if (initialAccessorialsSnapshotRef.current !== null) {
       const initAcc = initialAccessorialsSnapshotRef.current;
@@ -327,7 +322,7 @@ const NewShipment: React.FC = () => {
       }
     }
 
-    // 2. Check Products (Units, Pieces, Class, Weight, Length, Width, Height, NMFC, Hazmat, Add/Delete line)
+    // 2. Check Products (Units, Pieces, PackageType, Class, Weight, Length, Width, Height, NMFC, Hazmat, Stackable, Add/Delete line)
     if (initialProductsSnapshotRef.current !== null) {
       const initProds = initialProductsSnapshotRef.current;
       if (items.length !== initProds.length) {
@@ -340,6 +335,7 @@ const NewShipment: React.FC = () => {
 
         if (normalizeValue(cur.pallets) !== normalizeValue(init.pallets)) return true;
         if (normalizeValue(cur.pieces) !== normalizeValue(init.pieces)) return true;
+        if (String(cur.packageType ?? "").trim() !== String(init.packageType ?? "").trim()) return true;
         if (normalizeValue(cur.class) !== normalizeValue(init.class)) return true;
         if (normalizeValue(cur.weight) !== normalizeValue(init.weight)) return true;
         if (normalizeValue(cur.length) !== normalizeValue(init.length)) return true;
@@ -347,11 +343,24 @@ const NewShipment: React.FC = () => {
         if (normalizeValue(cur.height) !== normalizeValue(init.height)) return true;
         if (String(cur.nmfc ?? "").trim() !== String(init.nmfc ?? "").trim()) return true;
         if (Boolean(cur.hazmat) !== Boolean(init.hazmat)) return true;
+        if (Boolean(cur.stackable) !== Boolean(init.stackable)) return true;
       }
     }
 
     return false;
   };
+
+  const hasRefactorChanges = (): boolean => {
+    return hasFactorDifferences();
+  };
+
+  // Keep hasRateChanged in sync with actual factor differences so changing value back to old resets it
+  useEffect(() => {
+    if (initialProductsSnapshotRef.current !== null || initialAccessorialsSnapshotRef.current !== null) {
+      const diff = hasFactorDifferences();
+      setHasRateChanged(diff);
+    }
+  }, [items, selectedAccessorialIds]);
 
   // Hazmat modal state
   const [isHazmatModalOpen, setIsHazmatModalOpen] = useState(false);
@@ -444,6 +453,7 @@ const NewShipment: React.FC = () => {
           id: String(p.id ?? ""),
           pallets: p.pallets,
           pieces: p.pieces,
+          packageType: p.packageType,
           class: p.class,
           weight: p.weight,
           length: p.length,
@@ -451,6 +461,7 @@ const NewShipment: React.FC = () => {
           height: p.height,
           nmfc: p.nmfc,
           hazmat: p.hazmat,
+          stackable: p.stackable,
         }));
       }
     } else {
@@ -460,6 +471,7 @@ const NewShipment: React.FC = () => {
           id: "1",
           pallets: "1",
           pieces: "1",
+          packageType: "Pallet",
           class: "",
           weight: "",
           length: "",
@@ -467,6 +479,7 @@ const NewShipment: React.FC = () => {
           height: "",
           nmfc: "",
           hazmat: false,
+          stackable: false,
         }];
       }
     }
@@ -550,8 +563,7 @@ const NewShipment: React.FC = () => {
         quote?.clientCode ||
         reduxClientContext?.customerLocation_selectedClientCode ||
         reduxClientContext?.quotes_selectedClientCode ||
-        DEFAULT_CLIENT_CODE ||
-        "Devts";
+        "";
 
       const token = reduxApp?.token;
       const headers: Record<string, string> = {
@@ -712,8 +724,7 @@ const NewShipment: React.FC = () => {
         quote?.clientCode ||
         reduxClientContext?.quotes_selectedClientCode ||
         reduxClientContext?.customerLocation_selectedClientCode ||
-        DEFAULT_CLIENT_CODE ||
-        "DEVTS";
+        "";
 
       const payload = {
         clientCode: clientCodeToUse,
@@ -832,6 +843,7 @@ const NewShipment: React.FC = () => {
       id: String(p.id ?? ""),
       pallets: p.pallets,
       pieces: p.pieces,
+      packageType: p.packageType,
       class: p.class,
       weight: p.weight,
       length: p.length,
@@ -839,6 +851,7 @@ const NewShipment: React.FC = () => {
       height: p.height,
       nmfc: p.nmfc,
       hazmat: p.hazmat,
+      stackable: p.stackable,
     }));
   };
 
@@ -975,28 +988,82 @@ const NewShipment: React.FC = () => {
     };
   }, [rawCarrier, quote]);
 
-  const handleFetchRatesForShipment = async (scacParam?: string) => {
-    setHasRateChanged(false);
-    syncFactorSnapshot();
+  const validateDateTimeFields = async (): Promise<boolean> => {
+    let formValidationError = false;
+
+    try {
+      await originForm.validateFields([
+        'expPickupDate',
+        'openTime',
+        'closeTime',
+        'pickupDate',
+        'pickupOpenTime',
+        'pickupCloseTime',
+      ]);
+    } catch {
+      formValidationError = true;
+    }
+
+    try {
+      await destinationForm.validateFields([
+        'expDeliveryDate',
+        'openTime',
+        'closeTime',
+        'deliveryDate',
+        'delOpenTime',
+        'delCloseTime',
+      ]);
+    } catch {
+      formValidationError = true;
+    }
 
     const originVals = {
       ...(originData || {}),
       ...(originFormValuesRef.current || {}),
       ...(originForm?.getFieldsValue?.(true) || {}),
     };
+    const destinationVals = {
+      ...(destinationData || {}),
+      ...(destinationFormValuesRef.current || {}),
+      ...(destinationForm?.getFieldsValue?.(true) || {}),
+    };
 
-    const readyTime = (
-      originVals.openTime ||
-      originVals.pickupOpenTime ||
-      originForm?.getFieldValue?.("openTime") ||
-      originForm?.getFieldValue?.("pickupOpenTime") || ""
-    ).trim();
+    const hasMissingOrigin =
+      !originVals.expPickupDate ||
+      !originVals.openTime ||
+      !originVals.closeTime ||
+      !originVals.pickupDate ||
+      !originVals.pickupOpenTime ||
+      !originVals.pickupCloseTime;
 
-    if (!readyTime) {
-      message.error("Pickup time is required.");
-      originForm.validateFields(['openTime']).catch(() => {});
-      return;
+    const hasMissingDest =
+      !destinationVals.expDeliveryDate ||
+      !destinationVals.openTime ||
+      !destinationVals.closeTime ||
+      !destinationVals.deliveryDate ||
+      !destinationVals.delOpenTime ||
+      !destinationVals.delCloseTime;
+
+    if (formValidationError || hasMissingOrigin || hasMissingDest) {
+      message.error("Please fill all required Origin and Destination Date & Time (From/To) fields.");
+      return false;
     }
+
+    return true;
+  };
+
+  const handleFetchRatesForShipment = async (scacParam?: string) => {
+    setHasRateChanged(false);
+    syncFactorSnapshot();
+
+    const isDateTimeValid = await validateDateTimeFields();
+    if (!isDateTimeValid) return;
+
+    const originVals = {
+      ...(originData || {}),
+      ...(originFormValuesRef.current || {}),
+      ...(originForm?.getFieldsValue?.(true) || {}),
+    };
 
     const origZip = (originVals.postal || originData?.postal || quote?.originZip || "").split(' - ')[0].trim();
     const destZip = (destinationData?.postal || quote?.destinationZip || "").split(' - ')[0].trim();
@@ -1042,9 +1109,20 @@ const NewShipment: React.FC = () => {
       stackable: Boolean(i.stackable),
     }));
 
+    const selectedIds = new Set(
+      (selectedAccessorialIds || []).map((id: any) => String(id))
+    );
     const accessorialCodes = (accessorialsList || [])
-      .filter((a: any) => (selectedAccessorialIds || []).includes(a.accessorialId))
-      .map((a: any) => a.accesorialCode || a.accessorialName);
+      .filter((a: any) => {
+        const id = a.accessorialID ?? a.accessorialId ?? a.id;
+        const name = a.accessorialName ?? a.description;
+        return (
+          (id !== undefined && selectedIds.has(String(id))) ||
+          (name && selectedIds.has(String(name)))
+        );
+      })
+      .map((a: any) => String(a.accesorialCode || a.accessorialCode || a.code || a.accessorialName || a.description || "").trim())
+      .filter(Boolean);
 
     const scacToUse = scacParam || selectedCarrierInfo?.carrierId || undefined;
     const firstHazmat = items.find((i) => i.hazmat) || items[0];
@@ -1070,7 +1148,7 @@ const NewShipment: React.FC = () => {
       profileCode: quote?.profileCode,
       ratingProfileCode: clients.find((c) => c.clientCode === selectedClientCode)?.ratingProfileCode,
       ratingClientCode: clients.find((c) => c.clientCode === selectedClientCode)?.ratingClientCode,
-      clientCode: selectedClientCode || quote?.clientCode || DEFAULT_CLIENT_CODE,
+      clientCode: selectedClientCode || quote?.clientCode || "",
       clientName: selectedClient?.clientName || quote?.clientName || "",
       scac: scacToUse,
       shipmentDate: toIsoOrCurrent(
@@ -1126,13 +1204,11 @@ const NewShipment: React.FC = () => {
 
   const handleAddLine = () => {
     dispatch(addProductRow());
-    setHasRateChanged(true);
   };
 
   const handleRemoveLine = (idToRemove: string) => {
     if (items.length > 1) {
       dispatch(removeProductRow(idToRemove));
-      setHasRateChanged(true);
     }
   };
 
@@ -1165,7 +1241,6 @@ const NewShipment: React.FC = () => {
           hazmatContactName: hazmatForm.hazmatContact,
         })
       );
-      setHasRateChanged(true);
     }
     setIsHazmatModalOpen(false);
     setActiveHazmatItem(null);
@@ -1195,7 +1270,6 @@ const NewShipment: React.FC = () => {
   );
 
   const handleUpdateField = (id: string, field: keyof ProductItem, value: any) => {
-    setHasRateChanged(true);
     if (field === 'stackable') {
       const isStackable = Boolean(value);
       dispatch(updateProductRow({ id, field: 'stackable', value: isStackable }));
@@ -1381,6 +1455,9 @@ const NewShipment: React.FC = () => {
       return;
     }
 
+    const isDateTimeValid = await validateDateTimeFields();
+    if (!isDateTimeValid) return;
+
     const readyTime = (
       originVals.openTime ||
       originVals.pickupOpenTime ||
@@ -1395,12 +1472,6 @@ const NewShipment: React.FC = () => {
       originForm?.getFieldValue?.("pickupCloseTime") ||
       "05:00 PM"
     ).trim();
-
-    if (!readyTime) {
-      message.error("Pickup time is required.");
-      originForm.validateFields(['openTime']).catch(() => {});
-      return;
-    }
 
     const shipmentNotes = shipmentNotesRef.current || "";
     const shipmentInfoValues = shipmentInfoValuesRef.current || {};
@@ -1419,8 +1490,7 @@ const NewShipment: React.FC = () => {
         quote?.clientCode ||
         reduxClientContext?.quotes_selectedClientCode ||
         reduxClientContext?.customerLocation_selectedClientCode ||
-        DEFAULT_CLIENT_CODE ||
-        "DEVTS";
+        "";
 
       const loggedInUser = reduxApp?.username || "Portal User";
 
@@ -1721,20 +1791,10 @@ const NewShipment: React.FC = () => {
       return;
     }
 
-    const readyTime = (
-      originVals.openTime ||
-      originVals.pickupOpenTime ||
-      originForm?.getFieldValue?.("openTime") ||
-      originForm?.getFieldValue?.("pickupOpenTime") || ""
-    ).trim();
+    const isDateTimeValid = await validateDateTimeFields();
+    if (!isDateTimeValid) return;
 
-    if (!readyTime) {
-      message.error("Pickup time is required.");
-      originForm.validateFields(['openTime']).catch(() => {});
-      return;
-    }
-
-    if (hasRefactorChanges()) {
+    if (isFromReference && hasRefactorChanges()) {
       setIsRefactorModalOpen(true);
     } else {
       checkMarkupAndSave();

@@ -1,3 +1,4 @@
+import type { RootState } from "../app/store";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { API_BASE_URL } from "../config/apiConfig";
@@ -149,13 +150,28 @@ const initialState: QuoteState = {
 export const fetchQuotes = createAsyncThunk<
   { quotes: QuoteResult[]; totalCount: number },
   FetchQuotesArgs,
-  { rejectValue: string }
+  { state: RootState; rejectValue: string }
 >(
   "quote/fetchQuotes",
-  async ({ clientCode, pageNumber = 1, pageSize = 10 }: { clientCode: string; pageNumber?: number; pageSize?: number }, { rejectWithValue }) => {
+  async ({ clientCode, pageNumber = 1, pageSize = 10 }: { clientCode?: string; pageNumber?: number; pageSize?: number }, { getState, rejectWithValue }) => {
     try {
+      const state = typeof getState === "function" ? (getState() as RootState) : undefined;
+      let targetCode = (typeof clientCode === "string" && clientCode.trim()) || "";
+
+      if (!targetCode && state) {
+        targetCode =
+          state.app?.ratingProfileCode?.trim() ||
+          state.customerLocation?.clients?.[0]?.ratingProfileCode?.trim() ||
+          state.app?.clientCode?.trim() ||
+          "";
+      }
+
+      if (!targetCode) {
+        return { quotes: [], totalCount: 0 };
+      }
+
       const response = await axios.get<ApiResponse<QuoteResult[]>>(
-        `${API_BASE_URL}/Quote/GetQuotesByClientCode/${clientCode}?pageNumber=${pageNumber}&pageSize=${pageSize}`
+        `${API_BASE_URL}/Quote/GetQuotesByClientCode/${encodeURIComponent(targetCode)}?pageNumber=${pageNumber}&pageSize=${pageSize}`
       );
       if (response.data && response.data.isSuccess) {
         const quotes = response.data.data || [];

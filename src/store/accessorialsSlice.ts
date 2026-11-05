@@ -2,7 +2,7 @@ import type { RootState } from "../app/store";
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import type { LocationAccessorial } from "../types/customerLocation.types";
 import axios from "axios";
-import { API_BASE_URL, SRV_TOKEN, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
+import { API_BASE_URL, SRV_TOKEN } from "../config/apiConfig";
 
 interface AccessorialApiItem
   extends Omit<LocationAccessorial, "accessorialName" | "description" | "accesorialCode"> {
@@ -46,7 +46,7 @@ export const fetchAccessorials = createAsyncThunk<
         (typeof clientCode === "string" && clientCode.trim()) ||
         state.app?.clientCode ||
         state.app?.profileCode ||
-        DEFAULT_CLIENT_CODE;
+        "";
       const token = (getState() as RootState)?.app?.token;
 
       const response = await axios.get<AccessorialApiResponse>(

@@ -8,9 +8,11 @@ import App from "./App";
 import { store } from "./app/store.ts";
 import { configureApiAuthentication } from "./config/apiConfig";
 import { registerSessionRestoreGuard } from "./app/sessionLifecycle";
+import { setupNonFocusableClearIcons } from "./utils/setupNonFocusableClearIcons";
 
 configureApiAuthentication(() => store.getState().app.token);
 registerSessionRestoreGuard(() => window.location.replace("/"));
+setupNonFocusableClearIcons();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

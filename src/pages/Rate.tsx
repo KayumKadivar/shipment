@@ -15,7 +15,7 @@ import { Button, Checkbox, Col, Empty, Input, Select, Spin, message } from "antd
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { API_BASE_URL, DEFAULT_CLIENT_CODE } from "../config/apiConfig";
+import { API_BASE_URL } from "../config/apiConfig";
 import { useAppSelector, useAppDispatch } from "../app/hooks";
 import {
   fetchCarrierLogo,
@@ -639,7 +639,7 @@ function Rate() {
     quoteRequest?.clientCode ||
     reduxClientContext?.quotes_selectedClientCode ||
     reduxClientContext?.customerLocation_selectedClientCode ||
-    DEFAULT_CLIENT_CODE;
+    "";
   const selectedClient = clientCodeToUse
     ? clients.find((c) => c.clientCode === clientCodeToUse)
     : undefined;
@@ -809,8 +809,7 @@ function Rate() {
         quoteRequest?.clientCode ||
         reduxClientContext?.quotes_selectedClientCode ||
         reduxClientContext?.customerLocation_selectedClientCode ||
-        DEFAULT_CLIENT_CODE ||
-        "DEVTS";
+         "";
 
       if (!clientCodeToUse) return;
 
@@ -838,6 +837,14 @@ function Rate() {
               setIsMarkupEnabled(false);
               const rateVal = config.rate != null ? String(config.rate) : "0";
               setNetSellRate(rateVal);
+              setAppliedMarkupConfig({
+                isMarkupEnabled: false,
+                markupDropdownOption: "",
+                numericMarkup: 0,
+                numericMarkupRate: 0,
+                isNetSellRateEnabled: true,
+                numericNetSellRate: Number(rateVal) || 0,
+              });
             } else {
               setIsMarkupEnabled(true);
               setIsNetSellRateEnabled(false);
@@ -861,6 +868,14 @@ function Rate() {
                     ? String(config.rate)
                     : "0";
               setMarkup(minVal);
+              setAppliedMarkupConfig({
+                isMarkupEnabled: true,
+                markupDropdownOption: opt,
+                numericMarkup: Number(minVal) || 0,
+                numericMarkupRate: Number(rateVal) || 0,
+                isNetSellRateEnabled: false,
+                numericNetSellRate: 0,
+              });
             }
           }
         }
@@ -1154,7 +1169,7 @@ function Rate() {
       destinationCountry: quoteRequest?.destCountry,
       pickupDate: quoteRequest?.shipmentDate,
       clientName: quoteRequest?.clientName,
-      clientCode: quoteRequest?.clientCode || "Devts",
+      clientCode: quoteRequest?.clientCode || "",
       profileCode: quoteRequest?.profileCode,
       quoteProducts: (quoteRequest?.shipments || []).map((s, idx) => ({
         quoteProductId: idx + 1,
@@ -1184,7 +1199,7 @@ function Rate() {
       ? {
           ...fallbackQuote,
           ...quoteToSend,
-          clientCode: quoteToSend.clientCode || quoteRequest?.clientCode || "Devts",
+          clientCode: quoteToSend.clientCode || quoteRequest?.clientCode || "",
           quoteProducts:
             quoteToSend.quoteProducts && quoteToSend.quoteProducts.length > 0
               ? quoteToSend.quoteProducts
@@ -1202,11 +1217,11 @@ function Rate() {
           price: rate.sellPrice !== undefined ? rate.sellPrice : rate.price,
           markupType: carrierConfig.isNetSellRateEnabled
             ? "netSellRate"
-            : carrierConfig.markupDropdownOption,
+            : (carrierConfig.markupDropdownOption || markupDropdownOption || "Flat"),
           rate: carrierConfig.isNetSellRateEnabled
-            ? String(carrierConfig.numericNetSellRate)
-            : String(carrierConfig.numericMarkupRate),
-          minimum: String(carrierConfig.numericMarkup),
+            ? String(carrierConfig.numericNetSellRate || netSellRate || "0")
+            : String(carrierConfig.numericMarkupRate || markupRate || "0"),
+          minimum: String(carrierConfig.numericMarkup || markup || "0"),
           markup: rate.markupAmount ?? (rate.sellPrice !== undefined && rate.price !== undefined ? Math.round((rate.sellPrice - rate.price) * 100) / 100 : 0),
           grossSellAmount: rate.grossSell ?? rate.grossSellAmount,
           sellPrice: rate.sellPrice,

@@ -43,7 +43,6 @@ import { useDispatch } from "react-redux";
 import { useAppSelector } from "../app/hooks";
 import type { AppDispatch } from "../app/store";
 import { getAllCustomerLocations, getCustomerLocationByID, updateCustomerLocation, deleteCustomerLocations, fetchClientsAndSubclients } from "../store/customerLocationSlice";
-import { DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import type {
   CustomerLocation,
   LocationType,
@@ -189,16 +188,12 @@ function CustomerLocationPage({
 
   const loggedInClientCode =
     useAppSelector((state) => state.app.clientCode) ||
-    DEFAULT_CLIENT_CODE;
+    "";
 
   const defaultLoggedClient = useMemo(() => {
     return (
       clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
-      clients.find((client) => client.isLoggedClient)?.clientCode ||
-      loggedInClientCode ||
-      DEFAULT_CLIENT_CODE ||
-      clients[0]?.clientCode ||
-      ""
+      clients.find((client) => client.isLoggedClient)?.clientCode || loggedInClientCode || clients[0]?.clientCode || ""
     );
   }, [clients, loggedInClientCode]);
 

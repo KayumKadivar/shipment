@@ -9,7 +9,7 @@ import { usePostalLookup } from '../../hooks/usePostalLookup';
 import { formatDisplayTime, TIME_OPTIONS } from './OriginLocation';
 import { formatPhoneNumber } from '../../utils/formatPhoneNumber';
 import axios from 'axios';
-import { API_BASE_URL, DEFAULT_CLIENT_CODE } from '../../config/apiConfig';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 export interface DestinationLocationProps {
   form?: FormInstance;
@@ -226,8 +226,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
           clientCode ||
           reduxClientContext?.customerLocation_selectedClientCode ||
           reduxClientContext?.quotes_selectedClientCode ||
-          DEFAULT_CLIENT_CODE ||
-          "DEVTS";
+          "";
 
         const response = await axios.post(
           `${API_BASE_URL}/Location/SearchLocations`,
@@ -612,6 +611,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
               label="Exp. Delivery Date"
               name="expDeliveryDate"
               className="location-time-label"
+              rules={[{ required: true, message: "Exp. Delivery Date is required" }]}
               getValueProps={(val) => ({
                 value: val ? (dayjs.isDayjs(val) ? val : dayjs(val).isValid() ? dayjs(val) : null) : null,
               })}
@@ -625,7 +625,11 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
-            <Form.Item label="From" name="openTime">
+            <Form.Item 
+              label="From" 
+              name="openTime"
+              rules={[{ required: true, message: "Exp. Delivery From time is required" }]}
+            >
               <Select
                 className="location-time-select"
                 popupClassName="location-time-dropdown"
@@ -638,7 +642,11 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
-            <Form.Item label="To" name="closeTime">
+            <Form.Item 
+              label="To" 
+              name="closeTime"
+              rules={[{ required: true, message: "Exp. Delivery To time is required" }]}
+            >
               <Select
                 className="location-time-select"
                 popupClassName="location-time-dropdown"
@@ -657,6 +665,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
               label="Delivery Date"
               name="deliveryDate"
               className="location-time-label"
+              rules={[{ required: true, message: "Delivery Date is required" }]}
               getValueProps={(val) => ({
                 value: val ? (dayjs.isDayjs(val) ? val : dayjs(val).isValid() ? dayjs(val) : null) : null,
               })}
@@ -670,7 +679,11 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
-            <Form.Item label="From" name="delOpenTime">
+            <Form.Item 
+              label="From" 
+              name="delOpenTime"
+              rules={[{ required: true, message: "Delivery From time is required" }]}
+            >
               <Select
                 className="location-time-select"
                 popupClassName="location-time-dropdown"
@@ -678,11 +691,16 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
                 allowClear
                 showSearch
                 options={timeOptions}
+                placeholder="From"
               />
             </Form.Item>
           </Col>
           <Col xs={12} md={7}>
-            <Form.Item label="To" name="delCloseTime">
+            <Form.Item 
+              label="To" 
+              name="delCloseTime"
+              rules={[{ required: true, message: "Delivery To time is required" }]}
+            >
               <Select
                 className="location-time-select"
                 popupClassName="location-time-dropdown"
@@ -690,6 +708,7 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
                 allowClear
                 showSearch
                 options={timeOptions}
+                placeholder="To"
               />
             </Form.Item>
           </Col>

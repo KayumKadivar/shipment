@@ -2,8 +2,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 import {
   API_BASE_URL,
-  DEFAULT_CLIENT_CODE,
-  SRV_TOKEN,
+    SRV_TOKEN,
 } from "../config/apiConfig";
 
 export type CarrierTrackingRecord = {
@@ -65,7 +64,7 @@ export const fetchCarrierTracking = createAsyncThunk<
 >(
   "carrierTracking/fetchCarrierTracking",
   async ({ loadNumber, clientCode }, { rejectWithValue }) => {
-    const resolvedClientCode = clientCode?.trim() || DEFAULT_CLIENT_CODE;
+    const resolvedClientCode = clientCode?.trim() || "";
 
     try {
       const response = await axios.get<CarrierTrackingApiResponse>(

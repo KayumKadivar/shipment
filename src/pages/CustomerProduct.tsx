@@ -46,7 +46,6 @@ import {
   getProductPackageTypes,
 } from "../store/customerProductSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
-import { DEFAULT_CLIENT_CODE } from "../config/apiConfig";
 import type {
   CustomerProduct,
   ProductFormValues,
@@ -190,15 +189,14 @@ function CustomerProductPage({
   
   const loggedInClientCode =
     useAppSelector((state) => state.app.clientCode) ||
-    DEFAULT_CLIENT_CODE;
+    "";
 
   const defaultLoggedClient = useMemo(() => {
     return (
       clients.find((client) => client.clientCode === loggedInClientCode)?.clientCode ||
       clients.find((client) => client.isLoggedClient)?.clientCode ||
       loggedInClientCode ||
-      DEFAULT_CLIENT_CODE ||
-      clients[0]?.clientCode ||
+            clients[0]?.clientCode ||
       ""
     );
   }, [clients, loggedInClientCode]);

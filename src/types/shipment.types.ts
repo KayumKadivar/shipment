@@ -227,6 +227,7 @@ export type ShipmentListApiResponse = {
 export type FetchShipmentsArgs = {
   pageNumber: number;
   pageSize: number;
+  clientCode?: string;
 };
 
 export type ShipmentRecord = {

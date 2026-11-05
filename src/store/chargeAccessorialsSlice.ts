@@ -3,8 +3,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 import {
   API_BASE_URL,
-  DEFAULT_CLIENT_CODE,
-  SRV_TOKEN,
+    SRV_TOKEN,
 } from "../config/apiConfig";
 
 export type ChargeAccessorial = {
@@ -52,7 +51,7 @@ function resolveClientCode(clientCode: string | null | undefined, appClientCode?
   return (
     clientCode?.trim() ||
     appClientCode ||
-    DEFAULT_CLIENT_CODE
+    ""
   );
 }
 
