@@ -54,7 +54,7 @@ export type CarrierRate = SendRateItem & {
   grossSellAmount?: number;
   discount?: number;
   fuelSurcharge?: number;
-  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number; code?: string }[];
+  accessorialCharges?: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[];
   quoteCostDetails?: any[] | null;
   rawQuoteResult?: any;
   sellPrice?: number;
@@ -406,7 +406,9 @@ export const getChargeSellDetails = (rate: CarrierRate) => {
       fuelSell: rate.fuelSell ?? (rate.isNetSellActive ? 0 : (rate.fuelSurcharge ?? 0)),
       accessorialsSell: (rate.accessorialCharges || []).map((ac) => ({
         accessorialDescription: ac.accessorialDescription || "Accessorial",
-        accessorialCharge: rate.isNetSellActive ? 0 : (ac.accessorialCharge ?? 0),
+        accessorialCharge: rate.isNetSellActive
+          ? 0
+          : (ac.sellCharge !== undefined ? ac.sellCharge : (ac.accessorialCharge ?? 0)),
       })),
     };
   }
@@ -469,7 +471,7 @@ export const getChargeSellDetails = (rate: CarrierRate) => {
     rate.accessorialCharges.forEach((ac) => {
       accessorialsSell.push({
         accessorialDescription: ac.accessorialDescription || "Accessorial",
-        accessorialCharge: ac.accessorialCharge ?? 0,
+        accessorialCharge: ac.sellCharge !== undefined ? ac.sellCharge : (ac.accessorialCharge ?? 0),
       });
     });
   }
