@@ -137,7 +137,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   onClearError,
   onSelectCarrier,
   onRateDetailsChange,
-  clientMarkupConfig,
+  
   isFromReference: _isFromReference = false,
   hasRateChanged = false,
   onRateChanged,
@@ -217,7 +217,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   }, [hasRateChanged]);
 
   // Applied markup state (active and recalculated on table when applied)
-  const fetchedMarkupClientRef = useRef<string | null>(null);
+  // const fetchedMarkupClientRef = useRef<string | null>(null);
   const [appliedMarkupConfig, setAppliedMarkupConfig] = useState<{
     isMarkupEnabled: boolean;
     markupDropdownOption: string;

@@ -827,15 +827,24 @@ const NewShipment: React.FC = () => {
     }, 400);
   };
 
+  const rawCarrier: any = selectedCarrierRate || prefillData?.selectedCarrier || prefillData?.rate || quote?.selectedCarrier || quote?.quoteResults?.[0];
+
+  const resolvedServiceLevel =
+    (selectedCarrier as any)?.serviceLevel ||
+    selectedCarrier?.service ||
+    (rawCarrier as any)?.serviceLevel ||
+    (rawCarrier as any)?.serviceLevelDescription ||
+    rawCarrier?.service ||
+    (quote as any)?.serviceLevel ||
+    "Standard";
+
   const shipmentInfoData = {
-    serviceLevel: selectedCarrier?.service || "",
+    serviceLevel: resolvedServiceLevel,
     customerRef: String(reference || quote?.quoteRequestId || ""),
     mode: quote?.mode || "",
     equipment: quote?.equipment || "",
     paymentTerms: quote?.paymentTerms || "",
   };
-
-  const rawCarrier: any = selectedCarrierRate || prefillData?.selectedCarrier || prefillData?.rate || quote?.selectedCarrier || quote?.quoteResults?.[0];
 
   const syncFactorSnapshot = () => {
     initialAccessorialsSnapshotRef.current = [...selectedAccessorialIds].sort((a, b) => a - b);
@@ -1065,8 +1074,14 @@ const NewShipment: React.FC = () => {
       ...(originForm?.getFieldsValue?.(true) || {}),
     };
 
+    const destinationVals = {
+      ...(destinationData || {}),
+      ...(destinationFormValuesRef.current || {}),
+      ...(destinationForm?.getFieldsValue?.(true) || {}),
+    };
+
     const origZip = (originVals.postal || originData?.postal || quote?.originZip || "").split(' - ')[0].trim();
-    const destZip = (destinationData?.postal || quote?.destinationZip || "").split(' - ')[0].trim();
+    const destZip = (destinationVals.postal || destinationData?.postal || quote?.destinationZip || "").split(' - ')[0].trim();
 
     if (!origZip || !destZip) {
       message.warning("Please provide Origin and Destination ZIP codes before rating.");
@@ -1130,13 +1145,13 @@ const NewShipment: React.FC = () => {
     const payload = {
       serviceToken: SRV_TOKEN,
       origZip,
-      origCity: originData?.city || quote?.originCity || "",
-      origState: originData?.state || quote?.originStateCode || "",
-      origCountry: originData?.country || quote?.originCountry || "USA",
+      origCity: originVals.city || originData?.city || quote?.originCity || "",
+      origState: originVals.state || originData?.state || quote?.originStateCode || "",
+      origCountry: originVals.country || originData?.country || quote?.originCountry || "USA",
       destZip,
-      destCity: destinationData?.city || quote?.destinationCity || "",
-      destState: destinationData?.state || quote?.destinationStateCode || "",
-      destCountry: destinationData?.country || quote?.destinationCountry || "USA",
+      destCity: destinationVals.city || destinationData?.city || quote?.destinationCity || "",
+      destState: destinationVals.state || destinationData?.state || quote?.destinationStateCode || "",
+      destCountry: destinationVals.country || destinationData?.country || quote?.destinationCountry || "USA",
       hazmatProperShippingName: firstHazmat?.hazmatProperShippingName || "",
       hazmatClass: firstHazmat?.hazmatClass || "",
       hazmatUN: firstHazmat?.hazmatUN || "",
