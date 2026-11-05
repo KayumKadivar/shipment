@@ -938,38 +938,29 @@ function Rate() {
   const handleSaveQuote = async () => {
     setIsSavingQuote(true);
     try {
-      const marginTypeToPass = isNetSellRateEnabled
+      const marginTypeToPass = appliedMarkupConfig.isNetSellRateEnabled
         ? "NetSell"
-        : markupDropdownOption === "Flat"
-          ? "Flat"
-          : markupDropdownOption;
+        : appliedMarkupConfig.isMarkupEnabled
+          ? (appliedMarkupConfig.markupDropdownOption === "Flat" ? "Flat" : appliedMarkupConfig.markupDropdownOption)
+          : "";
 
-      const marginValToPass = isNetSellRateEnabled
-        ? Number(netSellRate) || 0
-        : markupDropdownOption === "Flat"
-          ? Number(markupRate) || Number(markup) || 0
-          : Number(markupRate) || 0;
-
-      const currentConfig: AppliedMarkupConfig = {
-        isMarkupEnabled: isNetSellRateEnabled ? false : isMarkupEnabled,
-        markupDropdownOption: isNetSellRateEnabled ? "" : markupDropdownOption,
-        numericMarkup: isNetSellRateEnabled ? 0 : (Number(markup) || 0),
-        numericMarkupRate: isNetSellRateEnabled ? 0 : (Number(markupRate) || 0),
-        isNetSellRateEnabled,
-        numericNetSellRate: isNetSellRateEnabled ? (Number(netSellRate) || 0) : 0,
-      };
-
-      setAppliedMarkupConfig(currentConfig);
+      const marginValToPass = appliedMarkupConfig.isNetSellRateEnabled
+        ? appliedMarkupConfig.numericNetSellRate || 0
+        : appliedMarkupConfig.isMarkupEnabled
+          ? (appliedMarkupConfig.markupDropdownOption === "Flat"
+              ? appliedMarkupConfig.numericMarkupRate || appliedMarkupConfig.numericMarkup || 0
+              : appliedMarkupConfig.numericMarkupRate || 0)
+          : 0;
 
       const calculatedRatesToSave = (ratesFromStore || []).map((r) =>
-        applyMarkupToRate(r, carrierMarkupMap[r.id] || carrierMarkupMap[r.code] || currentConfig)
+        applyMarkupToRate(r, carrierMarkupMap[r.id] || carrierMarkupMap[r.code] || appliedMarkupConfig)
       );
 
       await dispatch(
         saveCustomerQuote({
           marginType: marginTypeToPass,
           marginPercent: marginValToPass,
-          isNetSellRate: isNetSellRateEnabled,
+          isNetSellRate: appliedMarkupConfig.isNetSellRateEnabled,
           calculatedRates: calculatedRatesToSave,
           rawQuote: rawQuote || undefined,
         })

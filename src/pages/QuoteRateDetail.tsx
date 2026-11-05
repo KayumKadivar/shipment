@@ -488,23 +488,25 @@ function QuoteRateDetail() {
   const handleSaveQuote = async () => {
     setIsSavingQuote(true);
     try {
-      const marginTypeToPass = isNetSellRateEnabled
+      const marginTypeToPass = appliedMarkupConfig.isNetSellRateEnabled
         ? "NetSell"
-        : markupDropdownOption === "Flat"
-          ? "Flat"
-          : markupDropdownOption;
+        : appliedMarkupConfig.isMarkupEnabled
+          ? (appliedMarkupConfig.markupDropdownOption === "Flat" ? "Flat" : appliedMarkupConfig.markupDropdownOption)
+          : "";
 
-      const marginValToPass = isNetSellRateEnabled
-        ? Number(netSellRate) || 0
-        : markupDropdownOption === "Flat"
-          ? Number(markupRate) || Number(markup) || 0
-          : Number(markupRate) || 0;
+      const marginValToPass = appliedMarkupConfig.isNetSellRateEnabled
+        ? appliedMarkupConfig.numericNetSellRate || 0
+        : appliedMarkupConfig.isMarkupEnabled
+          ? (appliedMarkupConfig.markupDropdownOption === "Flat"
+              ? appliedMarkupConfig.numericMarkupRate || appliedMarkupConfig.numericMarkup || 0
+              : appliedMarkupConfig.numericMarkupRate || 0)
+          : 0;
 
       await dispatch(
         saveCustomerQuote({
           marginType: marginTypeToPass,
           marginPercent: marginValToPass,
-          isNetSellRate: isNetSellRateEnabled,
+          isNetSellRate: appliedMarkupConfig.isNetSellRateEnabled,
           calculatedRates: rates.map((r) => applyMarkupToRate(r, getRateMarkupConfig(r))),
           rawQuote: apiQuote,
         })
