@@ -235,13 +235,137 @@ export interface QuoteSaveApiResponse {
   data?: unknown;
 }
 
-// async thunk for fetching rates
 export const fetchCarrierRates = createAsyncThunk<
   ApiRate[],
   CarrierRateRequest,
   { rejectValue: string }
 >(
   "customerRate/fetchCarrierRates",
+  async (payload, { getState, rejectWithValue }) => {
+    try {
+      const token = (getState() as RootState)?.app?.token;
+
+      const ratingClientCode =
+        payload.ratingClientCode ||
+        (getState() as RootState)?.app?.ratingClientCode ||
+        payload.clientCode ||
+        (getState() as RootState)?.app?.clientCode ||
+        "";
+
+      const ratingProfileCode =
+        payload.ratingProfileCode ||
+        (getState() as RootState)?.app?.ratingProfileCode ||
+        payload.profileCode ||
+        (getState() as RootState)?.app?.profileCode || "";
+
+      const requestPayload = createGetRatesRequest({
+        ...payload,
+        ratingProfileCode,
+        ratingClientCode,
+      });
+
+      const response = await axios.post<RateApiResponse>(
+        `${API_BASE_URL}/Rating/GetQuote`,
+        requestPayload,
+        {
+          headers: {
+            accept: "*/*",
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+      );
+
+      if (response.data && response.data.isSuccess === false) {
+        let msg = response.data.message || response.data.errorMessage || "Failed to fetch rates";
+        if (typeof msg === "string") {
+          msg = msg
+            .replace(/^[\s-]*Severity:\s*Error[\r\n\s-]*/gi, "")
+            .split("\n")
+            .map((line) => line.trim().replace(/^[-–—\s]+/, ""))
+            .filter(Boolean)
+            .join("\n");
+        }
+        return rejectWithValue(msg);
+      }
+
+      let apiRates: ApiRate[] = [];
+      let rawQuoteClean: any = null;
+      const responseData = response.data?.data as any;
+      if (responseData) {
+        if (Array.isArray(responseData)) {
+          apiRates = responseData.map((r: any) => ({ ...r }));
+        } else if (typeof responseData === "object") {
+          const list =
+            responseData.leastCostCarriers ||
+            responseData.quoteResults ||
+            responseData.rates ||
+            responseData.carrierRates ||
+            responseData.carriers ||
+            [];
+         
+          apiRates = (Array.isArray(list) ? list : []).map((r: any) => ({ ...r }));
+
+         
+          rawQuoteClean = {
+            ...responseData,
+            quoteResults: Array.isArray(responseData.quoteResults)
+              ? responseData.quoteResults.map((qr: any) => ({ ...qr }))
+              : undefined,
+          };
+        }
+      }
+      if (rawQuoteClean) {
+        (apiRates as any).rawQuote = rawQuoteClean;
+      }
+      console.log("Extracted apiRates:", apiRates);
+      return apiRates;
+    } catch (error: any) {
+      console.error("fetchCarrierRates error:", error);
+      let errMsg = "Failed to fetch rates";
+      if (error?.response?.data) {
+        const data = error.response.data;
+        if (typeof data === "string") {
+          errMsg = data;
+        } else if (data.message) {
+          errMsg = data.message;
+        } else if (data.errorMessage) {
+          errMsg = data.errorMessage;
+        } else if (data.title) {
+          errMsg = data.title;
+          if (data.errors && typeof data.errors === "object") {
+            const fieldMsgs = Object.values(data.errors).flat().filter(Boolean).join(", ");
+            if (fieldMsgs) errMsg = `${data.title}: ${fieldMsgs}`;
+          }
+        } else if (data.errors) {
+          if (Array.isArray(data.errors)) {
+            errMsg = data.errors.join(", ");
+          } else if (typeof data.errors === "object") {
+            errMsg = Object.values(data.errors).flat().join(", ");
+          }
+        }
+      } else if (error?.message) {
+        errMsg = error.message;
+      }
+      if (typeof errMsg === "string") {
+        errMsg = errMsg
+          .replace(/^[\s-]*Severity:\s*Error[\r\n\s-]*/gi, "")
+          .split("\n")
+          .map((line) => line.trim().replace(/^[-–—\s]+/, ""))
+          .filter(Boolean)
+          .join("\n");
+      }
+      return rejectWithValue(errMsg);
+    }
+  }
+);
+
+export const fetchCarrierRatesShipment = createAsyncThunk<
+  ApiRate[],
+  CarrierRateRequest,
+  { rejectValue: string }
+>(
+  "customerRate/fetchCarrierRatesShipment",
   async (payload, { getState, rejectWithValue }) => {
     try {
       const token = (getState() as RootState)?.app?.token;
@@ -360,6 +484,7 @@ export const fetchCarrierRates = createAsyncThunk<
     }
   }
 );
+
 
 export const fetchCarrierLogo = createAsyncThunk<
   { scac: string; logo: string },
@@ -736,15 +861,17 @@ const customerRateSlice = createSlice({
 
         state.rates = action.payload.map((rate: any, index: number) => {
           let grossCharge = Number(rate.grossCharge) || 0;
-          let grossSellAmount = (rate as any).grossSellAmount != null
+          let grossSellAmount = (rate as any).sellGrossCharge != null
+            ? Number((rate as any).sellGrossCharge)
+            : (rate as any).grossSellAmount != null
             ? Number((rate as any).grossSellAmount)
             : (rate as any).sellAmount != null
             ? Number((rate as any).sellAmount)
             : undefined;
           let discount = Number(rate.discount) || 0;
           let fuelSurcharge = Number(rate.fuelSurcharge) || 0;
-          let discountSell: number | undefined = undefined;
-          let fuelSell: number | undefined = undefined;
+          let discountSell: number | undefined = (rate as any).sellDiscount != null ? Number((rate as any).sellDiscount) : undefined;
+          let fuelSell: number | undefined = (rate as any).sellFuelSurcharge != null ? Number((rate as any).sellFuelSurcharge) : undefined;
           const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
 
           const costDetails = rate.quoteCostDetails || rate.costDetails;
@@ -764,8 +891,9 @@ const customerRateSlice = createSlice({
                 name.includes("freight")
               ) {
                 grossCharge = amount;
-                if (cd.sellAmount != null) {
-                  grossSellAmount = Number(cd.sellAmount);
+                const costSell = cd.sellAmount != null ? Number(cd.sellAmount) : (cd.sell != null ? Number(cd.sell) : undefined);
+                if (costSell !== undefined) {
+                  grossSellAmount = costSell;
                 }
               } else if (
                 code === COST_CODE_DISC ||
@@ -849,6 +977,143 @@ const customerRateSlice = createSlice({
       })
       // fetchCarrierRates.rejected: when request is failed
       .addCase(fetchCarrierRates.rejected, (state, action) => {
+        state.loading = false;
+        state.error = (action.payload as string) || action.error.message || "Failed to fetch rates";
+      })
+      // fetchCarrierRatesShipment cases
+      .addCase(fetchCarrierRatesShipment.pending, (state, action) => {
+        state.loading = true;
+        state.error = null;
+        state.rates = [];
+        state.quoteRequest = action.meta.arg;
+      })
+      .addCase(fetchCarrierRatesShipment.fulfilled, (state, action) => {
+        state.rawQuote = (action.payload as any)?.rawQuote || null;
+        state.loading = false;
+
+        state.rates = action.payload.map((rate: any, index: number) => {
+          let grossCharge = Number(rate.grossCharge) || 0;
+          let grossSellAmount = (rate as any).sellGrossCharge != null
+            ? Number((rate as any).sellGrossCharge)
+            : (rate as any).grossSellAmount != null
+            ? Number((rate as any).grossSellAmount)
+            : (rate as any).sellAmount != null
+            ? Number((rate as any).sellAmount)
+            : undefined;
+          let discount = Number(rate.discount) || 0;
+          let fuelSurcharge = Number(rate.fuelSurcharge) || 0;
+          let discountSell: number | undefined = (rate as any).sellDiscount != null ? Number((rate as any).sellDiscount) : undefined;
+          let fuelSell: number | undefined = (rate as any).sellFuelSurcharge != null ? Number((rate as any).sellFuelSurcharge) : undefined;
+          const otherAccessorials: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
+
+          const costDetails = rate.quoteCostDetails || rate.costDetails;
+          if (Array.isArray(costDetails) && costDetails.length > 0) {
+            costDetails.forEach((cd: any) => {
+              const code = (cd.accCode || cd.code || "").trim().toUpperCase();
+              const name = (cd.accName || cd.name || cd.description || "").trim().toLowerCase();
+              const amount = Number(cd.amount ?? cd.charge) || 0;
+
+              if (
+                code === COST_CODE_GROSS ||
+                code === "FRT" ||
+                code === "FREIGHT" ||
+                code === "BASE" ||
+                name === COST_NAME_GROSS.toLowerCase() ||
+                name.includes("gross") ||
+                name.includes("freight")
+              ) {
+                grossCharge = amount;
+                const costSell = cd.sellAmount != null ? Number(cd.sellAmount) : (cd.sell != null ? Number(cd.sell) : undefined);
+                if (costSell !== undefined) {
+                  grossSellAmount = costSell;
+                }
+              } else if (
+                code === COST_CODE_DISC ||
+                code === "DSC" ||
+                code === "DISCOUNT" ||
+                name === COST_NAME_DISC.toLowerCase() ||
+                name.includes("discount")
+              ) {
+                discount = Math.abs(amount);
+                if (cd.sellAmount != null) {
+                  discountSell = Math.abs(Number(cd.sellAmount));
+                }
+              } else if (
+                code === COST_CODE_FUEL ||
+                code === "FSC" ||
+                code === "FUEL SURCHARGE" ||
+                name === COST_NAME_FUEL.toLowerCase() ||
+                name.includes("fuel")
+              ) {
+                fuelSurcharge = amount;
+                if (cd.sellAmount != null) {
+                  fuelSell = Number(cd.sellAmount);
+                }
+              } else {
+                otherAccessorials.push({
+                  code: cd.accCode || cd.code || "ACC",
+                  accessorialDescription: cd.accName || cd.name || cd.description || "Accessorial",
+                  accessorialCharge: amount,
+                  sellCharge: cd.sellAmount != null ? Number(cd.sellAmount) : amount,
+                });
+              }
+            });
+          } else if (Array.isArray(rate.accessorialCharges)) {
+            rate.accessorialCharges.forEach((ac: any) => {
+              const amt = Number(ac.accessorialCharge ?? ac.amount) || 0;
+              const sellAmt = ac.sellCharge != null ? Number(ac.sellCharge) : (ac.sellAmount != null ? Number(ac.sellAmount) : amt);
+              otherAccessorials.push({
+                code: ac.code || ac.accessorialCode || "ACC",
+                accessorialDescription: ac.accessorialDescription || ac.description || ac.accName || "Accessorial",
+                accessorialCharge: amt,
+                sellCharge: sellAmt,
+              });
+            });
+          }
+
+          const totalAccessorialsBuy = otherAccessorials.reduce((acc, c) => acc + (c.accessorialCharge || 0), 0);
+          const computedBuyPrice = Math.round(((grossCharge - discount + fuelSurcharge) + totalAccessorialsBuy) * 100) / 100;
+          const price = computedBuyPrice > 0
+            ? computedBuyPrice
+            : (Number(rate.totalShipmentCost) || Number(rate.netCharge) || Number(rate.price) || 0);
+
+          const calculatedSellPrice =
+            grossSellAmount !== undefined
+              ? Math.round((grossSellAmount - (discountSell ?? discount) + (fuelSell ?? fuelSurcharge) + otherAccessorials.reduce((acc, c) => acc + (c.sellCharge ?? c.accessorialCharge ?? 0), 0)) * 100) / 100
+              : price;
+
+          if (!grossCharge && price > 0) {
+            grossCharge = price;
+          }
+
+          return {
+            id: `${rate.scac || rate.carrierCode || "CARRIER"}-${index}-${rate.saasQuoteNumber || index}`,
+            name: rate.carrierName || rate.name || "",
+            code: rate.scac || rate.carrierCode || "",
+            service: rate.serviceLevelDescription || rate.serviceLevel || rate.service || "",
+            serviceLevel: rate.serviceLevelDescription || rate.serviceLevel || rate.service || "",
+            price: price > 0 ? price : computedBuyPrice,
+            transitDays: Number(rate.transitDays) || 0,
+            estimatedDelivery: rate.deliveryDate || rate.estimatedDeliveryDate || "",
+            warning: rate.errorMessage?.trim() || (price <= 0 ? "Rate unavailable or capacity rules exceeded." : ""),
+            quoteExpiry: rate.quoteExpirationDate || "",
+            liabilityNew: "",
+            liabilityUsed: "",
+            grossCharge,
+            sellPrice: calculatedSellPrice > 0 ? calculatedSellPrice : (price > 0 ? price : 0),
+            grossSell: grossSellAmount,
+            grossSellAmount,
+            discount,
+            discountSell,
+            fuelSurcharge,
+            fuelSell,
+            accessorialCharges: otherAccessorials,
+            quoteCostDetails: costDetails,
+            rawQuoteResult: rate,
+          };
+        });
+      })
+      .addCase(fetchCarrierRatesShipment.rejected, (state, action) => {
         state.loading = false;
         state.error = (action.payload as string) || action.error.message || "Failed to fetch rates";
       })

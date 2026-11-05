@@ -833,21 +833,9 @@ function Rate() {
             const raw = String(config.markupType).toLowerCase();
             const isNetSell = raw.includes("netsell");
             if (isNetSell) {
-              setIsNetSellRateEnabled(true);
-              setIsMarkupEnabled(false);
               const rateVal = config.rate != null ? String(config.rate) : "0";
               setNetSellRate(rateVal);
-              setAppliedMarkupConfig({
-                isMarkupEnabled: false,
-                markupDropdownOption: "",
-                numericMarkup: 0,
-                numericMarkupRate: 0,
-                isNetSellRateEnabled: true,
-                numericNetSellRate: Number(rateVal) || 0,
-              });
             } else {
-              setIsMarkupEnabled(true);
-              setIsNetSellRateEnabled(false);
               let opt = "Flat";
               if (raw.includes("flat")) {
                 opt = "Flat";
@@ -868,14 +856,6 @@ function Rate() {
                     ? String(config.rate)
                     : "0";
               setMarkup(minVal);
-              setAppliedMarkupConfig({
-                isMarkupEnabled: true,
-                markupDropdownOption: opt,
-                numericMarkup: Number(minVal) || 0,
-                numericMarkupRate: Number(rateVal) || 0,
-                isNetSellRateEnabled: false,
-                numericNetSellRate: 0,
-              });
             }
           }
         }

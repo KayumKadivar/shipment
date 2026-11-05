@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { setProductItems, addProductRow, removeProductRow, updateProductRow, updateProductHazmat, setWeightUnit, resetProductItems, type ProductItem } from '../../store/productSlice';
 import { setSelectedAccessorials, fetchAccessorials, clearSelectedAccessorials } from '../../store/accessorialsSlice';
-import { fetchCarrierRates, clearRateError } from '../../store/customerRateSlice';
+import { fetchCarrierRatesShipment, clearRateError } from '../../store/customerRateSlice';
 import {
   Button, Card, Input, Segmented, Checkbox, Select,
   Row, Col, Flex, message, Spin, AutoComplete, Tooltip, Modal, Form, Typography,
@@ -1197,8 +1197,8 @@ const NewShipment: React.FC = () => {
 
     try {
       setIsRateModalOpen(true);
-      const res = await dispatch(fetchCarrierRates(payload));
-      if (fetchCarrierRates.fulfilled.match(res)) {
+      const res = await dispatch(fetchCarrierRatesShipment(payload));
+      if (fetchCarrierRatesShipment.fulfilled.match(res)) {
         setHasRateChanged(false);
         syncFactorSnapshot();
         const rates = res.payload;
