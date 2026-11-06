@@ -296,6 +296,26 @@ const NewShipment: React.FC = () => {
   const [isMinMarkupModalOpen, setIsMinMarkupModalOpen] = useState(false);
   const initialProductsSnapshotRef = useRef<any[] | null>(null);
   const initialAccessorialsSnapshotRef = useRef<number[] | null>(null);
+  const initialLocationSnapshotRef = useRef<{
+    originZip: string;
+    expPickupDate: string;
+    pickupDate: string;
+    destinationZip: string;
+  } | null>(null);
+
+  const normalizeZip = (val: any) => {
+    if (!val) return "";
+    return String(val).split(" - ")[0].replace(/[^a-zA-Z0-9]/g, "").trim().toLowerCase();
+  };
+
+  const normalizeDate = (val: any) => {
+    if (!val) return "";
+    if (dayjs.isDayjs(val)) {
+      return val.isValid() ? val.format("YYYY-MM-DD") : "";
+    }
+    const d = dayjs(val);
+    return d.isValid() ? d.format("YYYY-MM-DD") : String(val).trim();
+  };
 
   const normalizeValue = (val: any) => {
     if (val === null || val === undefined) return "";
@@ -347,10 +367,50 @@ const NewShipment: React.FC = () => {
       }
     }
 
+    // 3. Check Location & Dates (Origin Postal / ZIP, Exp. Pickup Date, Pickup Date, Destination Postal / ZIP)
+    if (initialLocationSnapshotRef.current !== null) {
+      const initLoc = initialLocationSnapshotRef.current;
+      const originVals = {
+        ...(originData || {}),
+        ...(originFormValuesRef.current || {}),
+        ...(originForm?.getFieldsValue?.(true) || {}),
+      };
+      const destinationVals = {
+        ...(destinationData || {}),
+        ...(destinationFormValuesRef.current || {}),
+        ...(destinationForm?.getFieldsValue?.(true) || {}),
+      };
+
+      const curOriginZip = normalizeZip(originVals.postal);
+      const curExpPickupDate = normalizeDate(originVals.expPickupDate);
+      const curPickupDate = normalizeDate(originVals.pickupDate);
+      const curDestZip = normalizeZip(destinationVals.postal);
+
+      if (initLoc.originZip !== undefined && initLoc.originZip !== curOriginZip) {
+        return true;
+      }
+      if (initLoc.expPickupDate !== undefined && initLoc.expPickupDate !== curExpPickupDate) {
+        return true;
+      }
+      if (initLoc.pickupDate !== undefined && initLoc.pickupDate !== curPickupDate) {
+        return true;
+      }
+      if (initLoc.destinationZip !== undefined && initLoc.destinationZip !== curDestZip) {
+        return true;
+      }
+    }
+
     return false;
   };
 
   const hasRefactorChanges = (): boolean => {
+    const hasRate = Boolean(
+      isFromReference ||
+      selectedCarrierRate ||
+      selectedCarrierInfo?.carrierId ||
+      carrierRateData?.carrierCode
+    );
+    if (!hasRate) return false;
     return hasFactorDifferences();
   };
 
@@ -463,6 +523,17 @@ const NewShipment: React.FC = () => {
           hazmat: p.hazmat,
           stackable: p.stackable,
         }));
+      }
+      if (initialLocationSnapshotRef.current === null) {
+        const pDate = quote?.pickupDate
+          ? normalizeDate(quote.pickupDate)
+          : dayjs().format("YYYY-MM-DD");
+        initialLocationSnapshotRef.current = {
+          originZip: normalizeZip(quote?.originZip || ""),
+          expPickupDate: pDate,
+          pickupDate: pDate,
+          destinationZip: normalizeZip(quote?.destinationZip || ""),
+        };
       }
     } else {
       dispatch(resetProductItems());
@@ -862,6 +933,22 @@ const NewShipment: React.FC = () => {
       hazmat: p.hazmat,
       stackable: p.stackable,
     }));
+    const origVals = {
+      ...(originData || {}),
+      ...(originFormValuesRef.current || {}),
+      ...(originForm?.getFieldsValue?.(true) || {}),
+    };
+    const destVals = {
+      ...(destinationData || {}),
+      ...(destinationFormValuesRef.current || {}),
+      ...(destinationForm?.getFieldsValue?.(true) || {}),
+    };
+    initialLocationSnapshotRef.current = {
+      originZip: normalizeZip(origVals.postal),
+      expPickupDate: normalizeDate(origVals.expPickupDate),
+      pickupDate: normalizeDate(origVals.pickupDate),
+      destinationZip: normalizeZip(destVals.postal),
+    };
   };
 
   const handleSelectRateFromModal = (rate: CarrierRate) => {
@@ -1809,7 +1896,7 @@ const NewShipment: React.FC = () => {
     const isDateTimeValid = await validateDateTimeFields();
     if (!isDateTimeValid) return;
 
-    if (isFromReference && hasRefactorChanges()) {
+    if (hasRefactorChanges()) {
       setIsRefactorModalOpen(true);
     } else {
       checkMarkupAndSave();
@@ -1921,7 +2008,12 @@ const NewShipment: React.FC = () => {
                   locationsList={originLocationsList}
                   loading={loadingOrigin}
                   clientCode={selectedClientCode || quote?.clientCode}
-                  onChange={(vals) => { originFormValuesRef.current = vals; }}
+                  onChange={(vals) => {
+                    originFormValuesRef.current = vals;
+                    if (initialLocationSnapshotRef.current !== null || initialProductsSnapshotRef.current !== null || initialAccessorialsSnapshotRef.current !== null) {
+                      setHasRateChanged(hasFactorDifferences());
+                    }
+                  }}
                   onLocationSelect={(loc) => {
                     const newOrigin = {
                       locationId: loc.locationId || loc.LocationId,
@@ -1956,7 +2048,12 @@ const NewShipment: React.FC = () => {
                   locationsList={destinationLocationsList}
                   loading={loadingDestination}
                   clientCode={selectedClientCode || quote?.clientCode}
-                  onChange={(vals) => { destinationFormValuesRef.current = vals; }}
+                  onChange={(vals) => {
+                    destinationFormValuesRef.current = vals;
+                    if (initialLocationSnapshotRef.current !== null || initialProductsSnapshotRef.current !== null || initialAccessorialsSnapshotRef.current !== null) {
+                      setHasRateChanged(hasFactorDifferences());
+                    }
+                  }}
                   onLocationSelect={(loc) => {
                     const newDest = {
                       locationId: loc.locationId || loc.LocationId,

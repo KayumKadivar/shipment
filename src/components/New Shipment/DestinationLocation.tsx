@@ -173,8 +173,8 @@ const DestinationLocation: React.FC<DestinationLocationProps> = ({
         closeTime: closeTimeFormatted,
         delOpenTime: openTimeFormatted,
         delCloseTime: closeTimeFormatted,
-        deliveryDate: form.getFieldValue("deliveryDate") || initialData.deliveryDate || dayjs().format("MM/DD/YYYY"),
-        expDeliveryDate: form.getFieldValue("expDeliveryDate") || initialData.expDeliveryDate || initialData.deliveryDate || dayjs().format("MM/DD/YYYY"),
+        deliveryDate: initialData.deliveryDate || form.getFieldValue("deliveryDate") || dayjs().format("MM/DD/YYYY"),
+        expDeliveryDate: initialData.expDeliveryDate || initialData.deliveryDate || form.getFieldValue("expDeliveryDate") || dayjs().format("MM/DD/YYYY"),
         consigneeNotes: initialData.consigneeNotes || "",
       });
     }

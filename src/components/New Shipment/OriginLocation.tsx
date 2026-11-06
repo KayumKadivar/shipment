@@ -198,8 +198,8 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
         closeTime: closeTimeFormatted,
         pickupOpenTime: openTimeFormatted,
         pickupCloseTime: closeTimeFormatted,
-        pickupDate: form.getFieldValue("pickupDate") || initialData.pickupDate || dayjs().format("MM/DD/YYYY"),
-        expPickupDate: form.getFieldValue("expPickupDate") || initialData.expPickupDate || initialData.pickupDate || dayjs().format("MM/DD/YYYY"),
+        pickupDate: initialData.pickupDate || form.getFieldValue("pickupDate") || dayjs().format("MM/DD/YYYY"),
+        expPickupDate: initialData.expPickupDate || initialData.pickupDate || form.getFieldValue("expPickupDate") || dayjs().format("MM/DD/YYYY"),
         shipperNotes: initialData.shipperNotes || "",
       });
     }
