@@ -766,9 +766,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         }
       }
 
-      const isCustomerManuallyEdited = editedCellKeys.includes(
-        `${item.id}-customer`,
-      );
       const custAmt =
         isNetSellActive && !isFreight
           ? 0
@@ -785,9 +782,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         ? isFreight
           ? custAmt - buyAmt
           : 0
-        : isCustomerManuallyEdited
-          ? custAmt - buyAmt
-          : calculatedMarkup;
+        : calculatedMarkup;
 
       return {
         id: item.id,
@@ -802,9 +797,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         isCustom: item.isCustom,
         isEligibleForMarkup: isNetSellActive
           ? isFreight
-          : isCustomerManuallyEdited
-            ? true
-            : isEligible || finalMarkup !== 0,
+          : isEligible || finalMarkup !== 0,
       };
     });
   }, [
