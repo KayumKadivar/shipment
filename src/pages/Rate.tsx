@@ -490,6 +490,7 @@ export function CarrierCard({
   onCheckedChange,
   onShipIt,
   isCorporate,
+  disableCardClick,
   // onSend,
 }: {
   rate: CarrierRate;
@@ -497,6 +498,7 @@ export function CarrierCard({
   onCheckedChange: (checked: boolean) => void;
   onShipIt: () => void;
   isCorporate?: boolean;
+  disableCardClick?: boolean;
   onSend?: () => void;
 }) {
   const sellDetails = getChargeSellDetails(rate);
@@ -511,6 +513,7 @@ export function CarrierCard({
     <article
       className={`rate-card ${checked ? "rate-card--selected" : ""}`}
       onClick={(e) => {
+        if (disableCardClick) return;
         if ((e.target as HTMLElement).closest("button")) return;
         onCheckedChange(!checked);
       }}>
@@ -535,7 +538,10 @@ export function CarrierCard({
           <Button
             type={checked ? "primary" : "default"}
             className='rate-card__select'
-            onClick={onShipIt}>
+            onClick={(e) => {
+              e.stopPropagation();
+              onShipIt();
+            }}>
             {checked ? "Selected" : "Ship It"}
           </Button>
         </div>

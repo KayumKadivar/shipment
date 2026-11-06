@@ -98,6 +98,7 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
       open={open}
       onCancel={onClose}
       maskClosable={false}
+      closable={true}
       footer={null}
       width={1100}
       centered
@@ -204,7 +205,8 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
                       key={rate.id}
                       rate={rate}
                       checked={selectedRateId === rate.id}
-                      onCheckedChange={() => onSelectRate(rate)}
+                      disableCardClick={true}
+                      onCheckedChange={() => {}}
                       onShipIt={() => onSelectRate(rate)}
                      /* actionLabel={actionLabel}*/
                     />
