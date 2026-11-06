@@ -272,9 +272,118 @@ const NewShipment: React.FC = () => {
     );
   }, [clients, selectedClientCode, quote]);
 
+  const [carrierNotes, setCarrierNotes] = useState<string>(() => quote?.carrierNote || "");
+  const [specialNotes, setSpecialNotes] = useState<string>(() => quote?.specialNotes || "");
+
   const handleClientChange = (value: string) => {
-    setSelectedClientCode(value || defaultLoggedClient);
+    const newClient = value || defaultLoggedClient;
+    if (newClient === selectedClientCode) return;
+
+    setSelectedClientCode(newClient);
     searchedZipsRef.current = {};
+
+    const today = dayjs().format("MM/DD/YYYY");
+    const cleanOrigin = {
+      companyName: "",
+      address1: "",
+      address2: "",
+      postal: "",
+      city: "",
+      state: "",
+      country: "USA",
+      contactName: "",
+      phone: "",
+      ext: "",
+      email: "",
+      fax: "",
+      pickupDate: today,
+      expPickupDate: today,
+      shipperNotes: "",
+    };
+    const cleanDestination = {
+      companyName: "",
+      address1: "",
+      address2: "",
+      postal: "",
+      city: "",
+      state: "",
+      country: "USA",
+      contactName: "",
+      phone: "",
+      ext: "",
+      email: "",
+      fax: "",
+      deliveryDate: today,
+      expDeliveryDate: today,
+      consigneeNotes: "",
+    };
+
+    originForm.resetFields();
+    destinationForm.resetFields();
+    setOriginData(cleanOrigin);
+    setDestinationData(cleanDestination);
+    originFormValuesRef.current = { ...cleanOrigin };
+    destinationFormValuesRef.current = { ...cleanDestination };
+    setOriginLocationsList([]);
+    setDestinationLocationsList([]);
+
+    // Reset Products
+    dispatch(resetProductItems());
+    initialProductsSnapshotRef.current = [{
+      id: "1",
+      pallets: "1",
+      pieces: "1",
+      packageType: "Pallet",
+      class: "",
+      weight: "",
+      length: "",
+      width: "",
+      height: "",
+      nmfc: "",
+      hazmat: false,
+      stackable: false,
+    }];
+
+    // Reset Accessorials
+    dispatch(clearSelectedAccessorials());
+    initialAccessorialsSnapshotRef.current = [];
+
+    // Reset Snapshot refs
+    initialLocationSnapshotRef.current = {
+      originZip: "",
+      expPickupDate: today,
+      pickupDate: today,
+      destinationZip: "",
+    };
+
+    // Reset Rates
+    setSelectedCarrierRate(null);
+    setSelectedCarrierInfo(null);
+    setHasRateChanged(false);
+    rateDetailsRef.current = {
+      buyRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
+      sellRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
+      totalMarkup: 0,
+      minimumMarkup: 0,
+      markupDropdownOption: "Flat",
+      isMarkupEnabled: false,
+      hasUnappliedChanges: false,
+    };
+
+    // Reset Notes & Additional Info
+    setCarrierNotes("");
+    setSpecialNotes("");
+    carrierNotesRef.current = "";
+    specialNotesRef.current = "";
+    shipmentNotesRef.current = "";
+    internalNotesListRef.current = [];
+    insuranceValuesRef.current = {
+      shipmentValue: "",
+      codAmount: "",
+      insuranceType: "None",
+      specialInstructions: "",
+    };
+    billToValuesRef.current = { country: "USA" };
   };
 
   // Manage multiple product lines from Redux
@@ -1993,6 +2102,7 @@ const NewShipment: React.FC = () => {
             <Row gutter={[16, 16]}>
               <Col xs={24} md={12}>
                 <OriginLocation
+                  key={selectedClientCode}
                   form={originForm}
                   initialData={originData}
                   locationsList={originLocationsList}
@@ -2033,6 +2143,7 @@ const NewShipment: React.FC = () => {
               </Col>
               <Col xs={24} md={12}>
                 <DestinationLocation
+                  key={selectedClientCode}
                   form={destinationForm}
                   initialData={destinationData}
                   locationsList={destinationLocationsList}
@@ -2082,8 +2193,9 @@ const NewShipment: React.FC = () => {
                     rows={4}
                     placeholder="Add shipment notes, special instructions, or internal comments..."
                     className="notes-textarea"
-                    defaultValue={quote?.carrierNote || ""}
+                    value={carrierNotes}
                     onChange={(e) => {
+                      setCarrierNotes(e.target.value);
                       carrierNotesRef.current = e.target.value;
                       shipmentNotesRef.current = e.target.value;
                     }}
@@ -2099,8 +2211,9 @@ const NewShipment: React.FC = () => {
                     rows={4}
                     placeholder="Add shipment notes, special instructions, or internal comments..."
                     className="notes-textarea"
-                    defaultValue={quote?.specialNotes || ""}
+                    value={specialNotes}
                     onChange={(e) => {
+                      setSpecialNotes(e.target.value);
                       specialNotesRef.current = e.target.value;
                     }}
                   />
@@ -2113,6 +2226,7 @@ const NewShipment: React.FC = () => {
         <Col xs={24} xl={8} className="ns-top-right-col">
           <Flex vertical gap={16} className="ns-right-col">
             <ShipmentInformation
+              key={selectedClientCode}
               initialData={shipmentInfoData}
               onChange={handleShipmentInfoChange}
             />
@@ -2411,6 +2525,7 @@ const NewShipment: React.FC = () => {
       <Row gutter={[16, 16]} align="stretch" className="ns-bottom-row">
         <Col xs={24} xl={16}>
           <CustomerRate
+            key={selectedClientCode}
             carrierData={carrierRateData}
             onRate={handleFetchRatesForShipment}
             loadingRate={ratesLoading}
@@ -2425,6 +2540,7 @@ const NewShipment: React.FC = () => {
         </Col>
         <Col xs={24} xl={8}>
           <BillToLocation
+            key={selectedClientCode}
             clientCode={selectedClientCode || quote?.clientCode}
             onChange={(vals) => { billToValuesRef.current = vals; }}
           />
@@ -2432,12 +2548,14 @@ const NewShipment: React.FC = () => {
 
         <Col xs={24} xl={16}>
           <InsuranceInfo
+            key={selectedClientCode}
             onChange={(vals) => { insuranceValuesRef.current = vals; }}
           />
         </Col>
 
         <Col xs={24} xl={8} className="ns-internal-col">
           <InternalNotes
+            key={selectedClientCode}
             onNotesChange={(notes) => { internalNotesListRef.current = notes; }}
           />
         </Col>
@@ -2544,7 +2662,7 @@ const NewShipment: React.FC = () => {
         onOk={handleMinMarkupModalOk}
         onCancel={handleMinMarkupModalCancel}
         okText="OK"
-        cancelButtonProps={{ style: { display: 'none' } }}
+        cancelText="Cancel"
         centered
         okButtonProps={{ danger: true }}
       >

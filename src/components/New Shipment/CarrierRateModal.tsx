@@ -97,6 +97,7 @@ const CarrierRateModal: React.FC<CarrierRateModalProps> = ({
     <Modal
       open={open}
       onCancel={onClose}
+      maskClosable={false}
       footer={null}
       width={1100}
       centered
