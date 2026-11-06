@@ -1466,6 +1466,7 @@ const NewShipment: React.FC = () => {
     minimumMarkup?: number;
     markupDropdownOption?: string;
     isMarkupEnabled?: boolean;
+    hasUnappliedChanges?: boolean;
   }>({
     buyRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
     sellRate: { freight: 0, fuel: 0, discount: 0, accesorialCostDetails: [] },
@@ -1473,6 +1474,7 @@ const NewShipment: React.FC = () => {
     minimumMarkup: 0,
     markupDropdownOption: "Flat",
     isMarkupEnabled: false,
+    hasUnappliedChanges: false,
   });
   const [isSavingShipment, setIsSavingShipment] = useState<boolean>(false);
 
@@ -1903,20 +1905,8 @@ const NewShipment: React.FC = () => {
     }
   };
 
-  const isMarkupLessThanMinimum = (): boolean => {
-    const markupOption = rateDetailsRef.current?.markupDropdownOption;
-    // Flat me lagu nahi padega - only the other 3 (% options):
-    if (!markupOption || markupOption === "Flat") {
-      return false;
-    }
-
-    const totalMarkup = Number(rateDetailsRef.current?.totalMarkup) || 0;
-    const minMarkup = Number(rateDetailsRef.current?.minimumMarkup) || 0;
-    return minMarkup > 0 && totalMarkup < minMarkup;
-  };
-
   const checkMarkupAndSave = () => {
-    if (isMarkupLessThanMinimum()) {
+    if (rateDetailsRef.current?.hasUnappliedChanges) {
       setIsMinMarkupModalOpen(true);
     } else {
       executeSaveShipment();

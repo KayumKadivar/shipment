@@ -92,6 +92,7 @@ export interface CustomerRateProps {
     minimumMarkup?: number;
     markupDropdownOption?: string;
     isMarkupEnabled?: boolean;
+    hasUnappliedChanges?: boolean;
   }) => void;
   clientMarkupConfig?: any;
   isFromReference?: boolean;
@@ -200,6 +201,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
   // Charge amount input dirty state
   const [isChargeAmountDirty, setIsChargeAmountDirty] =
+    useState<boolean>(false);
+
+  // Track unapplied rate or input changes
+  const [hasUnappliedChanges, setHasUnappliedChanges] =
     useState<boolean>(false);
 
   // Track which table cells have been edited to keep border-bottom applied
@@ -408,6 +413,8 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       setEditingRowId(null);
       setEditedCellKeys([]);
       setIsMarkupRateDirty(false);
+      setIsNetSellDirty(false);
+      setHasUnappliedChanges(false);
       setAppliedMarkupConfig({
         isMarkupEnabled: false,
         markupDropdownOption: "",
@@ -907,6 +914,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       ? appliedMarkupConfig.markupDropdownOption
       : (isMarkupEnabled ? markupDropdownOption : "Flat");
 
+    const isAnyRateUnapplied =
+      hasUnappliedChanges ||
+      isMarkupRateDirty ||
+      isNetSellDirty ||
+      Boolean(editingRowId && (isBuyInputDirty || isCustomerInputDirty));
+
     const ratesObj = {
       buyRate: {
         freight: buyFreight,
@@ -924,6 +937,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       minimumMarkup: effectiveMinimum,
       markupDropdownOption: activeOption,
       isMarkupEnabled: appliedMarkupConfig.isMarkupEnabled || isMarkupEnabled,
+      hasUnappliedChanges: isAnyRateUnapplied,
     };
 
     const serialized = JSON.stringify(ratesObj);
@@ -931,7 +945,22 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       prevRatesRef.current = serialized;
       onRateDetailsChange(ratesObj);
     }
-  }, [lineItems, markup, minimumRate, totalMarkup, markupDropdownOption, isMarkupEnabled, appliedMarkupConfig, onRateDetailsChange]);
+  }, [
+    lineItems,
+    markup,
+    minimumRate,
+    totalMarkup,
+    markupDropdownOption,
+    isMarkupEnabled,
+    appliedMarkupConfig,
+    hasUnappliedChanges,
+    isMarkupRateDirty,
+    isNetSellDirty,
+    editingRowId,
+    isBuyInputDirty,
+    isCustomerInputDirty,
+    onRateDetailsChange,
+  ]);
 
   // Options for Charge type Select dropdown from Accessorials API list
   const chargeTypeOptions = useMemo(() => {
@@ -1018,6 +1047,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setCustomCharges((prev) => [...prev, newCharge]);
     setChargeAmount("");
     setSelectedChargeType(undefined);
+    setHasUnappliedChanges(true);
     onRateChanged?.(true);
     message.success(`Added charge: ${description}`);
   };
@@ -1058,6 +1088,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
 
     if (selectedRowId === targetId) setSelectedRowId(null);
     if (editingRowId === targetId) setEditingRowId(null);
+    setHasUnappliedChanges(true);
     onRateChanged?.(true);
     message.success("Charge removed.");
   };
@@ -1192,6 +1223,10 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       );
     }
 
+    if (isBuyChanged || isCustomerChanged) {
+      setHasUnappliedChanges(true);
+    }
+
     setEditingRowId(null);
     setIsBuyInputDirty(false);
     setIsCustomerInputDirty(false);
@@ -1268,6 +1303,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     setIsNetSellDirty(false);
     setIsMarkupRateDirty(false);
     setIsMarkupDirty(false);
+    setHasUnappliedChanges(false);
 
     if (isMarkupEnabled && numMarkup > 0) {
       message.success(`Applied ${markupDropdownOption} markup`);
@@ -1324,6 +1360,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     if (checked) {
                       setIsNetSellRateEnabled(false);
                     }
+                    setHasUnappliedChanges(true);
                     onRateChanged?.(true);
                   }}
                   className="markup-checkbox"
@@ -1338,6 +1375,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                       placeholder="Select markup type"
                       onChange={(val) => {
                         setMarkupDropdownOption(val);
+                        setHasUnappliedChanges(true);
                         onRateChanged?.(true);
                       }}
                       style={{ minWidth: 230 }}
@@ -1370,6 +1408,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                           const val = e.target.value.replace(/[^0-9.]/g, "");
                           setMarkupRate(val);
                           setIsMarkupRateDirty(true);
+                          setHasUnappliedChanges(true);
                           onRateChanged?.(true);
                         }}
                         onPressEnter={handleApplyMarkup}
@@ -1395,6 +1434,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         onChange={(e) => {
                           const val = e.target.value.replace(/[^0-9.]/g, "");
                           setMarkup(val);
+                          setHasUnappliedChanges(true);
                           onRateChanged?.(true);
                         }}
                       />
@@ -1410,6 +1450,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                     if (checked) {
                       setIsMarkupEnabled(false);
                     }
+                    setHasUnappliedChanges(true);
                     onRateChanged?.(true);
                   }}
                   className="markup-checkbox"
@@ -1428,6 +1469,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                         const val = e.target.value.replace(/[^0-9.]/g, "");
                         setNetSellRate(val);
                         setIsNetSellDirty(true);
+                        setHasUnappliedChanges(true);
                         onRateChanged?.(true);
                       }}
                       onPressEnter={handleApplyMarkup}
