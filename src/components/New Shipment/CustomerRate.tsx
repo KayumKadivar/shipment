@@ -133,7 +133,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   clientCode,
   isCorporate: propIsCorporate,
   onRate,
-  loadingRate,
   rateError,
   onClearError,
   onSelectCarrier,
@@ -149,8 +148,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   const customerRate = useSelector((state: RootState) => state.customerRate);
   const accessorialsList =
     useSelector((state: RootState) => state.accessorials?.data) || [];
-  const { loading = false, error: storeError } = customerRate || {};
-  const isRating = loadingRate ?? loading;
+  const { error: storeError } = customerRate || {};
   const activeError = rateError !== undefined ? rateError : storeError;
 
  
@@ -1794,10 +1792,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
                 </div>
               );
             })
-          ) : isRating ? (
-            <div className="rate-empty-state">
-              <Spin />
-            </div>
           ) : (
             <div className="rate-empty-state">
               No rates added yet. Click Rate to fetch carrier pricing.

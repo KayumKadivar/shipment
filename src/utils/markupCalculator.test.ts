@@ -38,3 +38,29 @@ it("applyMarkupToRate_whenRoundingIsUnspecified_preservesCarrierRounding", () =>
     numericMarkupRate: 0.005, isNetSellRateEnabled: false, numericNetSellRate: 0,
   })).toMatchObject({ sellPrice: 2.01, grossSell: 1.01, fuelSell: 1, markupAmount: 0.01 });
 });
+
+it("applyMarkupToRate_whenRatePriceIsZeroOrNegative_doesNotApplyMarkup", () => {
+  const errorRate = {
+    id: "error-carrier",
+    name: "Clear Lane",
+    code: "CLNI",
+    price: 0,
+    grossCharge: 0,
+    discount: 0,
+    fuelSurcharge: 0,
+  };
+
+  const result = applyMarkupToRate(errorRate, {
+    isMarkupEnabled: true,
+    markupDropdownOption: "Flat",
+    numericMarkup: 0,
+    numericMarkupRate: 150,
+    isNetSellRateEnabled: false,
+    numericNetSellRate: 0,
+  });
+
+  expect(result.sellPrice).toBe(0);
+  expect(result.grossSell).toBe(0);
+  expect(result.markupAmount).toBe(0);
+  expect(result.isNetSellActive).toBe(false);
+});

@@ -2290,7 +2290,64 @@ const NewShipment: React.FC = () => {
                     if (prod.length) handleUpdateField(item.id, 'length', String(prod.length));
                     if (prod.width) handleUpdateField(item.id, 'width', String(prod.width));
                     if (prod.height) handleUpdateField(item.id, 'height', String(prod.height));
-                    if (prod.isHazmat || prod.hazmat) handleUpdateField(item.id, 'hazmat', true);
+                    const isHaz = Boolean(prod.isHazmat ?? prod.hazmat ?? prod.hazMat);
+                    if (isHaz) {
+                      dispatch(
+                        updateProductHazmat({
+                          id: item.id,
+                          hazmat: true,
+                          hazmatUN: prod.hazmatUN || prod.hazMatUN || "",
+                          hazmatProperShippingName:
+                            prod.hazmatProperShippingName ||
+                            prod.hazMatProperShippingName ||
+                            "",
+                          hazmatClass: prod.hazmatClass
+                            ? String(prod.hazmatClass)
+                            : prod.hazMatClass
+                              ? String(prod.hazMatClass)
+                              : "",
+                          hazmatPackingGroup:
+                            prod.hazmatGroup ||
+                            prod.hazmatPackingGroup ||
+                            prod.hazMatPackingGroup ||
+                            prod.packagingGroup ||
+                            "",
+                          hazmatGroup:
+                            prod.hazmatGroup ||
+                            prod.hazmatPackingGroup ||
+                            prod.hazMatPackingGroup ||
+                            prod.packagingGroup ||
+                            "",
+                          hazmatPhone:
+                            prod.hazmatPhone || prod.hazMatPhone || "",
+                          hazmatContact:
+                            prod.hazmatContactName ||
+                            prod.hazmatContact ||
+                            prod.hazMatContact ||
+                            "",
+                          hazmatContactName:
+                            prod.hazmatContactName ||
+                            prod.hazmatContact ||
+                            prod.hazMatContact ||
+                            "",
+                        })
+                      );
+                    } else {
+                      dispatch(
+                        updateProductHazmat({
+                          id: item.id,
+                          hazmat: false,
+                          hazmatUN: "",
+                          hazmatProperShippingName: "",
+                          hazmatClass: "",
+                          hazmatPackingGroup: "",
+                          hazmatGroup: "",
+                          hazmatPhone: "",
+                          hazmatContact: "",
+                          hazmatContactName: "",
+                        })
+                      );
+                    }
                   }
                 }}
                 notFoundContent={loadingProducts ? <div className="product-autocomplete-loading"><Spin size="small" /></div> : undefined}

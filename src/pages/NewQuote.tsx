@@ -1693,16 +1693,54 @@ function NewQuote() {
                                 String(prod.height),
                               );
                             }
-                            if (prod.isHazmat || prod.hazmat) {
-                              updateItem(
-                                quotePackage.id,
-                                item.id,
-                                "hazMat",
-                                true,
-                              );
+                            const isHaz = Boolean(
+                              prod.isHazmat ?? prod.hazmat ?? prod.hazMat,
+                            );
+                            if (isHaz) {
+                              updateItemHazmat(quotePackage.id, item.id, {
+                                hazMat: true,
+                                hazMatUN:
+                                  prod.hazmatUN || prod.hazMatUN || "",
+                                hazMatProperShippingName:
+                                  prod.hazmatProperShippingName ||
+                                  prod.hazMatProperShippingName ||
+                                  "",
+                                hazMatClass: prod.hazmatClass
+                                  ? String(prod.hazmatClass)
+                                  : prod.hazMatClass
+                                    ? String(prod.hazMatClass)
+                                    : "",
+                                hazMatPackingGroup:
+                                  prod.hazmatGroup ||
+                                  prod.hazmatPackingGroup ||
+                                  prod.hazMatPackingGroup ||
+                                  prod.packagingGroup ||
+                                  "",
+                                hazMatPhone:
+                                  prod.hazmatPhone || prod.hazMatPhone || "",
+                                hazMatContact:
+                                  prod.hazmatContactName ||
+                                  prod.hazmatContact ||
+                                  prod.hazMatContact ||
+                                  "",
+                              });
                               form.setFieldValue(
                                 ["items", item.id, "hazMat"],
                                 true,
+                              );
+                            } else {
+                              updateItemHazmat(quotePackage.id, item.id, {
+                                hazMat: false,
+                                hazMatUN: "",
+                                hazMatProperShippingName: "",
+                                hazMatClass: "",
+                                hazMatPackingGroup: "",
+                                hazMatPhone: "",
+                                hazMatContact: "",
+                              });
+                              form.setFieldValue(
+                                ["items", item.id, "hazMat"],
+                                false,
                               );
                             }
                           }

@@ -160,6 +160,21 @@ export function applyMarkupToRate<T extends BaseCarrierRate>(
   rate: T,
   config: AppliedMarkupConfig
 ): T {
+ 
+  if ((Number(rate.price) || 0) <= 0) {
+    return {
+      ...rate,
+      sellPrice: 0,
+      grossSell: rate.grossCharge ?? 0,
+      fuelSell: rate.fuelSurcharge ?? 0,
+      discountSell: rate.discount ?? 0,
+      markupAmount: 0,
+      ppsFreight: 0,
+      ppsFuel: 0,
+      isNetSellActive: false,
+    };
+  }
+
   if (config.targetCarrierFilter) {
     const filter = config.targetCarrierFilter.trim().toLowerCase();
     const isMatch = [rate.name, rate.code, rate.service].some((value) =>

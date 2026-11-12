@@ -135,6 +135,7 @@ function QuoteRateDetail() {
 
     if (currentSearch) {
       const matchingRates = rates.filter((r) =>
+        (Number(r.price) || 0) > 0 &&
         [r.name, r.code, r.service].some((val) =>
           (val || "").toLowerCase().includes(currentSearch)
         )

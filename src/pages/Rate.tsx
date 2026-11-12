@@ -517,7 +517,7 @@ export function CarrierCard({
     <article
       className={`rate-card ${checked ? "rate-card--selected" : ""}`}
       onClick={(e) => {
-        if (disableCardClick) return;
+        if (disableCardClick || (Number(rate.price) || 0) <= 0) return;
         if ((e.target as HTMLElement).closest("button")) return;
         onCheckedChange(!checked);
       }}>
@@ -542,6 +542,7 @@ export function CarrierCard({
           <Button
             type={checked ? "primary" : "default"}
             className='rate-card__select'
+            disabled={(Number(rate.price) || 0) <= 0}
             onClick={(e) => {
               e.stopPropagation();
               onShipIt();
@@ -714,6 +715,7 @@ function Rate() {
 
     if (currentSearch) {
       const matchingRates = (ratesFromStore || []).filter((r) =>
+        (Number(r.price) || 0) > 0 &&
         [r.name, r.code, r.service].some((val) =>
           (val || "").toLowerCase().includes(currentSearch)
         )
