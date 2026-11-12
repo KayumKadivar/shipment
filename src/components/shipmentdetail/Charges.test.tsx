@@ -202,6 +202,38 @@ function createShipmentWithChargeTotals(
 }
 
 describe("Charges", () => {
+  it("Charges_DefaultMode_DisablesUnsupportedEditors", () => {
+    renderCharges(shipmentWithCharges);
+    expect(screen.getByRole("button", { name: "Edit carrier liability" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Freight insurance actions" })).toHaveProperty("disabled", true);
+  });
+
+  it("Charges_AcceptedSellEdit_PublishesUpdatedRateSnapshot", () => {
+    const onValuesChange = vi.fn();
+    render(<MemoryRouter><Charges shipment={shipmentWithCharges} onChangeCommitted={vi.fn()} onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Edit Freight" }));
+    fireEvent.change(screen.getByLabelText("Sell charge"), { target: { value: "180" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save charge line" }));
+    expect(onValuesChange).toHaveBeenLastCalledWith(expect.objectContaining({ sellRate: expect.objectContaining({ freight: 180 }) }));
+  });
+
+  it("Charges_CancelledSellEdit_DoesNotPublishDraft", () => {
+    const onValuesChange = vi.fn();
+    render(<MemoryRouter><Charges shipment={shipmentWithCharges} onChangeCommitted={vi.fn()} onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Edit Freight" }));
+    fireEvent.change(screen.getByLabelText("Sell charge"), { target: { value: "180" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel charge line editing" }));
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
+
+  it("Charges_SelectedRerate_PublishesSelectedBuyAndSellAmounts", () => {
+    const onValuesChange = vi.fn();
+    render(<MemoryRouter><Charges shipment={shipmentWithCharges} onChangeCommitted={vi.fn()} onEditorStateChange={vi.fn()}
+      reratedRate={{ ...reratedRateBase, grossCharge: 150, sellGrossCharge: 180 }} onValuesChange={onValuesChange} /></MemoryRouter>);
+    expect(onValuesChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      buyRate: expect.objectContaining({ freight: 150 }), sellRate: expect.objectContaining({ freight: 180 }),
+    }));
+  });
   beforeEach(() => {
     localStorage.clear();
     reduxMocks.isCorporate = true;
@@ -233,6 +265,7 @@ describe("Charges", () => {
     render(
       <MemoryRouter>
         <Charges
+          readOnlyUnsupported={false}
           shipment={shipment}
           onChangeCommitted={onChangeCommitted}
           onEditorStateChange={vi.fn()}
@@ -293,14 +326,14 @@ describe("Charges", () => {
     });
 
     expect(screen.getByText("Freight").closest("tr")?.textContent).toContain(
-      "$150.00$120.00",
+      "$150.00$150.00",
     );
     expect(screen.getByText("Discount").closest("tr")?.textContent).toContain(
-      "($25.00)($15.00)",
+      "($25.00)($25.00)",
     );
     expect(
       screen.getByText("Fuel surcharge").closest("tr")?.textContent,
-    ).toContain("$35.00$30.00");
+    ).toContain("$35.00$35.00");
   });
 
   it("Charges_whenReratedAccessorialExists_updatesBuyAndPreservesSell", () => {
@@ -320,7 +353,87 @@ describe("Charges", () => {
 
     expect(
       screen.getByText("Inside delivery").closest("tr")?.textContent,
-    ).toContain("$22.00$12.00");
+    ).toContain("$22.00$22.00");
+  });
+
+  it.each([
+    ["Freight", { sellGrossCharge: 180 }, "$180.00"],
+    ["Discount", { sellDiscount: 30 }, "($30.00)"],
+    ["Discount", { sellDiscount: -30 }, "($30.00)"],
+    ["Fuel surcharge", { sellFuelSurcharge: 45 }, "$45.00"],
+    ["Freight", { sellGrossCharge: 0 }, "$0.00"],
+    ["Discount", { sellDiscount: 0 }, "$0.00"],
+    ["Fuel surcharge", { sellFuelSurcharge: 0 }, "$0.00"],
+  ])("Charges_WhenReratedSellAmountExists_UsesSelectedSellAmount_%s_%j", (description, sellAmounts, expected) => {
+    renderCharges(shipmentWithCharges, {
+      ...reratedRateBase,
+      grossCharge: 150,
+      discount: 25,
+      fuelSurcharge: 35,
+      ...sellAmounts,
+    });
+
+    const cells = within(screen.getByText(description).closest("tr")!).getAllByRole("cell");
+    expect(cells[3].textContent).toBe(expected);
+  });
+
+  it("Charges_WhenReratedCoreRowsAreMissing_AddsSelectedSellAmounts", () => {
+    renderCharges(shipment, {
+      ...reratedRateBase,
+      grossCharge: 150,
+      sellGrossCharge: 180,
+    });
+
+    const cells = within(screen.getByText("Freight").closest("tr")!).getAllByRole("cell");
+    expect(cells[3].textContent).toBe("$180.00");
+  });
+
+  it("Charges_WhenReratedAccessorialIsUnmatched_PreservesItsAmounts", () => {
+    renderCharges(shipmentWithAccessorialCharges, reratedRateBase);
+
+    const cells = within(screen.getByText("Lift gate").closest("tr")!).getAllByRole("cell");
+    expect(cells[2].textContent).toBe("$18.00");
+    expect(cells[3].textContent).toBe("$18.00");
+  });
+
+  it("Charges_WhenReratedSellAmountsChange_RecalculatesTotalsAndMargin", () => {
+    const { container } = renderCharges(shipmentWithCharges, {
+      ...reratedRateBase,
+      grossCharge: 150,
+      discount: 25,
+      fuelSurcharge: 35,
+      sellGrossCharge: 180,
+      sellDiscount: 30,
+      sellFuelSurcharge: 45,
+    });
+
+    const cells = within(container.querySelector("tfoot")!).getAllByRole("cell");
+    expect(cells[1].textContent).toBe("$160.00");
+    expect(cells[2].textContent).toBe("$195.00");
+    expect(cells[3].textContent).toBe("$35.00");
+  });
+
+  it("Charges_WhenAnotherRateIsSelected_ReplacesPreviousSellAmounts", () => {
+    const props = { shipment: shipmentWithCharges, onChangeCommitted: vi.fn(), onEditorStateChange: vi.fn() };
+    const view = render(<MemoryRouter><Charges {...props} reratedRate={{ ...reratedRateBase, sellGrossCharge: 180 }} /></MemoryRouter>);
+
+    view.rerender(<MemoryRouter><Charges {...props} reratedRate={{ ...reratedRateBase, id: "second-rate", sellGrossCharge: 210 }} /></MemoryRouter>);
+
+    const cells = within(screen.getByText("Freight").closest("tr")!).getAllByRole("cell");
+    expect(cells[3].textContent).toBe("$210.00");
+  });
+
+  it("Charges_WhenReratedAfterManualSellEdit_ReplacesTheManualAmount", () => {
+    const props = { shipment: shipmentWithCharges, onChangeCommitted: vi.fn(), onEditorStateChange: vi.fn() };
+    const view = render(<MemoryRouter><Charges {...props} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("button", { name: "Edit Freight" }));
+    fireEvent.change(screen.getByLabelText("Sell charge"), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save charge line" }));
+
+    view.rerender(<MemoryRouter><Charges {...props} reratedRate={{ ...reratedRateBase, sellGrossCharge: 180 }} /></MemoryRouter>);
+
+    const cells = within(screen.getByText("Freight").closest("tr")!).getAllByRole("cell");
+    expect(cells[3].textContent).toBe("$180.00");
   });
 
   it("Charges_whenReratedAccessorialsAreMissing_addsEveryRowWithEqualBuyAndSell", () => {
@@ -1252,10 +1365,10 @@ describe("Charges", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     view.rerender(<MemoryRouter><Charges {...props} reratedRate={{ ...reratedRateBase, grossCharge: 200, discount: 10, fuelSurcharge: 40 }} /></MemoryRouter>);
     const freight = screen.getByText("Freight").closest("tr")!;
-    expect(within(freight).getByText("$200.00")).toBeTruthy();
-    expect(within(freight).getByText("$222.73")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(within(freight).getAllByText("$200.00")).toHaveLength(2);
     expect(within(freight).queryByText("$222.73")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(within(freight).getByText("$323.92")).toBeTruthy();
   });
 
   it("Charges_ApplyAfterManualSellEdit_ReplacesSellOverride", () => {

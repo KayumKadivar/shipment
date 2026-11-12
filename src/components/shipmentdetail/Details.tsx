@@ -274,7 +274,7 @@ function Details({
             label='Actual pickup date'
             value={values.scheduleActualPickupDate}
             type='date'
-            isEditing={activeEditor === "schedule"}
+            isEditing={false}
             onChange={(value) =>
               onFieldChange("scheduleActualPickupDate", value)
             }

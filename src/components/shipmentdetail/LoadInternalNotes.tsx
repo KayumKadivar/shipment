@@ -12,10 +12,12 @@ function LoadInternalNotes({
   initialNotes,
   onNoteAdded,
   onEditorStateChange,
+  onValuesChange,
 }: {
   initialNotes: readonly string[] | null;
   onNoteAdded: () => void;
   onEditorStateChange: (isEditing: boolean) => void;
+  onValuesChange?: (notes: string[]) => void;
 }) {
   const [notes, setNotes] = useState(() =>
     (initialNotes ?? []).map((note) => note.trim()).filter(Boolean),
@@ -32,7 +34,9 @@ function LoadInternalNotes({
     const note = draftNote.trim();
     if (!note) return;
 
-    setNotes((currentNotes) => [...currentNotes, note]);
+    const nextNotes = [...notes, note];
+    setNotes(nextNotes);
+    onValuesChange?.(nextNotes);
     setDraftNote("");
     onNoteAdded();
   };
@@ -70,7 +74,10 @@ function LoadInternalNotes({
     setNotes(nextNotes);
     setNoteDrafts(null);
     onEditorStateChange(false);
-    if (hasChanges) onNoteAdded();
+    if (hasChanges) {
+      onValuesChange?.(nextNotes);
+      onNoteAdded();
+    }
   };
 
   const cancelEditing = () => {

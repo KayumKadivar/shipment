@@ -35,6 +35,7 @@ import {
   type ChargePricingDraft,
 } from "./chargePricing";
 import { aggregateAccessorialCharges } from "./shipmentAccessorials";
+import { editedChargeRates } from "./editedChargeRates";
 
 type ChargeLine = {
   id: string;
@@ -77,6 +78,8 @@ type ChargesProps = {
   onChangeCommitted: () => void;
   onEditorStateChange: (isEditing: boolean) => void;
   reratedRate?: ShipmentRerateRate | null;
+  onValuesChange?: (values: Pick<ShipmentDetails, "buyRate" | "sellRate">) => void;
+  readOnlyUnsupported?: boolean;
 };
 
 const deductibleTiers = [
@@ -285,6 +288,7 @@ function mergeReratedChargeLines(
     code: string,
     description: string,
     buyCost: number,
+    sellCost: number,
   ) => {
     const index = lines.findIndex(
       (line) =>
@@ -292,21 +296,30 @@ function mergeReratedChargeLines(
     );
 
     if (index >= 0) {
-      lines[index] = { ...lines[index], buyCost };
+      lines[index] = { ...lines[index], buyCost, sellCost };
       return;
     }
 
-    lines.push({ id, code, description, buyCost, sellCost: null });
+    lines.push({ id, code, description, buyCost, sellCost });
   };
 
-  updateCoreLine("freight", "FRT", "Freight", rate.grossCharge);
+  updateCoreLine(
+    "freight", "FRT", "Freight",
+    rate.grossCharge,
+    rate.sellGrossCharge ?? rate.grossCharge,
+  );
   updateCoreLine(
     "discount",
     "DSC",
     "Discount",
     normalizeDiscount(rate.discount) ?? 0,
+    normalizeDiscount(rate.sellDiscount ?? rate.discount) ?? 0,
   );
-  updateCoreLine("fuel", "FSC", "Fuel surcharge", rate.fuelSurcharge);
+  updateCoreLine(
+    "fuel", "FSC", "Fuel surcharge",
+    rate.fuelSurcharge,
+    rate.sellFuelSurcharge ?? rate.fuelSurcharge,
+  );
 
   const matchedLineIds = new Set<string>();
   rate.accessorialCharges.forEach((charge, index) => {
@@ -338,6 +351,7 @@ function mergeReratedChargeLines(
       lines[existingIndex] = {
         ...existingLine,
         buyCost: charge.accessorialCharge,
+        sellCost: charge.accessorialCharge,
       };
       matchedLineIds.add(existingLine.id);
       return;
@@ -425,6 +439,8 @@ function Charges({
   onChangeCommitted,
   onEditorStateChange,
   reratedRate,
+  onValuesChange,
+  readOnlyUnsupported = true,
 }: ChargesProps) {
   const reduxApp = useAppSelector((state) => state.app);
   const navigate = useNavigate();
@@ -439,6 +455,15 @@ function Charges({
   const [charges, setCharges] = useState<ChargesState>(() =>
     createInitialCharges(shipment),
   );
+  const publishedLines = useRef(charges.lines);
+  const publishedRates = useRef({ buyRate: shipment.buyRate, sellRate: shipment.sellRate });
+  useEffect(() => {
+    if (publishedLines.current === charges.lines) return;
+    publishedLines.current = charges.lines;
+    const values = editedChargeRates(charges.lines, publishedRates.current);
+    publishedRates.current = values;
+    onValuesChange?.(values);
+  }, [charges.lines, onValuesChange]);
   const [pricingDraft, setPricingDraft] =
     useState<ChargePricingDraft>(defaultChargePricing);
   const [isPricingDirty, setIsPricingDirty] = useState(false);
@@ -540,10 +565,7 @@ function Charges({
 
   if (reratedRate && reratedRate !== appliedReratedRate) {
     setAppliedReratedRate(reratedRate);
-    const lines = mergeReratedChargeLines(sourceLines, reratedRate).map((line) => {
-      const current = charges.lines.find((item) => item.id === line.id);
-      return current ? { ...line, sellCost: current.sellCost } : line;
-    });
+    const lines = mergeReratedChargeLines(charges.lines, reratedRate);
     setSourceLines(lines);
     setCharges((current) => ({ ...current, lines }));
   }
@@ -788,6 +810,7 @@ function Charges({
                   size='small'
                   icon={<EditOutlined />}
                   aria-label='Edit carrier liability'
+                  disabled={readOnlyUnsupported}
                   title='Edit carrier liability'
                   onClick={() => setLiabilityDraft({ ...charges.liability })}
                 />
@@ -890,6 +913,7 @@ function Charges({
                     size='small'
                     icon={<MoreOutlined />}
                     aria-label='Freight insurance actions'
+                    disabled={readOnlyUnsupported}
                     title='Freight insurance actions'
                   />
                 </Dropdown>

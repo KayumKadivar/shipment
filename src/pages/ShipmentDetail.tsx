@@ -2,6 +2,7 @@ import { ArrowLeftOutlined } from "@ant-design/icons";
 import {
   Alert,
   Button,
+  ConfigProvider,
   Empty,
   Input,
   Spin,
@@ -47,7 +48,10 @@ import {
 } from "../components/shipmentdetail/shipmentRerateRequest";
 import { fetchCarrierTracking } from "../store/carrierTrackingSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
-import { fetchShipmentByLoadNumber, copyShipment } from "../store/shipmentSlice";
+import { applySavedShipment, fetchShipmentByLoadNumber, copyShipment } from "../store/shipmentSlice";
+import { editShipment, resetEditShipment } from "../store/editShipmentSlice";
+import { createEditShipmentRequest } from "../components/shipmentdetail/editShipmentRequest";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 import {
   clearShipmentRerate,
   rerateShipment,
@@ -393,6 +397,20 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const location = useLocation();
+  const [committedShipment, setCommittedShipment] = useState(shipment);
+  const [saveValidationError, setSaveValidationError] = useState<string | null>(null);
+  const saveInProgress = useRef(false);
+  const editState = useAppSelector((state) => state.editShipment);
+  const username = useAppSelector((state) => state.app?.username);
+  const savedCarrierName = useAppSelector((state) => state.shipment.shipments?.find(
+    (row) => row.loadNumber === shipment.loadNumber)?.carrier);
+  const saving = editState?.saving ?? false;
+  const collectLoadValues = useCallback((values: Pick<ShipmentDetails, "products" | "accessorials" | "bolDispatchNotes">) => {
+    setCommittedShipment((current) => ({ ...current, ...values }));
+  }, []);
+  const collectChargeValues = useCallback((values: Pick<ShipmentDetails, "buyRate" | "sellRate">) => {
+    setCommittedShipment((current) => ({ ...current, ...values }));
+  }, []);
   const [isResolvingRatingProfile, setIsResolvingRatingProfile] = useState(false);
   const ratingLookupRequest = useRef<{ abort: () => void } | null>(null);
   const rerateInProgress = useRef(false);
@@ -477,7 +495,9 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
 
     if (requiresRerate) {
       setHasPendingRerateChanges(true);
+      setNeedsRerating(true);
     }
+    setSaveValidationError(null);
   }, []);
 
   const updateTabEditingState = useCallback(
@@ -538,12 +558,43 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
     setActiveDetailEditor(null);
   };
 
-  const savePendingChanges = () => {
-    setHasUnsavedChanges(false);
-
-    if (hasPendingRerateChanges) {
-      setNeedsRerating(true);
-      setHasPendingRerateChanges(false);
+  const savePendingChanges = async () => {
+    if (hasOpenInlineEditor || needsRerating || hasPendingRerateChanges || saving || saveInProgress.current) return;
+    setSaveValidationError(null);
+    saveInProgress.current = true;
+    try {
+      const payload = createEditShipmentRequest({
+        shipment: {
+          ...committedShipment,
+          sellCarrierName: committedShipment.sellCarrierName || (savedCarrierName !== "—" ? savedCarrierName : "") || "",
+        },
+        detailValues: savedDetailValues,
+        username,
+      });
+      const result = await dispatch(editShipment(payload));
+      if (!isMounted.current) return;
+      if (editShipment.fulfilled.match(result)) {
+        const nextShipment: ShipmentDetails = {
+          ...committedShipment, ...payload,
+          proNumber: result.payload.data?.proNumber ?? payload.proNumber,
+          bolStatus: result.payload.data?.shipmentStatus || payload.bolStatus,
+        };
+        setCommittedShipment(nextShipment);
+        setSavedDetailValues(createShipmentDetailEditValues(nextShipment));
+        setDraftDetailValues(createShipmentDetailEditValues(nextShipment));
+        dispatch(applySavedShipment(nextShipment));
+        setHasUnsavedChanges(false);
+        setNeedsRerating(false);
+        setHasPendingRerateChanges(false);
+        dispatch(clearShipmentRerate());
+        navigate("/shipments");
+      } else if (editShipment.rejected.match(result)) {
+        setSaveValidationError(getApiErrorMessage(result.payload, "Unable to save shipment."));
+      }
+    } catch (error: unknown) {
+      if (isMounted.current) setSaveValidationError(getApiErrorMessage(error, "Unable to prepare shipment changes."));
+    } finally {
+      saveInProgress.current = false;
     }
   };
 
@@ -610,6 +661,9 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   };
 
   const handleSelectRerateRate = (selectedRate: CarrierRate) => {
+    setCommittedShipment((current) => ({
+      ...current, scac: selectedRate.code, sellSCAC: selectedRate.code, sellCarrierName: selectedRate.name,
+    }));
     dispatch(selectShipmentRerateRate(selectedRate.id));
     setIsRerateModalOpen(false);
     setActiveTab("Charges");
@@ -643,17 +697,18 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   const rerateButton = (
     <Button
       loading={rerateLoading || isResolvingRatingProfile}
-      disabled={!needsRerating || rerateLoading || isResolvingRatingProfile}
+      disabled={!needsRerating || hasOpenInlineEditor || saving || rerateLoading || isResolvingRatingProfile}
       onClick={handleRerate}>
       Re-Rate
     </Button>
   );
 
   return (
+    <ConfigProvider componentDisabled={saving}>
     <section className='shipment-detail-page'>
       {messageContext}
       <div className='shipment-detail-top'>
-        <button type='button' onClick={() => navigate("/shipments")}>
+        <button type='button' disabled={saving} onClick={() => navigate("/shipments")}>
           ← All Shipments
         </button>
         <div className='shipment-detail-actions'>
@@ -679,7 +734,8 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
             <>
               <Button
                 type='primary'
-                disabled={hasOpenInlineEditor}
+                loading={saving}
+                disabled={hasOpenInlineEditor || needsRerating || hasPendingRerateChanges || rerateLoading || isResolvingRatingProfile}
                 onClick={savePendingChanges}>
                 Save
               </Button>
@@ -745,7 +801,14 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
         />
       ) : null}
 
-      <div className='shipment-detail-layout'>
+      {saveValidationError || editState?.error ? (
+        <Alert type='error' showIcon title='Unable to save shipment' description={saveValidationError || editState?.error} />
+      ) : null}
+      {!hasUnsavedChanges && editState?.successMessage ? (
+        <p role='status'>{editState.successMessage}</p>
+      ) : null}
+
+      <div className='shipment-detail-layout' inert={saving}>
         <aside className='shipment-detail-left'>
           <div className='shipment-detail-map-card'>
             <ShipmentRouteMap shipment={shipment} />
@@ -795,7 +858,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
               <DetailField
                 label='Carrier Quote Number'
                 value={referenceDetailValues.referenceCarrierQuoteNumber}
-                isEditing={isReferenceEditing}
+                isEditing={false}
                 onChange={(value) =>
                   updateDraftDetailField("referenceCarrierQuoteNumber", value)
                 }
@@ -811,7 +874,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
               <DetailField
                 label='Load'
                 value={referenceDetailValues.referenceLoad}
-                isEditing={isReferenceEditing}
+                isEditing={false}
                 onChange={(value) =>
                   updateDraftDetailField("referenceLoad", value)
                 }
@@ -852,6 +915,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
               onChangeCommitted={markChangesPending}
               onEditorStateChange={handleLoadEditingStateChange}
               onRateInputsChange={setRerateLoadValues}
+              onValuesChange={collectLoadValues}
             />
           </div>
           <div hidden={activeTab !== "Charges"}>
@@ -861,6 +925,8 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
               onChangeCommitted={markChangesPending}
               onEditorStateChange={handleChargesEditingStateChange}
               reratedRate={reratedRate}
+              onValuesChange={collectChargeValues}
+              readOnlyUnsupported
             />
           </div>
           <div hidden={activeTab !== "Tracking"}>
@@ -876,6 +942,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
         </main>
       </div>
     </section>
+    </ConfigProvider>
   );
 }
 
@@ -891,12 +958,14 @@ function ShipmentDetail() {
     if (!loadNumber) return;
 
     dispatch(clearShipmentRerate());
+    dispatch(resetEditShipment());
     const shipmentRequest = dispatch(fetchShipmentByLoadNumber(loadNumber));
     const trackingRequest = dispatch(
       fetchCarrierTracking({ loadNumber }),
     );
 
     return () => {
+      dispatch(resetEditShipment());
       shipmentRequest.abort();
       trackingRequest.abort();
     };

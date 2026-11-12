@@ -1,5 +1,5 @@
 import { mapShipmentListItem, trimApiStrings } from "../lib/shipmentListMapping";
-import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import axios from "axios";
 import {
   API_BASE_URL,
@@ -233,7 +233,15 @@ export const copyShipment = createAsyncThunk<
 const shipmentSlice = createSlice({
   name: "shipment",
   initialState,
-  reducers: {},
+  reducers: {
+    /** Updates the loaded detail baseline only while the saved shipment is still displayed. */
+    applySavedShipment: (state, action: PayloadAction<ShipmentDetails>) => {
+      if (state.currentShipment?.loadNumber === action.payload.loadNumber
+        && state.requestedLoadNumber === action.payload.loadNumber) {
+        state.currentShipment = action.payload;
+      }
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchShipments.pending, (state, action) => {
@@ -294,4 +302,5 @@ const shipmentSlice = createSlice({
   },
 });
 
+export const { applySavedShipment } = shipmentSlice.actions;
 export default shipmentSlice.reducer;

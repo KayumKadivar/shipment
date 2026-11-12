@@ -18,6 +18,7 @@ import packageTypesReducer from "../store/packageTypesSlice.ts";
 
 import shipmentProductSearchReducer from "../store/shipmentProductSearchSlice.ts";
 import shipmentRerateReducer from "../store/shipmentRerateSlice.ts";
+import editShipmentReducer from "../store/editShipmentSlice.ts";
 
 import equipmentReducer from "../store/equipmentSlice.ts";
 import serviceLevelReducer from "../store/serviceLevelSlice.ts";
@@ -44,6 +45,7 @@ export const store = configureStore({
     packageTypes: packageTypesReducer,
     shipmentProductSearch: shipmentProductSearchReducer,
     shipmentRerate: shipmentRerateReducer,
+    editShipment: editShipmentReducer,
     equipment: equipmentReducer,
     serviceLevel: serviceLevelReducer,
     paymentTerm: paymentTermReducer,

@@ -183,6 +183,29 @@ const productSearchResult = {
 };
 
 describe("LoadTab", () => {
+  it("LoadTab_AcceptedWeightEdit_PreservesHiddenProductFields", () => {
+    const onValuesChange = vi.fn();
+    const shipmentWithMetadata = {
+      ...shipment,
+      products: [{ ...shipment.products[0], skuNumber: "SKU-42", accountNumber: "ACCOUNT-1", pcf: 12.5 }],
+    };
+    render(<LoadTab shipment={shipmentWithMetadata} onChangeCommitted={vi.fn()} onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit load line" }));
+    fireEvent.change(screen.getByLabelText("Weight in pounds"), { target: { value: "250" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(onValuesChange).toHaveBeenLastCalledWith(expect.objectContaining({ products: [expect.objectContaining({
+      productWeight: 250, skuNumber: "SKU-42", accountNumber: "ACCOUNT-1", pcf: 12.5,
+    })] }));
+  });
+
+  it("LoadTab_CancelledWeightEdit_DoesNotPublishDraft", () => {
+    const onValuesChange = vi.fn();
+    render(<LoadTab shipment={shipment} onChangeCommitted={vi.fn()} onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit load line" }));
+    fireEvent.change(screen.getByLabelText("Weight in pounds"), { target: { value: "250" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel load line editing" }));
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     reduxMocks.dispatch.mockReset();
     reduxMocks.fetchAccessorials.mockClear();

@@ -21,6 +21,11 @@ const shipment = {
 } as ShipmentDetails;
 
 describe("Details", () => {
+  it("Details_ScheduleEditor_KeepsActualPickupDateReadOnly", () => {
+    render(<Details shipment={shipment} activeEditor='schedule' values={createShipmentDetailEditValues(shipment)}
+      onFieldChange={vi.fn()} onBeginEditing={vi.fn()} onSaveEditing={vi.fn()} onCancelEditing={vi.fn()} />);
+    expect(screen.getByText("Actual pickup date").parentElement?.querySelector("input")).toBeNull();
+  });
   beforeEach(() => {
     vi.stubGlobal(
       "ResizeObserver",

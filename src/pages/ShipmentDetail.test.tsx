@@ -9,6 +9,8 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useEffect } from "react";
+import type { EditShipmentRequest } from "../types/editShipment.types";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { ClientOption } from "../store/customerLocationSlice";
 import { act } from "@testing-library/react";
@@ -17,8 +19,10 @@ import type { ShipmentDetails } from "../types/shipment.types";
 import type { CarrierRate } from "./Rate";
 import ShipmentDetail from "./ShipmentDetail";
 
-const { dispatchMock, shipmentState, rerateState, rerateShipmentMock, lookupUnwrapMock, lookupAbortMock, lookupMock } =
+const { editState, editShipmentMock, dispatchMock, shipmentState, rerateState, rerateShipmentMock, lookupUnwrapMock, lookupAbortMock, lookupMock } =
   vi.hoisted(() => ({
+  editState: { saving: false, error: null as string | null, successMessage: null as string | null },
+  editShipmentMock: vi.fn((payload: EditShipmentRequest) => ({ type: "editShipment/request", payload })),
   dispatchMock: vi.fn(),
   lookupUnwrapMock: vi.fn<() => Promise<ClientOption[]>>(),
   lookupAbortMock: vi.fn(),
@@ -44,12 +48,14 @@ const { dispatchMock, shipmentState, rerateState, rerateShipmentMock, lookupUnwr
 vi.mock("../app/hooks", () => ({
   useAppDispatch: () => dispatchMock,
   useAppSelector: (selector: (state: {
+    editShipment: typeof editState;
     shipment: typeof shipmentState;
     app: { profileCode: string; ratingProfileCode: string; ratingClientCode: string };
     customerLocation: { clients: { clientCode: string; ratingProfileCode: string; ratingClientCode: string }[] };
     shipmentRerate: typeof rerateState;
   }) => unknown) =>
     selector({
+      editShipment: editState,
       shipment: shipmentState,
       app: { profileCode: "PROFILE-42", ratingProfileCode: "APP-PROFILE", ratingClientCode: "APP-CLIENT" },
       customerLocation: { clients: [{ clientCode: "CLIENT-42", ratingProfileCode: "CLIENT-BUY-PROFILE", ratingClientCode: "CLIENT-BUY-CODE" }] },
@@ -59,7 +65,16 @@ vi.mock("../app/hooks", () => ({
 
 vi.mock("../store/customerLocationSlice", () => ({ fetchClientsAndSubclients: lookupMock }));
 
+vi.mock("../store/editShipmentSlice", () => ({
+  resetEditShipment: vi.fn(() => ({ type: "editShipment/reset" })),
+  editShipment: Object.assign(editShipmentMock, {
+    fulfilled: { match: (action: { type?: string }) => action.type === "editShipment/save/fulfilled" },
+    rejected: { match: (action: { type?: string }) => action.type === "editShipment/save/rejected" },
+  }),
+}));
+
 vi.mock("../store/shipmentSlice", () => ({
+  applySavedShipment: vi.fn((payload: ShipmentDetails) => ({ type: "shipment/applySavedShipment", payload })),
   fetchShipmentByLoadNumber: vi.fn((loadNumber: string) => ({
     payload: loadNumber,
     type: "shipment/fetchByLoadNumber",
@@ -141,14 +156,25 @@ vi.mock("../components/shipmentdetail/LoadTab", () => ({
   default: ({
     onChangeCommitted,
     onEditorStateChange,
+    onValuesChange,
+    shipment,
   }: {
     onChangeCommitted: (requiresRerate?: boolean) => void;
     onEditorStateChange: (isEditing: boolean) => void;
+    shipment: ShipmentDetails;
+    onValuesChange?: (values: Pick<ShipmentDetails, "products" | "accessorials" | "bolDispatchNotes">) => void;
   }) => (
     <>
       <button type='button' onClick={() => onChangeCommitted()}>
         Commit load change
       </button>
+      <button type='button' onClick={() => {
+        onValuesChange?.({
+          products: shipment.products.map((product) => ({ ...product, productDescription: "Updated freight" })),
+          accessorials: ["LFG"], bolDispatchNotes: ["Accepted internal note"],
+        });
+        onChangeCommitted();
+      }}>Commit accepted load values</button>
       <button type='button' onClick={() => onChangeCommitted(true)}>
         Commit rate-affecting load change
       </button>
@@ -160,11 +186,19 @@ vi.mock("../components/shipmentdetail/LoadTab", () => ({
 }));
 
 vi.mock("../components/shipmentdetail/Charges", () => ({
-  default: ({ reratedRate }: { reratedRate?: ShipmentRerateRate | null }) => (
-    <div data-testid='charges-rerated-rate'>
-      {reratedRate ? `${reratedRate.scac}:${reratedRate.grossCharge}` : "none"}
-    </div>
-  ),
+  default: ({ reratedRate, onValuesChange }: {
+    reratedRate?: ShipmentRerateRate | null;
+    onValuesChange?: (values: Pick<ShipmentDetails, "buyRate" | "sellRate">) => void;
+  }) => {
+    useEffect(() => {
+      if (!reratedRate) return;
+      onValuesChange?.({
+        buyRate: { freight: reratedRate.grossCharge, fuel: reratedRate.fuelSurcharge, discount: -Math.abs(reratedRate.discount), accesorialCostDetails: [] },
+        sellRate: { freight: reratedRate.sellGrossCharge ?? reratedRate.grossCharge, fuel: reratedRate.sellFuelSurcharge ?? reratedRate.fuelSurcharge, discount: -Math.abs(reratedRate.sellDiscount ?? reratedRate.discount), accesorialCostDetails: [] },
+      });
+    }, [reratedRate, onValuesChange]);
+    return <div data-testid='charges-rerated-rate'>{reratedRate ? `${reratedRate.scac}:${reratedRate.grossCharge}` : "none"}</div>;
+  },
 }));
 
 vi.mock("../components/shipmentdetail/Tracking", () => ({
@@ -237,14 +271,16 @@ const returnedRerate: ShipmentRerateRate = {
 };
 
 function renderShipmentDetail(state?: unknown) {
-  return render(
+  const createView = () => (
     <MemoryRouter initialEntries={[{ pathname: "/shipments/LOAD-100", state }]}>
       <Routes>
         <Route path='/shipments/:shipmentId' element={<ShipmentDetail />} />
         <Route path='/shipments' element={<div>Shipments list</div>} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+  const view = render(createView());
+  return { ...view, refresh: () => view.rerender(createView()) };
 }
 
 /** Commits a load change and starts the public rerate action. */
@@ -257,6 +293,10 @@ function requestRerate() {
 
 describe("ShipmentDetail", { timeout: 20_000 }, () => {
   beforeEach(() => {
+    editShipmentMock.mockClear();
+    editState.saving = false;
+    editState.error = null;
+    editState.successMessage = null;
     lookupMock.mockClear();
     lookupAbortMock.mockReset();
     lookupUnwrapMock.mockReset().mockResolvedValue([
@@ -273,6 +313,12 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
     rerateState.error = null;
     dispatchMock.mockImplementation(
       (action: { type?: string; payload?: string }) => {
+        if (action.type === "editShipment/request") {
+          editState.successMessage = "Shipment saved.";
+          return Promise.resolve({ type: "editShipment/save/fulfilled", payload: {
+            isSuccess: true, message: "", data: { bolNo: "LOAD-100", proNumber: "PRO-200", shipmentStatus: "Booked" },
+          } });
+        }
         if (action.type === "customerLocation/request") {
           return { unwrap: lookupUnwrapMock, abort: lookupAbortMock };
         }
@@ -289,6 +335,10 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
           rerateState.rate =
             rerateState.rates.find((rate) => rate.id === action.payload) ??
             null;
+        }
+        if (action.type === "shipmentRerate/clearShipmentRerate") {
+          rerateState.rate = null;
+          rerateState.rates = [];
         }
 
         return { abort: vi.fn() };
@@ -438,7 +488,7 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
     );
   });
 
-  it("ShipmentDetail_whenGlobalSaveIsClicked_keepsValuesAndClearsDirtyState", () => {
+  it("ShipmentDetail_whenGlobalSaveIsClicked_keepsValuesAndClearsDirtyState", async () => {
     renderShipmentDetail();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Bill To" }));
@@ -452,16 +502,12 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(within(billToCard!).getByText("Session Company")).toBeTruthy();
-    expect(
-      screen.queryByText("Screen has some unsaved data!!"),
-    ).toBeNull();
+    await waitFor(() => expect(screen.queryByText("Screen has some unsaved data!!")).toBeNull());
+    expect(editShipmentMock).toHaveBeenCalledWith(expect.objectContaining({ billToName: "Session Company" }));
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
-    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(await screen.findByText("Shipments list")).toBeTruthy();
   });
 
   it("ShipmentDetail_whenRateAffectingLoadChangeIsGloballySaved_enablesRerateReminder", () => {
@@ -475,15 +521,14 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
     );
 
     expect(screen.getByText("Screen has some unsaved data!!")).toBeTruthy();
-    expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
-    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Re-Rate" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(screen.queryByText("Screen has some unsaved data!!")).toBeNull();
+    expect(editShipmentMock).not.toHaveBeenCalled();
+    expect(screen.getByText("Screen has some unsaved data!!")).toBeTruthy();
     expect(screen.getByText("Shipment Need to be re rated !")).toHaveProperty(
       "className",
       "shipment-detail-rerate-message",
@@ -643,7 +688,7 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
       "disabled",
       false,
     );
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
     expect(rerateShipmentMock).toHaveBeenCalledTimes(1);
     expect(
       screen.getByRole("tab", { name: "Charges" }).getAttribute("aria-selected"),
@@ -746,7 +791,8 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
         screen.getByRole("button", { name: `Save ${section}` }),
       );
 
-      expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
+      expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
       expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
@@ -773,7 +819,8 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
     fireEvent.keyDown(pickupDateInput, { key: "Enter", code: "Enter" });
     fireEvent.click(screen.getByRole("button", { name: "Save Schedule" }));
 
-    expect(screen.queryByText("Shipment Need to be re rated !")).toBeNull();
+    expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" })).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(screen.getByText("Shipment Need to be re rated !")).toBeTruthy();
@@ -834,7 +881,7 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
       ".shipment-detail-field--editing",
     );
 
-    expect(controls).toHaveLength(5);
+    expect(controls).toHaveLength(3);
     expect(alignedRows).toHaveLength(controls.length);
     controls.forEach((control) => {
       expect(
@@ -893,4 +940,113 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
     ).toBeTruthy();
     expect(within(noteCard!).getByText("Delivery instructions")).toBeTruthy();
   });
+
+  it("ShipmentDetail_SaveAfterRateSelection_SubmitsSelectedSellFreight", async () => {
+    renderShipmentDetail();
+    requestRerate();
+    await screen.findByRole("dialog", { name: "Quote Results" });
+    rerateState.rates[0] = { ...returnedRerate, grossCharge: 150, sellGrossCharge: 180 };
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(editShipmentMock).toHaveBeenCalled());
+    expect(editShipmentMock.mock.calls[0][0]).toMatchObject({
+      scac: "FXFE", sellSCAC: "FXFE", sellCarrierName: "FEDEX FREIGHT-PRIORITY",
+      buyRate: { freight: 150 }, sellRate: { freight: 180 },
+    });
+  });
+
+  it("ShipmentDetail_SaveAfterLoadCommit_SubmitsAcceptedProductsAndNotes", async () => {
+    renderShipmentDetail();
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Commit accepted load values" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(editShipmentMock).toHaveBeenCalledTimes(1));
+    expect(editShipmentMock.mock.calls[0][0]).toMatchObject({
+      products: [expect.objectContaining({ productDescription: "Updated freight" })],
+      bolDispatchNotes: ["Accepted internal note"], accessorials: ["LFG"],
+    });
+  });
+
+  it("ShipmentDetail_SaveFailure_KeepsAcceptedEditsForRetry", async () => {
+    renderShipmentDetail();
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Commit load change" }));
+    dispatchMock.mockImplementation((action: { type?: string }) => {
+      if (action.type === "editShipment/request") {
+        return Promise.resolve({ type: "editShipment/save/rejected", payload: "Server unavailable" });
+      }
+      return { abort: vi.fn() };
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(editShipmentMock).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Server unavailable")).toBeTruthy();
+    expect(screen.getByText("Screen has some unsaved data!!")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(editShipmentMock).toHaveBeenCalledTimes(2));
+    expect(editShipmentMock.mock.calls[1][0]).toEqual(editShipmentMock.mock.calls[0][0]);
+  });
+
+  it("ShipmentDetail_ReferenceEditing_KeepsUnsupportedFieldsReadOnly", () => {
+    renderShipmentDetail();
+    fireEvent.click(screen.getByRole("button", { name: "Edit Reference Numbers" }));
+    expect(screen.queryByLabelText("Carrier Quote Number")).toBeNull();
+    expect(screen.queryByLabelText("Load")).toBeNull();
+  });
+
+
+
+
+  it("ShipmentDetail_PostSaveRefresh_FailedWriteKeepsDraftWithoutReading", async () => {
+    renderShipmentDetail();
+    dispatchMock.mockClear();
+    const dispatch = dispatchMock.getMockImplementation()!;
+    dispatchMock.mockImplementation((action) => action.type === "editShipment/request"
+      ? Promise.resolve({ type: "editShipment/save/rejected", payload: "Shipment was modified" })
+      : dispatch(action));
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Commit load change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Shipment was modified")).toBeTruthy();
+    expect(screen.getByText("Screen has some unsaved data!!")).toBeTruthy();
+    expect(dispatchMock.mock.calls.filter(([action]) => action.type === "shipment/fetchByLoadNumber")).toHaveLength(0);
+    expect(screen.queryByText("Shipments list")).toBeNull();
+  });
+
+  it("ShipmentDetail_SuccessfulSave_RedirectsWithoutRefreshingDetail", async () => {
+    renderShipmentDetail();
+    dispatchMock.mockClear();
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Commit load change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Shipments list")).toBeTruthy();
+    expect(editShipmentMock).toHaveBeenCalledTimes(1);
+    expect(dispatchMock.mock.calls.filter(([action]) => action.type === "shipment/fetchByLoadNumber")).toHaveLength(0);
+  });
+
+  it("ShipmentDetail_PendingSave_WaitsForSuccessBeforeRedirecting", async () => {
+    renderShipmentDetail();
+    const dispatch = dispatchMock.getMockImplementation()!;
+    let complete!: (result: unknown) => void;
+    const pending = new Promise((resolve) => { complete = resolve; });
+    dispatchMock.mockImplementation((action) => action.type === "editShipment/request" ? pending : dispatch(action));
+    fireEvent.click(screen.getByRole("tab", { name: "Load" }));
+    fireEvent.click(screen.getByRole("button", { name: "Commit load change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.queryByText("Shipments list")).toBeNull();
+    expect(screen.getByText("Screen has some unsaved data!!")).toBeTruthy();
+    await act(async () => { complete({ type: "editShipment/save/fulfilled", payload: { data: null } }); });
+    expect(await screen.findByText("Shipments list")).toBeTruthy();
+  });
+
+  it("ShipmentDetail_SuccessfulRerateSave_ClearsSelectedRateBeforeRedirecting", async () => {
+    renderShipmentDetail();
+    requestRerate();
+    fireEvent.click(await screen.findByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Shipments list")).toBeTruthy();
+    expect(rerateState.rate).toBeNull();
+  });
+
+
 });

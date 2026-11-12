@@ -48,6 +48,8 @@ export type ShipmentDetails = {
   pickupStatus: string | null;
   scac: string | null;
   sellSCAC: string | null;
+  /** Carrier name retained locally when a replacement rate is selected. */
+  sellCarrierName?: string | null;
   shipmentMode: string | null;
   equipment: string | null;
   pickupdate: string | null;

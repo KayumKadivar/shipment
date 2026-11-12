@@ -32,6 +32,7 @@ import LoadInternalNotes from "./LoadInternalNotes";
 import { createShipmentAccessorialLabels } from "./shipmentAccessorials";
 
 type LoadLine = {
+  originalProduct?: ShipmentProduct;
   id: string;
   units: string;
   packageType: string;
@@ -87,6 +88,7 @@ type LoadTabProps = {
   onChangeCommitted: (requiresRerate?: boolean) => void;
   onEditorStateChange: (isEditing: boolean) => void;
   onRateInputsChange?: (values: ShipmentRerateLoadValues) => void;
+  onValuesChange?: (values: Pick<ShipmentDetails, "products" | "accessorials" | "bolDispatchNotes">) => void;
 };
 
 const RerateLoadLineFields: ReadonlyArray<keyof LoadLine> = [
@@ -130,6 +132,7 @@ function createShipmentLine(
 ): LoadLine {
   return {
     id: `shipment-load-${shipment.loadNumber}-${index}`,
+    originalProduct: product,
     units: numberText(product.pallets ?? product.pieces),
     packageType: product.packageType ?? "",
     weight: numberText(product.productWeight),
@@ -174,6 +177,40 @@ function createEmptyLine(): LoadLine {
     pieces: 1,
     linearFeet: 0,
     stackable: false,
+  };
+}
+
+/** Reconstructs accepted product values without losing fields absent from the editor. */
+function createEditedProduct(line: LoadLine): ShipmentProduct {
+  const original = line.originalProduct;
+  const numeric = (value: string, previous: number | null | undefined) =>
+    original && value === numberText(previous) ? previous ?? null : numericValue(value);
+  const rate = createRerateProduct(line);
+  const unchangedUnits = original && line.units === numberText(original.pallets ?? original.pieces)
+    && line.packageType === (original.packageType ?? "");
+  return {
+    productDescription: line.description,
+    productClass: line.freightClass,
+    productWeight: numeric(line.weight, original?.productWeight),
+    pallets: unchangedUnits ? original.pallets : rate.pallets,
+    pieces: line.pieces,
+    nmfc: line.nmfc,
+    hazMat: line.hazMat,
+    length: numeric(line.length, original?.length),
+    width: numeric(line.width, original?.width),
+    height: numeric(line.height, original?.height),
+    pcf: original?.pcf ?? null,
+    packageType: line.packageType,
+    skuNumber: original?.skuNumber ?? null,
+    accountNumber: original?.accountNumber ?? null,
+    linearFeet: line.linearFeet,
+    hazmatProperShippingName: line.hazMatProperShippingName,
+    hazmatClass: line.hazMatClass,
+    hazmatUnNaNumber: line.hazMatUN,
+    hazmatPhone: line.hazMatPhone,
+    hazmatGroup: line.hazMatPackingGroup,
+    hazmatContact: line.hazMatContact,
+    stackable: line.stackable,
   };
 }
 
@@ -376,6 +413,7 @@ function LoadTab({
   onChangeCommitted,
   onEditorStateChange,
   onRateInputsChange,
+  onValuesChange,
 }: LoadTabProps) {
   const dispatch = useAppDispatch();
   const {
@@ -406,6 +444,20 @@ function LoadTab({
     AccessorialDraftLine[] | null
   >(null);
   const [internalNotesEditing, setInternalNotesEditing] = useState(false);
+  const [committedNotes, setCommittedNotes] = useState(shipment.bolDispatchNotes);
+  const [committedAccessorials, setCommittedAccessorials] = useState(shipment.accessorials);
+  const publishedValues = useRef({ lines, committedNotes, committedAccessorials });
+  useEffect(() => {
+    const previous = publishedValues.current;
+    if (previous.lines === lines && previous.committedNotes === committedNotes
+      && previous.committedAccessorials === committedAccessorials) return;
+    publishedValues.current = { lines, committedNotes, committedAccessorials };
+    onValuesChange?.({
+      products: lines.map(createEditedProduct),
+      accessorials: committedAccessorials,
+      bolDispatchNotes: committedNotes,
+    });
+  }, [lines, committedNotes, committedAccessorials, onValuesChange]);
   const [accessorialLookupRequested, setAccessorialLookupRequested] =
     useState(false);
   const productSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -706,6 +758,7 @@ function LoadTab({
     setAccessorials(nextAccessorials);
     setAccessorialDraft(null);
     if (hasChanges) {
+      setCommittedAccessorials(resolveAccessorialCodes(nextAccessorials, shipment, accessorialOptionsSource));
       onRateInputsChange?.({
         shipments: lines.map(createRerateProduct),
         accessorialCodes: resolveAccessorialCodes(
@@ -1003,6 +1056,7 @@ function LoadTab({
 
         <LoadInternalNotes
           initialNotes={shipment.bolDispatchNotes}
+          onValuesChange={setCommittedNotes}
           onNoteAdded={() => onChangeCommitted()}
           onEditorStateChange={setInternalNotesEditing}
         />

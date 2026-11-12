@@ -470,7 +470,9 @@ function QuoteLocationCard({
             onDropdownVisibleChange={(visible) => setDropdownOpen(visible)}
             placeholder="ZIP / Postal"
             notFoundContent={loadingPostal ? <Spin size="small" /> : null}
-          />
+          >
+            <Input autoComplete="off" placeholder="ZIP / Postal" />
+          </AutoComplete>
         </Form.Item>
 
         <Form.Item

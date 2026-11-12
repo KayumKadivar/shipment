@@ -5,6 +5,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LoadInternalNotes from "./LoadInternalNotes";
 
 describe("LoadInternalNotes", () => {
+  it("LoadInternalNotes_AddedNote_PublishesAcceptedCollection", () => {
+    const onValuesChange = vi.fn();
+    render(<LoadInternalNotes initialNotes={["Original"]} onNoteAdded={vi.fn()} onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} />);
+    fireEvent.change(screen.getByLabelText("Customer / Internal Note"), { target: { value: "New note" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(onValuesChange).toHaveBeenCalledWith(["Original", "New note"]);
+  });
+
+  it("LoadInternalNotes_CancelledEdit_DoesNotPublishDraft", () => {
+    const onValuesChange = vi.fn();
+    render(<LoadInternalNotes initialNotes={["Original"]} onNoteAdded={vi.fn()} onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit internal notes" }));
+    fireEvent.change(screen.getByLabelText("Internal note 1"), { target: { value: "Draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel internal note editing" }));
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
+
+  it("LoadInternalNotes_AcceptedEdit_PublishesChangedCollection", () => {
+    const onValuesChange = vi.fn();
+    render(<LoadInternalNotes initialNotes={["Original"]} onNoteAdded={vi.fn()} onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit internal notes" }));
+    fireEvent.change(screen.getByLabelText("Internal note 1"), { target: { value: "Updated" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save internal notes" }));
+    expect(onValuesChange).toHaveBeenCalledWith(["Updated"]);
+  });
   beforeEach(() => {
     vi.stubGlobal(
       "ResizeObserver",
