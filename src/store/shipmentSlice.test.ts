@@ -8,6 +8,7 @@ import type {
   ShipmentListItem,
 } from "../types/shipment.types";
 import {
+  copyShipment,
   fetchShipmentByLoadNumber,
   fetchShipments,
 } from "./shipmentSlice";
@@ -91,7 +92,7 @@ describe("shipment API configuration", () => {
       }),
     );
 
-    const action = await fetchShipments({ pageNumber: 2, pageSize: 25 })(
+    const action = await fetchShipments({ pageNumber: 2, pageSize: 25, clientCode: "DEVTS" })(
       vi.fn(),
       vi.fn(),
       undefined,
@@ -263,5 +264,59 @@ describe("shipment API configuration", () => {
     expect(action.payload.products[0]?.hazmatProperShippingName).toBe(
       "Flammable liquid",
     );
+  });
+
+  it("copyShipment_whenApiSucceeds_callsCopyShipmentWithBolNoAndReturnsMessage", async () => {
+    vi.spyOn(axios, "post").mockResolvedValue(
+      createAxiosResponse({
+        isSuccess: true,
+        message: "Shipment copied successfully!",
+        data: { newBolNo: "DEW08939" },
+      }),
+    );
+
+    const action = await copyShipment("DEW08938")(
+      vi.fn(),
+      () => ({ app: { token: "fake-jwt-token" } } as any),
+      undefined,
+    );
+
+    expect(copyShipment.fulfilled.match(action)).toBe(true);
+    if (!copyShipment.fulfilled.match(action)) {
+      throw new Error("Expected copyShipment to fulfill");
+    }
+
+    expect(action.payload.message).toBe("Shipment copied successfully!");
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringContaining("/CopyShipment/CopyShipment"),
+      { bolNo: "DEW08938" },
+      expect.objectContaining({
+        params: { bolNo: "DEW08938" },
+        headers: expect.objectContaining({
+          Authorization: "Bearer fake-jwt-token",
+        }),
+      }),
+    );
+  });
+
+  it("copyShipment_whenApiFails_returnsErrorMessage", async () => {
+    vi.spyOn(axios, "post").mockRejectedValue({
+      isAxiosError: true,
+      message: "Request failed",
+      response: { data: { message: "Invalid BOL number" } },
+    });
+
+    const action = await copyShipment("INVALID")(
+      vi.fn(),
+      () => ({ app: { token: null } } as any),
+      undefined,
+    );
+
+    expect(copyShipment.rejected.match(action)).toBe(true);
+    if (!copyShipment.rejected.match(action)) {
+      throw new Error("Expected copyShipment to reject");
+    }
+
+    expect(action.payload).toBe("Invalid BOL number");
   });
 });
