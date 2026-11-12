@@ -28,7 +28,6 @@ import {
   COST_CODE_FUEL,
   COST_NAME_GROSS,
   COST_NAME_DISC,
-  COST_NAME_FUEL,
 } from "../store/customerRateSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
 import { sendQuoteMail } from "../store/quoteSlice";
@@ -448,12 +447,15 @@ export const getChargeSellDetails = (rate: CarrierRate) => {
       ) {
         discountSell = Math.abs(Number(sell)) || 0;
       } else if (
-        code === "FUEL" ||
         code === "FSC" ||
+        code === "FUEL" ||
         code === "FUEL SURCHARGE" ||
-        name.includes("fuel")
+        name === "fuel surcharge" ||
+        name === "fuelsurcharge"
       ) {
-        fuelSell = sell;
+        if (fuelSell === undefined || Number(sell) > 0) {
+          fuelSell = sell;
+        }
       } else {
         const desc = cd.accName || cd.accessorialDescription || cd.name || cd.description || code || "Accessorial";
         accessorialsSell.push({
@@ -1056,15 +1058,20 @@ function Rate() {
                         discountSell = Math.abs(Number(cd.sellAmount));
                       }
                     } else if (
-                      code === COST_CODE_FUEL ||
                       code === "FSC" ||
+                      code === COST_CODE_FUEL ||
                       code === "FUEL SURCHARGE" ||
-                      name === COST_NAME_FUEL.toLowerCase() ||
-                      name.includes("fuel")
+                      name === "fuel surcharge" ||
+                      name === "fuelsurcharge"
                     ) {
-                      fuelSurcharge = amount;
+                      if (amount > 0 || fuelSurcharge === 0) {
+                        fuelSurcharge = amount;
+                      }
                       if (cd.sellAmount != null) {
-                        fuelSell = Number(cd.sellAmount);
+                        const sAmt = Number(cd.sellAmount);
+                        if (sAmt > 0 || fuelSell === undefined) {
+                          fuelSell = sAmt;
+                        }
                       }
                     } else {
                       otherAccessorials.push({

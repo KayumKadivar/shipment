@@ -16,7 +16,6 @@ import {
   COST_CODE_FUEL,
   COST_NAME_GROSS,
   COST_NAME_DISC,
-  COST_NAME_FUEL,
   saveCustomerQuote,
 } from "../store/customerRateSlice";
 import { fetchQuoteById, sendQuoteMail } from "../store/quoteSlice";
@@ -357,16 +356,20 @@ function QuoteRateDetail() {
                 discountSell = Math.abs(Number(cd.sellAmount));
               }
             } else if (
-              code === COST_CODE_FUEL ||
               code === "FSC" ||
+              code === COST_CODE_FUEL ||
               code === "FUEL SURCHARGE" ||
-              name === COST_NAME_FUEL.toLowerCase() ||
-              name === "fuelsurcharge" ||
-              name.includes("fuel")
+              name === "fuel surcharge" ||
+              name === "fuelsurcharge"
             ) {
-              fuelSurcharge = amount;
+              if (amount > 0 || fuelSurcharge === 0) {
+                fuelSurcharge = amount;
+              }
               if (cd.sellAmount != null) {
-                fuelSell = Number(cd.sellAmount);
+                const sAmt = Number(cd.sellAmount);
+                if (sAmt > 0 || fuelSell === undefined) {
+                  fuelSell = sAmt;
+                }
               }
             } else {
               otherAccessorials.push({

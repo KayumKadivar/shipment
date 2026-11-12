@@ -625,9 +625,9 @@ export const saveCustomerQuote = createAsyncThunk<
               } else {
                 if (accCode === COST_CODE_GROSS || accCode === "GROSS" || accCode === "FRT") {
                   cdSellAmount = sellGross;
-                } else if (accCode === COST_CODE_FUEL || accCode === "FUEL") {
+                } else if (accCode === COST_CODE_FUEL || accCode === "FUEL" || accCode === "FSC") {
                   cdSellAmount = Number(matchingRate?.fuelSell ?? cd.amount) || 0;
-                } else if (accCode === COST_CODE_DISC || accCode === "DISC" || accCode === "DISCOUNT") {
+                } else if (accCode === COST_CODE_DISC || accCode === "DISC" || accCode === "DISCOUNT" || accCode === "DSC") {
                   cdSellAmount = Number(matchingRate?.discountSell ?? cd.amount) || 0;
                 } else {
                   cdSellAmount = Number(cd.sellAmount ?? cd.amount) || 0;
@@ -911,13 +911,21 @@ const customerRateSlice = createSlice({
                   discountSell = Math.abs(Number(cd.sellAmount));
                 }
               } else if (
-                code === COST_CODE_FUEL ||
                 code === "FSC" ||
+                code === COST_CODE_FUEL ||
                 code === "FUEL SURCHARGE" ||
-                name === COST_NAME_FUEL.toLowerCase() ||
-                name.includes("fuel")
+                name === "fuel surcharge" ||
+                name === "fuelsurcharge"
               ) {
-                fuelSurcharge = amount;
+                if (amount > 0 || fuelSurcharge === 0) {
+                  fuelSurcharge = amount;
+                }
+                if (cd.sellAmount != null) {
+                  const sAmt = Number(cd.sellAmount);
+                  if (sAmt > 0 || fuelSell === undefined) {
+                    fuelSell = sAmt;
+                  }
+                }
               } else {
                 otherAccessorials.push({
                   code: cd.accCode || cd.code || "ACC",
@@ -929,10 +937,13 @@ const customerRateSlice = createSlice({
             });
           } else if (Array.isArray(rate.accessorialCharges)) {
             rate.accessorialCharges.forEach((ac: any) => {
+              const amt = Number(ac.accessorialCharge ?? ac.amount) || 0;
+              const sellAmt = ac.sellCharge != null ? Number(ac.sellCharge) : (ac.sellAmount != null ? Number(ac.sellAmount) : amt);
               otherAccessorials.push({
                 code: ac.code || ac.accessorialCode || "ACC",
                 accessorialDescription: ac.accessorialDescription || ac.description || ac.accName || "Accessorial",
-                accessorialCharge: Number(ac.accessorialCharge ?? ac.amount) || 0,
+                accessorialCharge: amt,
+                sellCharge: sellAmt,
               });
             });
           }
@@ -1043,15 +1054,20 @@ const customerRateSlice = createSlice({
                   discountSell = Math.abs(Number(cd.sellAmount));
                 }
               } else if (
-                code === COST_CODE_FUEL ||
                 code === "FSC" ||
+                code === COST_CODE_FUEL ||
                 code === "FUEL SURCHARGE" ||
-                name === COST_NAME_FUEL.toLowerCase() ||
-                name.includes("fuel")
+                name === "fuel surcharge" ||
+                name === "fuelsurcharge"
               ) {
-                fuelSurcharge = amount;
+                if (amount > 0 || fuelSurcharge === 0) {
+                  fuelSurcharge = amount;
+                }
                 if (cd.sellAmount != null) {
-                  fuelSell = Number(cd.sellAmount);
+                  const sAmt = Number(cd.sellAmount);
+                  if (sAmt > 0 || fuelSell === undefined) {
+                    fuelSell = sAmt;
+                  }
                 }
               } else {
                 otherAccessorials.push({

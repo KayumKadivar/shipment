@@ -683,6 +683,11 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
     try {
       const res = await dispatch(copyShipment(bolNoToCopy)).unwrap();
       messageApi.success(res.message || "Shipment copied successfully!");
+
+       setTimeout(() => {
+        navigate("/shipments");
+      }, 100);
+
     } catch (err: any) {
       const errMsg =
         typeof err === "string"
@@ -691,6 +696,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
       messageApi.error(errMsg);
     } finally {
       setIsCopying(false);
+      
     }
   };
 
