@@ -294,29 +294,25 @@ const carrierLogoInFlightSet = new Set<string>();
 export function CarrierLogo({ rate }: { rate: CarrierRate }) {
   const dispatch = useAppDispatch();
   const code = (rate.code || "").trim();
-  const [error, setError] = useState(() => carrierLogoFailedSet.has(code));
-  const [localLogo, setLocalLogo] = useState<string | null>(
-    () => rate.logo || carrierLogoCache.get(code) || null
+  const reduxLogo = useAppSelector(
+    (state) => state.customerRate?.carrierLogos?.[code]
   );
+  const isFailedInRedux = useAppSelector((state) =>
+    Boolean(state.customerRate?.carrierLogoFailed?.[code])
+  );
+
+  const effectiveLogo =
+    rate.logo || reduxLogo || carrierLogoCache.get(code) || null;
+  const isFailed = isFailedInRedux || carrierLogoFailedSet.has(code);
 
   useEffect(() => {
     if (!code) return;
-    if (rate.logo) {
-      carrierLogoCache.set(code, rate.logo);
-      setLocalLogo(rate.logo);
+    if (effectiveLogo) {
+      carrierLogoCache.set(code, effectiveLogo);
       return;
     }
-    if (carrierLogoCache.has(code)) {
-      setLocalLogo(carrierLogoCache.get(code)!);
-      return;
-    }
-    if (carrierLogoFailedSet.has(code)) {
-      setError(true);
-      return;
-    }
-    if (carrierLogoInFlightSet.has(code)) {
-      return;
-    }
+    if (isFailed) return;
+    if (carrierLogoInFlightSet.has(code)) return;
 
     carrierLogoInFlightSet.add(code);
 
@@ -326,31 +322,31 @@ export function CarrierLogo({ rate }: { rate: CarrierRate }) {
         carrierLogoInFlightSet.delete(code);
         if (res.logo) {
           carrierLogoCache.set(code, res.logo);
-          setLocalLogo(res.logo);
         } else {
           carrierLogoFailedSet.add(code);
-          setError(true);
         }
       })
       .catch(() => {
         carrierLogoInFlightSet.delete(code);
         carrierLogoFailedSet.add(code);
-        setError(true);
       });
-  }, [code, rate.logo, dispatch]);
+  }, [code, effectiveLogo, isFailed, dispatch]);
 
-  const loading = !rate.logo && !localLogo && !error && Boolean(code);
+  const loading = !effectiveLogo && !isFailed && Boolean(code);
 
   if (loading) {
-    return <div className="rate-placeholder-logo"><Spin size="small" /></div>;
+    return (
+      <div className='rate-placeholder-logo'>
+        <Spin size='small' />
+      </div>
+    );
   }
 
-  const logoToUse = rate.logo || localLogo;
-  if (error || !logoToUse) {
-    return <div className="rate-placeholder-logo">{rate.name}</div>;
+  if (isFailed || !effectiveLogo) {
+    return <div className='rate-placeholder-logo'>{rate.name}</div>;
   }
-  
-  return <img src={logoToUse} alt={`${rate.name}`} />;
+
+  return <img src={effectiveLogo} alt={`${rate.name}`} />;
 }
 
 export const formatDateTimeDisplay = (val?: string | null): string => {

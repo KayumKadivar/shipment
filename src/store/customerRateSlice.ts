@@ -203,6 +203,8 @@ export interface CustomerRateState {
   carrierSearchResults: CarrierSearchResult[];
   carrierSearchLoading: boolean;
   rawQuote: any | null;
+  carrierLogos: Record<string, string>;
+  carrierLogoFailed: Record<string, boolean>;
 }
 
 // Initial state for customer rate
@@ -215,6 +217,8 @@ const initialState: CustomerRateState = {
   carrierSearchResults: [],
   carrierSearchLoading: false,
   rawQuote: null,
+  carrierLogos: {},
+  carrierLogoFailed: {},
 };
 
 type RateApiResponse = {
@@ -1120,11 +1124,24 @@ const customerRateSlice = createSlice({
       .addCase(fetchCarrierLogo.fulfilled, (state, action) => {
         const { scac, logo } = action.payload;
         if (!logo) return;
+        if (!state.carrierLogos) {
+          state.carrierLogos = {};
+        }
+        state.carrierLogos[scac] = logo;
         state.rates.forEach((rate) => {
           if (rate.code === scac && rate.logo !== logo) {
             rate.logo = logo;
           }
         });
+      })
+      .addCase(fetchCarrierLogo.rejected, (state, action) => {
+        const scac = action.meta?.arg;
+        if (scac) {
+          if (!state.carrierLogoFailed) {
+            state.carrierLogoFailed = {};
+          }
+          state.carrierLogoFailed[scac] = true;
+        }
       })
       .addCase(searchCarriers.pending, (state) => {
         state.carrierSearchLoading = true;
