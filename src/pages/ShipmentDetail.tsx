@@ -8,6 +8,7 @@ import {
   Tabs,
   Tag,
   Typography,
+  message,
 } from "antd";
 import {
   GoogleMap,
@@ -46,7 +47,7 @@ import {
 } from "../components/shipmentdetail/shipmentRerateRequest";
 import { fetchCarrierTracking } from "../store/carrierTrackingSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
-import { fetchShipmentByLoadNumber } from "../store/shipmentSlice";
+import { fetchShipmentByLoadNumber, copyShipment } from "../store/shipmentSlice";
 import {
   clearShipmentRerate,
   rerateShipment,
@@ -422,6 +423,8 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   const [hasPendingRerateChanges, setHasPendingRerateChanges] = useState(false);
   const [needsRerating, setNeedsRerating] = useState(false);
   const [isRerateModalOpen, setIsRerateModalOpen] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
+  const [messageApi, messageContext] = message.useMessage();
   const [rerateValidationError, setRerateValidationError] = useState<
     string | null
   >(null);
@@ -615,6 +618,28 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
     setHasUnsavedChanges(true);
   };
 
+  const handleCopyShipment = async () => {
+    const bolNoToCopy = (shipment.loadNumber || (shipment as any).bolNo || "").trim();
+    if (!bolNoToCopy) {
+      messageApi.error("No valid BOL/Load number found to copy.");
+      return;
+    }
+
+    setIsCopying(true);
+    try {
+      const res = await dispatch(copyShipment(bolNoToCopy)).unwrap();
+      messageApi.success(res.message || "Shipment copied successfully!");
+    } catch (err: any) {
+      const errMsg =
+        typeof err === "string"
+          ? err
+          : err?.message || "Failed to copy shipment.";
+      messageApi.error(errMsg);
+    } finally {
+      setIsCopying(false);
+    }
+  };
+
   const rerateButton = (
     <Button
       loading={rerateLoading || isResolvingRatingProfile}
@@ -626,6 +651,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
 
   return (
     <section className='shipment-detail-page'>
+      {messageContext}
       <div className='shipment-detail-top'>
         <button type='button' onClick={() => navigate("/shipments")}>
           ← All Shipments
@@ -661,7 +687,9 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
             </>
           ) : null}
           <Button danger>Cancel Shipment</Button>
-          <Button>Copy Quote</Button>
+          <Button loading={isCopying} onClick={handleCopyShipment}>
+            Copy Shipment
+          </Button>
         </div>
       </div>
 
