@@ -35,7 +35,7 @@ const { Content } = Layout;
 const antTheme: ThemeConfig = {
   algorithm: theme.defaultAlgorithm,
   token: {
-no    colorPrimary: "#a31d14",
+    colorPrimary: "#a31d14",
     colorInfo: "#a31d14",
     colorError: "#a31d14",
     borderRadius: 6,
