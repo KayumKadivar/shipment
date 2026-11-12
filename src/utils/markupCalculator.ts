@@ -41,6 +41,8 @@ export interface MarkupDistributionParams {
   isMarkupEnabled: boolean;
   isNetSellRateEnabled: boolean;
   netSellRate?: number | string;
+  /** Defaults to true; false preserves unrounded markup until freight/fuel allocation. */
+  roundMarkupBeforeDistribution?: boolean;
 }
 
 export interface MarkupDistributionResult {
@@ -64,6 +66,7 @@ export function calculateMarkupDistribution({
   isMarkupEnabled,
   isNetSellRateEnabled,
   netSellRate = 0,
+  roundMarkupBeforeDistribution = true,
 }: MarkupDistributionParams): MarkupDistributionResult {
   const numRate = Math.max(0, Number(markupRate) || 0);
   const numMin = Math.max(0, Number(minimum) || 0);
@@ -85,23 +88,31 @@ export function calculateMarkupDistribution({
     if (markupDropdownOption === "Flat") {
       calculatedMarkup = rateToUse;
     } else if (markupDropdownOption === "% Freight") {
-      calculatedMarkup = netFreightBuy * (rateToUse / 100);
+      calculatedMarkup = roundMarkupBeforeDistribution
+        ? netFreightBuy * (rateToUse / 100)
+        : netFreightBuy * rateToUse / 100;
       if (calculatedMarkup < numMin) {
         calculatedMarkup = numMin;
       }
     } else if (markupDropdownOption === "% Freight + Fuel") {
-      calculatedMarkup = (netFreightBuy + fuelBuy) * (rateToUse / 100);
+      calculatedMarkup = roundMarkupBeforeDistribution
+        ? (netFreightBuy + fuelBuy) * (rateToUse / 100)
+        : (netFreightBuy + fuelBuy) * rateToUse / 100;
       if (calculatedMarkup < numMin) {
         calculatedMarkup = numMin;
       }
     } else if (markupDropdownOption === "% Freight + Fuel + Accessorial") {
-      calculatedMarkup = totalBuy * (rateToUse / 100);
+      calculatedMarkup = roundMarkupBeforeDistribution
+        ? totalBuy * (rateToUse / 100)
+        : totalBuy * rateToUse / 100;
       if (calculatedMarkup < numMin) {
         calculatedMarkup = numMin;
       }
     }
 
-    const totalMarkupToDistribute = Math.round(calculatedMarkup * 100) / 100;
+    const totalMarkupToDistribute = roundMarkupBeforeDistribution
+      ? Math.round(calculatedMarkup * 100) / 100
+      : calculatedMarkup;
     const baseTotal = netFreightBuy + fuelBuy;
 
     let ppsFreight = 0;
@@ -111,8 +122,12 @@ export function calculateMarkupDistribution({
       const freightPercent = Math.round((netFreightBuy / baseTotal) * 10000) / 100;
       const fuelPercent = Math.round((fuelBuy / baseTotal) * 10000) / 100;
 
-      ppsFreight = Math.round(((totalMarkupToDistribute * freightPercent) / 100) * 100) / 100;
-      ppsFuel = Math.round(((totalMarkupToDistribute * fuelPercent) / 100) * 100) / 100;
+      ppsFreight = roundMarkupBeforeDistribution
+        ? Math.round(((totalMarkupToDistribute * freightPercent) / 100) * 100) / 100
+        : Math.round(totalMarkupToDistribute * freightPercent) / 100;
+      ppsFuel = roundMarkupBeforeDistribution
+        ? Math.round(((totalMarkupToDistribute * fuelPercent) / 100) * 100) / 100
+        : Math.round(totalMarkupToDistribute * fuelPercent) / 100;
 
       if (Math.abs(ppsFreight + ppsFuel - totalMarkupToDistribute) > 0.0001) {
         ppsFuel = Math.round((totalMarkupToDistribute - ppsFreight) * 100) / 100;
@@ -178,14 +193,7 @@ export function applyMarkupToRate<T extends BaseCarrierRate>(
   const fuelBuy = Number(rate.fuelSurcharge) || 0;
   const discountBuy = Number(rate.discount) || 0;
   const netFreightBuy = Math.max(0, grossBuy - discountBuy);
-  const totalAccessorialsBuy = Array.isArray(rate.accessorialCharges)
-    ? rate.accessorialCharges.reduce((acc: number, c: any) => acc + (Number(c.accessorialCharge ?? c.amount) || 0), 0)
-    : 0;
-  const totalAccessorialsSell = Array.isArray(rate.accessorialCharges)
-    ? rate.accessorialCharges.reduce((acc: number, c: any) => acc + (Number(c.sellCharge ?? c.accessorialCharge ?? c.amount) || 0), 0)
-    : totalAccessorialsBuy;
-  const computedBuy = Math.round((netFreightBuy + fuelBuy + totalAccessorialsBuy) * 100) / 100;
-  const totalBuy = Math.max(Number(rate.price) || 0, computedBuy);
+  const totalBuy = Number(rate.price) || 0;
 
   const { calculatedMarkup, ppsFreight, ppsFuel, isNetSellActive } = calculateMarkupDistribution({
     netFreightBuy,
@@ -240,12 +248,7 @@ export function applyMarkupToRate<T extends BaseCarrierRate>(
         : rate.grossCharge;
   const existingMarkup =
     defaultGrossSell != null ? (defaultGrossSell - (rate.grossCharge ?? 0)) : 0;
-  const defaultSellPrice =
-    rate.sellPrice !== undefined
-      ? rate.sellPrice
-      : (rate.grossSell != null || rate.grossSellAmount != null)
-        ? Math.round(((Number(defaultGrossSell) - discountBuy) + (rate.fuelSell ?? fuelBuy) + totalAccessorialsSell) * 100) / 100
-        : (rate.price + existingMarkup);
+  const defaultSellPrice = rate.sellPrice !== undefined ? rate.sellPrice : (rate.price + existingMarkup);
 
   return {
     ...rate,

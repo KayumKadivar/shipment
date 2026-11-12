@@ -41,7 +41,7 @@ body {
   display: flex;
   flex-direction: column;
   padding: 38px 28px 32px;
-  border: 1px solid rgba(255, 89, 94, 0.72);
+  border: 1px solid rgba(163, 29, 20, 0.72);
   border-radius: 10px;
   background: linear-gradient(180deg, #ed1c24 0%, #c40e15 100%);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
@@ -95,10 +95,10 @@ body {
 .login-input.ant-input-affix-wrapper {
   min-height: 44px;
   color: #fff;
-  background: #a70d12 !important;
-  border-color: rgba(119, 0, 5, 0.72);
+  background: #a31d14 !important;
+  border-color: rgba(163, 29, 20, 0.72);
   border-radius: 6px;
-  box-shadow: inset 0 1px 2px rgba(70, 0, 3, 0.2);
+  box-shadow: inset 0 1px 2px rgba(163, 29, 20, 0.2);
   font-size: 14px;
 }
 .login-input.ant-input:hover,
@@ -127,7 +127,7 @@ body {
 .login-input.ant-input:-webkit-autofill,
 .login-input .ant-input:-webkit-autofill {
   -webkit-text-fill-color: #fff;
-  box-shadow: 0 0 0 1000px #a70d12 inset;
+  box-shadow: 0 0 0 1000px #a31d14 inset;
   transition: background-color 9999s ease-out 0s;
 }
 .login-options {
@@ -208,7 +208,7 @@ body {
   margin-bottom: 12px;
   padding: 7px 10px;
   border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(91, 0, 4, 0.42);
+  background: rgba(163, 29, 20, 0.42);
 }
 .login-alert .ant-alert-icon,
 .login-alert .ant-alert-message {
@@ -281,11 +281,12 @@ body {
     #fff
   );
   box-shadow:
-    0 0 7px rgba(255, 29, 43, 0.96),
-    0 0 20px rgba(255, 29, 43, 0.82),
-    0 0 42px rgba(255, 29, 43, 0.52),
-    0 0 70px rgba(255, 29, 43, 0.28);
-  animation: login-progress-fill var(--login-progress-duration, 3s) linear forwards;
+    0 0 7px rgba(163, 29, 20, 0.96),
+    0 0 20px rgba(163, 29, 20, 0.82),
+    0 0 42px rgba(163, 29, 20, 0.52),
+    0 0 70px rgba(163, 29, 20, 0.28);
+  animation: login-progress-fill var(--login-progress-duration, 3s) linear
+    forwards;
   transform-origin: left;
 }
 .login-progress-dot {
@@ -298,11 +299,12 @@ body {
   background: #fff;
   box-shadow:
     0 0 8px rgba(255, 255, 255, 0.98),
-    0 0 21px rgba(255, 36, 45, 0.96),
-    0 0 48px rgba(255, 36, 45, 0.86),
-    0 0 76px rgba(255, 36, 45, 0.5);
+    0 0 21px rgba(163, 29, 20, 0.96),
+    0 0 48px rgba(163, 29, 20, 0.86),
+    0 0 76px rgba(163, 29, 20, 0.5);
   transform: translate(-50%, -50%);
-  animation: login-progress-dot var(--login-progress-duration, 3s) linear forwards;
+  animation: login-progress-dot var(--login-progress-duration, 3s) linear
+    forwards;
 }
 .login-progress-status {
   margin: 0;
@@ -408,7 +410,7 @@ body {
   color: #8d8d8d;
 }
 .app-menu.ant-menu .ant-menu-item .anticon {
-  color: #d71920;
+  color: #a31d14;
   font-size: 15px;
 }
 .app-menu.ant-menu .ant-menu-item-selected {
@@ -428,7 +430,7 @@ body {
   width: 17px;
   height: 17px;
   border-radius: 50%;
-  background: #b91c1c;
+  background: #a31d14;
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -453,7 +455,7 @@ body {
 
 .sider-profile__avatar {
   flex: 0 0 auto;
-  background: #d71920;
+  background: #a31d14;
   color: #fff;
 }
 .sider-profile__meta {
@@ -535,7 +537,7 @@ body {
   border-color: #dddfe4;
 }
 .top-search .anticon {
-  color: #d71920;
+  color: #a31d14;
 }
 .top-icon-button.ant-btn {
   width: 28px;
@@ -554,7 +556,7 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #df2027;
+  background: #a31d14;
 }
 .top-logout-button.ant-btn {
   height: 32px;
@@ -586,7 +588,7 @@ body {
 
 .ns-fullscreen-spin .ant-spin-dot-item,
 .ant-spin-dot-item {
-  background-color: #d71920 !important;
+  background-color: #a31d14 !important;
 }
 
 /* New quote page */
@@ -823,7 +825,7 @@ body {
   content: " *" !important;
   display: inline-block !important;
   margin-inline-start: 2px !important;
-  color: #df2027 !important;
+  color: #a31d14 !important;
   font-family: inherit !important;
   font-size: 13px !important;
   font-weight: 700 !important;
@@ -831,7 +833,7 @@ body {
 }
 
 .quote-required-star {
-  color: #df2027;
+  color: #a31d14;
   font-weight: 700;
   font-size: 13px;
   line-height: 1;
@@ -936,8 +938,8 @@ body {
 .new-quote-page .ant-select-focused .ant-select-selector,
 .new-quote-page .ant-input:focus,
 .new-quote-page .ant-input-focused {
-  border-color: #d71920 !important;
-  box-shadow: 0 0 0 2px rgba(215, 25, 32, 0.08) !important;
+  border-color: #a31d14 !important;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.08) !important;
 }
 
 .quote-items-card__header {
@@ -1090,13 +1092,13 @@ body {
   min-height: auto;
   line-height: 1.3;
   border-radius: 4px;
-  background-color: #df2027 !important;
+  background-color: #a31d14 !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 12px rgba(223, 32, 39, 0.28);
+  box-shadow: 0 4px 12px rgba(163, 29, 20, 0.28);
 }
 
 .quote-item-error-tooltip .ant-tooltip-arrow::before {
-  background-color: #df2027 !important;
+  background-color: #a31d14 !important;
 }
 
 .quote-item-row > .ant-btn {
@@ -1214,9 +1216,8 @@ body {
   font-size: 12px;
 }
 
-.quote-accessorial-list > label.is-checked .ant-checkbox-wrapper,
-.quote-accessorial-list > .quote-accessorial-item.is-checked .ant-checkbox-wrapper {
-  color: #d71920;
+.quote-accessorial-list > label.is-checked .ant-checkbox-wrapper {
+  color: #a31d14;
 }
 
 .quote-notes-card {
@@ -1552,7 +1553,7 @@ body {
   background: #e2e5ea !important;
 }
 .shipment-table-card .ant-table-tbody > tr.selected-row > td:first-child {
-  box-shadow: inset 5px 0 0 #ef1f2b;
+  box-shadow: inset 5px 0 0 #a31d14;
 }
 .cell-strong,
 .cell-muted,
@@ -1587,8 +1588,8 @@ body {
   font-weight: 600;
 }
 .shipment-table-card .ant-checkbox-checked .ant-checkbox-inner {
-  background-color: #df2027;
-  border-color: #df2027;
+  background-color: #a31d14;
+  border-color: #a31d14;
 }
 .shipment-table-card .shipment-clickable-row {
   cursor: pointer;
@@ -1682,7 +1683,7 @@ body {
   gap: 10px;
 }
 .shipment-detail-unsaved-message {
-  color: #df2027;
+  color: #a31d14;
   font-size: 12px;
   font-weight: 500;
 }
@@ -1783,14 +1784,14 @@ body {
 }
 .shipment-detail-tabs .ant-tabs-ink-bar {
   height: 2px;
-  background: #df2027;
+  background: #a31d14;
   transition: all 300ms cubic-bezier(0.645, 0.045, 0.355, 1) !important;
 }
 .shipment-detail-tabs .ant-tabs-content-holder {
   display: none;
 }
 .shipment-detail-tabs .ant-tabs-tab-btn:focus-visible {
-  outline: 2px solid rgba(223, 32, 39, 0.35);
+  outline: 2px solid rgba(163, 29, 20, 0.35);
   outline-offset: 3px;
 }
 .shipment-detail-layout {
@@ -1857,7 +1858,7 @@ body {
   font-size: 11px;
 }
 .shipment-detail-map-note {
-  color: #b91c1c;
+  color: #a31d14;
 }
 .shipment-detail-side-card,
 .shipment-detail-card {
@@ -1900,7 +1901,7 @@ body {
 }
 .shipment-detail-warning .ant-alert-message,
 .shipment-detail-warning .ant-alert-description {
-  color: #ef1f2b;
+  color: #a31d14;
   font-size: 12px;
 }
 .shipment-detail-warning .ant-alert-message {
@@ -1951,7 +1952,7 @@ body {
   color: #89898c;
 }
 .shipment-detail-edit-actions .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: #fff0f1;
 }
 .shipment-detail-edit-actions .ant-btn[aria-label^="Save"] {
@@ -2022,8 +2023,8 @@ body {
 }
 .shipment-detail-field__input.ant-input:hover,
 .shipment-detail-field__input.ant-input:focus {
-  border-color: #df2027;
-  box-shadow: 0 0 0 2px rgba(223, 32, 39, 0.08);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.08);
 }
 .shipment-detail-field__picker.ant-picker {
   grid-column: 2;
@@ -2040,8 +2041,8 @@ body {
 }
 .shipment-detail-field__picker.ant-picker:hover,
 .shipment-detail-field__picker.ant-picker-focused {
-  border-color: #df2027;
-  box-shadow: 0 0 0 2px rgba(223, 32, 39, 0.08);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.08);
 }
 .shipment-detail-field__picker .ant-picker-input > input,
 .shipment-detail-field__picker .ant-picker-range-separator,
@@ -2211,8 +2212,8 @@ body {
 .shipment-load-table .ant-input:focus-within,
 .shipment-load-accessorial-list .ant-input:focus,
 .shipment-load-accessorial-list .ant-input:focus-within {
-  border-color: #df2027;
-  box-shadow: 0 0 0 2px rgba(223, 32, 39, 0.12);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.12);
 }
 .shipment-load-dimensions {
   display: grid;
@@ -2240,7 +2241,7 @@ body {
 }
 .shipment-load-actions .ant-btn:not(:disabled):hover,
 .shipment-load-accessorial-actions .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: #fff0f1;
 }
 .shipment-load-actions .ant-btn[aria-label^="Save"],
@@ -2249,7 +2250,7 @@ body {
 }
 .shipment-load-actions .ant-btn-dangerous:not(:disabled),
 .shipment-load-accessorial-edit-row .ant-btn-dangerous:not(:disabled) {
-  color: #df2027;
+  color: #a31d14;
 }
 .shipment-load-placeholder-row td > span {
   display: block;
@@ -2270,7 +2271,7 @@ body {
   font-size: 12px;
 }
 .shipment-load-add-line .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: transparent;
 }
 .shipment-load-accessorials {
@@ -2346,7 +2347,7 @@ body {
   font-size: 12px;
 }
 .shipment-load-accessorial-add-line .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: transparent;
 }
 
@@ -2397,7 +2398,7 @@ body {
 .shipment-load-internal-notes
   .shipment-load-internal-notes-actions
   .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: #fff0f1;
 }
 .shipment-load-internal-notes
@@ -2408,7 +2409,7 @@ body {
 .shipment-load-internal-notes
   .shipment-load-internal-notes-edit-row
   .ant-btn-dangerous:not(:disabled) {
-  color: #df2027;
+  color: #a31d14;
 }
 .shipment-load-internal-notes .shipment-load-internal-notes-list,
 .shipment-load-internal-notes .shipment-load-internal-notes-edit-list {
@@ -2465,8 +2466,8 @@ body {
 }
 .shipment-load-internal-notes .ant-input:focus,
 .shipment-load-internal-notes .ant-input:focus-within {
-  border-color: #df2027;
-  box-shadow: 0 0 0 2px rgba(223, 32, 39, 0.12);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.12);
 }
 .shipment-load-internal-notes .shipment-load-internal-notes-input {
   resize: vertical;
@@ -2548,7 +2549,7 @@ body {
 }
 .shipment-charge-card-actions .ant-btn:not(:disabled):hover,
 .shipment-charge-row-actions .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: #fff0f1;
 }
 .shipment-charge-card-actions .ant-btn[aria-label^="Save"],
@@ -2556,7 +2557,7 @@ body {
   color: #17864b;
 }
 .shipment-charge-row-actions .ant-btn-dangerous:not(:disabled) {
-  color: #df2027;
+  color: #a31d14;
 }
 .shipment-charge-summary-body {
   display: flex;
@@ -2628,8 +2629,8 @@ body {
 .shipment-charge-table .ant-input:focus-within,
 .shipment-charge-table .ant-select-focused .ant-select-selector,
 .shipment-charge-table .ant-input-number:focus-within {
-  border-color: #df2027;
-  box-shadow: 0 0 0 2px rgba(223, 32, 39, 0.12);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.12);
 }
 .shipment-charge-lines {
   margin-top: 26px;
@@ -2758,7 +2759,7 @@ body {
   font-weight: 500;
 }
 .shipment-charge-table tfoot td.shipment-charge-total-negative {
-  color: #df2027;
+  color: #a31d14;
 }
 .shipment-charge-table tfoot td:first-child {
   border-radius: 6px 0 0 6px;
@@ -2778,7 +2779,7 @@ body {
   font-size: 12px;
 }
 .shipment-charge-add-line .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: transparent;
 }
 .shipment-charge-footer {
@@ -2908,7 +2909,7 @@ body {
 }
 .shipment-tracking-card-actions .ant-btn:not(:disabled):hover,
 .shipment-tracking-row-actions .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: #fff0f1;
 }
 .shipment-tracking-card-actions .ant-btn[aria-label^="Save"],
@@ -2961,8 +2962,8 @@ body {
   box-shadow: none;
 }
 .shipment-notification-email .ant-input:focus {
-  border-color: #df2027;
-  box-shadow: 0 0 0 2px rgba(223, 32, 39, 0.12);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.12);
 }
 .shipment-notification-email strong {
   grid-column: 3;
@@ -2986,7 +2987,7 @@ body {
 }
 .shipment-notification-rule strong .anticon {
   margin-left: 3px;
-  color: #df2027;
+  color: #a31d14;
 }
 .shipment-notification-edit-fields {
   display: grid;
@@ -3037,8 +3038,8 @@ body {
 .shipment-reminder-form-card .ant-select-focused .ant-select-selector,
 .shipment-reminder-form-card .ant-picker-focused,
 .shipment-tracking-table .ant-input:focus {
-  border-color: #df2027 !important;
-  box-shadow: 0 0 0 2px rgba(223, 32, 39, 0.12) !important;
+  border-color: #a31d14 !important;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.12) !important;
 }
 .shipment-reminder-form-card > h2 {
   margin-bottom: 11px;
@@ -3060,7 +3061,7 @@ body {
 }
 .shipment-reminder-error {
   margin: 5px 0 0;
-  color: #df2027;
+  color: #a31d14;
   font-size: 9px;
 }
 .shipment-reminder-create {
@@ -3246,7 +3247,7 @@ body {
   font-size: 12px;
 }
 .shipment-tracking-add-line .ant-btn:not(:disabled):hover {
-  color: #df2027;
+  color: #a31d14;
   background: transparent;
 }
 
@@ -3366,8 +3367,8 @@ body {
 .quote-summary-filter-topline .ant-btn-primary {
   min-width: 136px;
   color: #fff;
-  border-color: #d71920;
-  background: #d71920;
+  border-color: #a31d14;
+  background: #a31d14;
 }
 .quote-summary-more-filters {
   display: grid;
@@ -3557,7 +3558,7 @@ body {
 .quote-summary-reference-link {
   padding: 0;
   border: 0;
-  color: #d71920;
+  color: #a31d14;
   background: transparent;
   font: inherit;
   font-weight: 600;
@@ -3565,7 +3566,7 @@ body {
 }
 .quote-summary-reference-link:hover,
 .quote-summary-reference-link:focus-visible {
-  color: #a80f15;
+  color: #a31d14;
   text-decoration: underline;
 }
 
@@ -3665,8 +3666,8 @@ body {
     box-shadow 160ms ease;
 }
 .quote-detail-offer-card.is-selected {
-  border-color: #d71920;
-  box-shadow: 0 0 0 2px rgba(215, 25, 32, 0.1);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.1);
 }
 .quote-detail-offer-card__offer {
   min-height: 235px;
@@ -3719,9 +3720,9 @@ body {
 .quote-detail-offer-card__offer .ant-btn:hover,
 .quote-detail-offer-card__offer .ant-btn:focus-visible,
 .quote-detail-offer-card__offer .ant-btn-primary {
-  border-color: #d71920 !important;
+  border-color: #a31d14 !important;
   color: #fff !important;
-  background: #d71920 !important;
+  background: #a31d14 !important;
 }
 .quote-detail-offer-card__information {
   min-width: 0;
@@ -3771,7 +3772,7 @@ body {
   cursor: pointer;
 }
 .quote-detail-offer-card__heading nav button:hover {
-  color: #d71920;
+  color: #a31d14;
 }
 .quote-detail-offer-card__details {
   display: grid;
@@ -4212,8 +4213,8 @@ body {
 }
 .customer-location-actions .ant-btn-primary {
   color: #fff;
-  border-color: #df2027;
-  background: #df2027;
+  border-color: #a31d14;
+  background: #a31d14;
 }
 .location-file-input {
   position: fixed;
@@ -4253,10 +4254,10 @@ body {
 }
 .customer-location-tabs .ant-tabs-ink-bar {
   height: 2px;
-  background: #ef2b33;
+  background: #a31d14;
 }
 .customer-location-tabs .ant-tabs-tab-btn:focus-visible {
-  outline: 2px solid rgba(223, 32, 39, 0.35);
+  outline: 2px solid rgba(163, 29, 20, 0.35);
   outline-offset: 2px;
 }
 
@@ -4299,15 +4300,15 @@ body {
   background: #fff;
 }
 .location-toolbar__left > .ant-input-affix-wrapper .anticon {
-  color: #df2027;
+  color: #a31d14;
 }
 .location-toolbar__left > .ant-btn {
   height: 34px;
   border-radius: 6px;
 }
 .location-toolbar__left > .ant-btn-dangerous:not(:disabled) {
-  color: #df2027;
-  border-color: #ef4444;
+  color: #a31d14;
+  border-color: #a31d14;
   background: transparent;
 }
 .location-page-controls {
@@ -4393,7 +4394,7 @@ body {
   .ant-table-tbody
   > tr.location-row-selected
   > td:first-child {
-  box-shadow: inset 3px 0 0 #df2027;
+  box-shadow: inset 3px 0 0 #a31d14;
 }
 .customer-location-table-card .ant-table-cell-fix-left-last::after,
 .customer-location-table-card .ant-table-cell-fix-right-first::after {
@@ -4401,8 +4402,8 @@ body {
 }
 .customer-location-table-card .ant-checkbox-checked .ant-checkbox-inner,
 .customer-location-table-card .ant-checkbox-indeterminate .ant-checkbox-inner {
-  border-color: #df2027;
-  background: #df2027;
+  border-color: #a31d14;
+  background: #a31d14;
 }
 .location-edit-button.ant-btn {
   width: 24px;
@@ -4411,7 +4412,7 @@ body {
   color: #999;
 }
 .location-edit-button.ant-btn:hover {
-  color: #df2027 !important;
+  color: #a31d14 !important;
   background: #fff0f1 !important;
 }
 .location-name-cell {
@@ -4719,7 +4720,7 @@ body {
 
 .send-rates-dialog__close:hover,
 .send-rates-dialog__remove-recipient:hover {
-  color: #d71920;
+  color: #a31d14;
 }
 
 .send-rates-dialog__recipients {
@@ -4763,8 +4764,8 @@ body {
 
 .send-rates-dialog__recipient .ant-input:focus,
 .send-rates-dialog__recipient .ant-input-focused {
-  border-color: #d71920;
-  box-shadow: 0 0 0 2px rgba(215, 25, 32, 0.1);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.1);
 }
 
 .send-rates-dialog__remove-recipient {
@@ -4787,8 +4788,8 @@ body {
 
 .send-rates-dialog__add-recipient.ant-btn:hover,
 .send-rates-dialog__add-recipient.ant-btn:focus-visible {
-  border-color: #d71920 !important;
-  color: #d71920 !important;
+  border-color: #a31d14 !important;
+  color: #a31d14 !important;
   background: #fff !important;
 }
 
@@ -4828,7 +4829,7 @@ body {
 .send-rates-dialog__rates-heading button {
   padding: 0;
   border: 0;
-  color: #ed1c29;
+  color: #a31d14;
   background: transparent;
   font-size: 11px;
   font-weight: 600;
@@ -4861,7 +4862,7 @@ body {
 
 .send-rates-dialog__rate:hover,
 .send-rates-dialog__rate.is-selected {
-  border-color: #d71920;
+  border-color: #a31d14;
   background: #fffafb;
 }
 
@@ -4877,8 +4878,8 @@ body {
 }
 
 .send-rates-dialog__rate .ant-checkbox-checked .ant-checkbox-inner {
-  border-color: #d71920;
-  background: #d71920;
+  border-color: #a31d14;
+  background: #a31d14;
 }
 
 .send-rates-dialog__logo {
@@ -4984,7 +4985,7 @@ body {
 .send-rates-dialog__validation {
   flex: 0 0 auto;
   padding: 7px 18px 0;
-  color: #d71920;
+  color: #a31d14;
   font-size: 11px;
 }
 
@@ -5006,7 +5007,7 @@ body {
 }
 
 .send-rates-dialog__footer p strong {
-  color: #ed1d2a;
+  color: #a31d14;
 }
 
 .send-rates-dialog__footer > div {
@@ -5027,15 +5028,15 @@ body {
 
 .send-rates-dialog__footer .ant-btn-primary {
   min-width: 104px;
-  border-color: #e21c28;
+  border-color: #a31d14;
   color: #fff;
-  background: #e21c28;
+  background: #a31d14;
 }
 
 .send-rates-dialog__footer .ant-btn-primary:hover,
 .send-rates-dialog__footer .ant-btn-primary:focus-visible {
-  border-color: #bb111b !important;
-  background: #bb111b !important;
+  border-color: #a31d14 !important;
+  background: #a31d14 !important;
 }
 
 @media (max-width: 640px) {
@@ -5173,7 +5174,7 @@ body {
 }
 
 .rate-back-button:hover {
-  color: #d71920;
+  color: #a31d14;
 }
 
 .rate-page__header {
@@ -5212,7 +5213,7 @@ body {
   padding: 10px 16px;
   border: 1px solid #f0b9bc;
   border-radius: 6px;
-  color: #e11d2e;
+  color: #a31d14;
   background: #fff7f7;
   font-size: 12px;
 }
@@ -5419,7 +5420,7 @@ body {
 }
 
 .rate-mode-tabs button.active {
-  border-bottom-color: #e11925;
+  border-bottom-color: #a31d14;
   color: #202431;
   font-weight: 600;
 }
@@ -5441,11 +5442,11 @@ body {
 
 .rate-mode-tabs button.active span {
   color: #fff;
-  background: #df202b;
+  background: #a31d14;
 }
 
 .rate-tab-with-error:not(.active) span {
-  color: #d71920;
+  color: #a31d14;
   background: #fde8e8;
 }
 
@@ -5471,7 +5472,7 @@ body {
 }
 
 .rate-toolbar .ant-input-prefix {
-  color: #df202b;
+  color: #a31d14;
 }
 
 .rate-toolbar .ant-input,
@@ -5490,8 +5491,8 @@ body {
 
 .rate-send-all.ant-btn:hover,
 .rate-send-all.ant-btn:focus-visible {
-  border-color: #d71920 !important;
-  color: #d71920 !important;
+  border-color: #a31d14 !important;
+  color: #a31d14 !important;
   background: #fff !important;
 }
 
@@ -5523,7 +5524,7 @@ body {
 
 .rate-view-switch button.active {
   color: #fff;
-  background: #dc1622;
+  background: #a31d14;
 }
 
 .rate-results-count {
@@ -5630,7 +5631,7 @@ body {
   margin: 0 0 18px;
   font-size: 18px;
   font-weight: 600;
-  color: #dc2626;
+  color: #a31d14;
 }
 
 .rate-error-badge {
@@ -5640,7 +5641,7 @@ body {
   padding: 2px 10px;
   border-radius: 999px;
   background: #fee2e2;
-  color: #b91c1c;
+  color: #a31d14;
   font-size: 13px;
   font-weight: 600;
 }
@@ -5657,8 +5658,8 @@ body {
 }
 
 .rate-card--selected {
-  border-color: #d71920;
-  box-shadow: 0 0 0 2px rgba(215, 25, 32, 0.08);
+  border-color: #a31d14;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.08);
 }
 
 .rate-card__warning {
@@ -5668,7 +5669,7 @@ body {
   gap: 10px;
   padding: 7px 15px;
   border-bottom: 1px solid #f3c6a5;
-  color: #e32b21;
+  color: #a31d14;
   background: #fffed0;
   font-size: 9px;
   line-height: 1.35;
@@ -5742,9 +5743,9 @@ body {
 .rate-card__select.ant-btn-primary,
 .rate-card__select.ant-btn:hover,
 .rate-card__select.ant-btn:focus-visible {
-  border-color: #d71920 !important;
+  border-color: #a31d14 !important;
   color: #fff !important;
-  background: #d71920 !important;
+  background: #a31d14 !important;
 }
 
 .rate-card__information {
@@ -5806,7 +5807,7 @@ body {
 }
 
 .rate-card__quick-actions button:hover {
-  color: #d71920;
+  color: #a31d14;
 }
 
 .rate-card__details {
@@ -6113,7 +6114,7 @@ body {
   padding-inline: 15px;
   border-color: #f1c7c9;
   border-radius: 6px;
-  color: #df2027;
+  color: #a31d14;
   background: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -6122,14 +6123,14 @@ body {
 .add-location-actions .ant-btn-primary {
   min-width: 150px;
   color: #fff;
-  border-color: #df2027;
-  background: #df2027;
+  border-color: #a31d14;
+  background: #a31d14;
 }
 .add-location-actions .ant-btn-primary:hover,
 .add-location-actions .ant-btn-primary:focus-visible {
   color: #fff !important;
-  border-color: #bf151c !important;
-  background: #bf151c !important;
+  border-color: #a31d14 !important;
+  background: #a31d14 !important;
 }
 .add-location-panels {
   display: grid;
@@ -6187,7 +6188,7 @@ body {
   > label.ant-form-item-required::before {
   order: 2;
   margin-inline: 2px 0;
-  color: #df2027 !important;
+  color: #a31d14 !important;
 }
 .add-location-card__body .ant-form-item-control {
   min-width: 0;
@@ -6269,8 +6270,8 @@ body {
   margin-top: 1px;
 }
 .add-location-accessorial-grid .ant-checkbox-checked .ant-checkbox-inner {
-  border-color: #df2027;
-  background: #df2027;
+  border-color: #a31d14;
+  background: #a31d14;
 }
 
 @media (max-width: 1180px) {
@@ -6397,11 +6398,11 @@ body {
   font-weight: 600;
 }
 .add-product-page .ant-radio-checked .ant-radio-inner {
-  border-color: #df2027;
+  border-color: #a31d14;
   background: #fff;
 }
 .add-product-page .ant-radio-checked .ant-radio-inner::after {
-  background: #df2027;
+  background: #a31d14;
 }
 
 @media (min-width: 769px) {
@@ -6494,8 +6495,8 @@ body {
 }
 .customer-product-actions .ant-btn-primary {
   color: #fff;
-  border-color: #df2027;
-  background: #df2027;
+  border-color: #a31d14;
+  background: #a31d14;
 }
 .product-file-input {
   position: fixed;
@@ -6534,10 +6535,10 @@ body {
 }
 .customer-product-tabs .ant-tabs-ink-bar {
   height: 2px;
-  background: #ef2b33;
+  background: #a31d14;
 }
 .customer-product-tabs .ant-tabs-tab-btn:focus-visible {
-  outline: 2px solid rgba(223, 32, 39, 0.35);
+  outline: 2px solid rgba(163, 29, 20, 0.35);
   outline-offset: 2px;
 }
 .customer-product-controls {
@@ -6579,15 +6580,15 @@ body {
   background: #fff;
 }
 .product-toolbar__left > .ant-input-affix-wrapper .anticon {
-  color: #df2027;
+  color: #a31d14;
 }
 .product-toolbar__left > .ant-btn {
   height: 40px;
   border-radius: 6px;
 }
 .product-toolbar__left > .ant-btn-dangerous:not(:disabled) {
-  color: #df2027;
-  border-color: #ef4444;
+  color: #a31d14;
+  border-color: #a31d14;
   background: transparent;
 }
 .product-page-controls {
@@ -6672,7 +6673,7 @@ body {
   .ant-table-tbody
   > tr.product-row-selected
   > td:first-child {
-  box-shadow: inset 3px 0 0 #df2027;
+  box-shadow: inset 3px 0 0 #a31d14;
 }
 .customer-product-table-card .ant-table-cell-fix-left-last::after,
 .customer-product-table-card .ant-table-cell-fix-right-first::after {
@@ -6680,8 +6681,8 @@ body {
 }
 .customer-product-table-card .ant-checkbox-checked .ant-checkbox-inner,
 .customer-product-table-card .ant-checkbox-indeterminate .ant-checkbox-inner {
-  border-color: #df2027;
-  background: #df2027;
+  border-color: #a31d14;
+  background: #a31d14;
 }
 .product-edit-button.ant-btn {
   width: 24px;
@@ -6690,7 +6691,7 @@ body {
   color: #999;
 }
 .product-edit-button.ant-btn:hover {
-  color: #df2027 !important;
+  color: #a31d14 !important;
   background: #fff0f1 !important;
 }
 .product-description-cell {
@@ -6873,7 +6874,7 @@ body {
 }
 
 .action-arrow-icon {
-  color: #ef4444;
+  color: #a31d14;
   transform: rotate(45deg);
   margin-left: 6px;
   font-size: 12px;
@@ -6902,7 +6903,7 @@ body {
 }
 
 .required {
-  color: #df2027;
+  color: #a31d14;
 }
 
 /* Sleek custom scrollbar for Ant Design dropdowns */

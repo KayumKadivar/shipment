@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { getProductPackageTypes } from "../store/customerProductSlice";
 import type { ProductFormValues } from "../types/customerProduct.types";
+import ProductHazmatFields from "../components/ProductHazmatFields";
 
 interface CustomerProductAddProps {
   onCreate: (values: ProductFormValues) => void;
@@ -87,6 +88,12 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
     nmfc: "",
     productClass: "",
     isHazmat: false,
+    hazmatUN: "",
+    hazmatProperShippingName: "",
+    hazmatClass: "",
+    hazmatGroup: "",
+    hazmatPhone: "",
+    hazmatContact: "",
     length: 0,
     height: 0,
     weight: 0,
@@ -198,6 +205,7 @@ function CustomerProductAdd({ onCreate }: CustomerProductAddProps) {
                   <strong>{isHazmat ? "Yes" : "No"}</strong>
                 </div>
               </Form.Item>
+              <ProductHazmatFields visible={isHazmat} />
             </div>
           </section>
 

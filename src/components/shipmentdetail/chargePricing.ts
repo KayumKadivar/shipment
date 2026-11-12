@@ -1,3 +1,5 @@
+import { calculateMarkupDistribution } from "../../utils/markupCalculator";
+
 /** Supported CustomerRate markup bases. */
 export type ChargeMarkupOption = "Flat" | "% Freight" | "% Freight + Fuel" | "% Freight + Fuel + Accessorial";
 
@@ -39,11 +41,8 @@ export function chargePricingKind(line: PricingLine) {
   return "accessorial";
 }
 
-/** Calculates fixed freight/fuel increments using CustomerRate's minimum and cent rounding rules. */
-export function calculateChargeMarkup(lines: readonly PricingLine[], pricing: ChargePricingDraft) {
-  const amount = Math.max(0, Number(pricing.markupRate) || 0);
-  const minimum = Math.max(0, Number(pricing.minimum) || 0);
-  const rate = amount > 0 ? amount : minimum;
+/** Adapts signed charge buy amounts to shared pricing while preserving zero allocation behavior. */
+function calculateChargeDistribution(lines: readonly PricingLine[], pricing: ChargePricingDraft) {
   let freight = 0;
   let fuel = 0;
   let total = 0;
@@ -54,22 +53,27 @@ export function calculateChargeMarkup(lines: readonly PricingLine[], pricing: Ch
     if (kind === "fuel") fuel += buy;
     total += buy;
   }
-  let markup = 0;
-  if (pricing.isMarkupEnabled && rate > 0) {
-    const base = pricing.markupDropdownOption === "% Freight" ? freight
-      : pricing.markupDropdownOption === "% Freight + Fuel" ? freight + fuel : total;
-    markup = pricing.markupDropdownOption === "Flat" ? rate : Math.max(base * rate / 100, minimum);
-  }
-  const baseTotal = freight + fuel;
-  if (markup <= 0 || baseTotal <= 0) return { freight: 0, fuel: 0 };
-  const freightPercent = Math.round(freight / baseTotal * 10000) / 100;
-  const fuelPercent = Math.round(fuel / baseTotal * 10000) / 100;
-  const freightMarkup = Math.round(markup * freightPercent) / 100;
-  let fuelMarkup = Math.round(markup * fuelPercent) / 100;
-  if (Math.abs(freightMarkup + fuelMarkup - markup) > 0.0001) {
-    fuelMarkup = Math.round((markup - freightMarkup) * 100) / 100;
-  }
-  return { freight: freightMarkup, fuel: fuelMarkup };
+  const result = calculateMarkupDistribution({
+    netFreightBuy: freight,
+    fuelBuy: fuel,
+    totalBuy: total,
+    markupDropdownOption: pricing.markupDropdownOption,
+    markupRate: pricing.markupRate,
+    minimum: pricing.minimum,
+    isMarkupEnabled: pricing.isMarkupEnabled,
+    isNetSellRateEnabled: pricing.isNetSellRateEnabled,
+    netSellRate: pricing.netSellRate,
+    roundMarkupBeforeDistribution: false,
+  });
+  return !result.isNetSellActive && (freight + fuel <= 0 || result.calculatedMarkup <= 0)
+    ? { ...result, ppsFreight: 0, ppsFuel: 0 }
+    : result;
+}
+
+/** Calculates fixed freight/fuel increments using CustomerRate's minimum and cent rounding rules. */
+export function calculateChargeMarkup(lines: readonly PricingLine[], pricing: ChargePricingDraft) {
+  const result = calculateChargeDistribution(lines, { ...pricing, isNetSellRateEnabled: false });
+  return { freight: result.ppsFreight, fuel: result.ppsFuel };
 }
 
 /** Applies sell pricing to snapshots without changing any buy amounts. */
@@ -78,13 +82,14 @@ export function applyChargePricing<T extends PricingLine>(
   pricing: ChargePricingDraft,
   increments = calculateChargeMarkup(lines, pricing),
 ): T[] {
+  const netSell = pricing.isNetSellRateEnabled ? calculateChargeDistribution(lines, pricing) : null;
   return lines.map((line) => {
     const kind = chargePricingKind(line);
-    if (pricing.isNetSellRateEnabled) {
+    if (netSell) {
       return {
         ...line,
         sellCost: kind === "freight"
-          ? Math.max(0, Number(pricing.netSellRate) || 0)
+          ? netSell.ppsFreight
           : 0,
       };
     }

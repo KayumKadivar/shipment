@@ -31,6 +31,14 @@ export type ShipmentRerateRate = {
   grossCharge: number;
   fuelSurcharge: number;
   discount: number;
+  /** Sell-side gross freight charge returned by rating, when available. */
+  sellGrossCharge?: number;
+  /** Sell-side freight discount returned by rating, when available. */
+  sellDiscount?: number;
+  /** Sell-side fuel surcharge returned by rating, when available. */
+  sellFuelSurcharge?: number;
+  /** Sell-side shipment total returned by rating, when available. */
+  sellTotalShipmentCost?: number;
   accessorialCharges: ShipmentRerateAccessorialCharge[];
 };
 
@@ -48,6 +56,14 @@ type ShipmentRerateApiRate = {
   grossCharge?: unknown;
   fuelSurcharge?: unknown;
   discount?: unknown;
+  /** Optional sell-side gross freight charge before numeric normalization. */
+  sellGrossCharge?: unknown;
+  /** Optional sell-side freight discount before numeric normalization. */
+  sellDiscount?: unknown;
+  /** Optional sell-side fuel surcharge before numeric normalization. */
+  sellFuelSurcharge?: unknown;
+  /** Optional sell-side shipment total before numeric normalization. */
+  sellTotalShipmentCost?: unknown;
   accessorialCharges?: Array<{
     accessorialCode?: string | null;
     accessorialDescription?: string | null;
@@ -115,6 +131,18 @@ function validateShipmentRerateRate(
     grossCharge: requiredNumber(rate.grossCharge, "gross charge"),
     fuelSurcharge: requiredNumber(rate.fuelSurcharge, "fuel surcharge"),
     discount: requiredNumber(rate.discount, "discount"),
+    sellGrossCharge: rate.sellGrossCharge == null
+      ? undefined
+      : requiredNumber(rate.sellGrossCharge, "sell gross charge"),
+    sellDiscount: rate.sellDiscount == null
+      ? undefined
+      : requiredNumber(rate.sellDiscount, "sell discount"),
+    sellFuelSurcharge: rate.sellFuelSurcharge == null
+      ? undefined
+      : requiredNumber(rate.sellFuelSurcharge, "sell fuel surcharge"),
+    sellTotalShipmentCost: rate.sellTotalShipmentCost == null
+      ? undefined
+      : requiredNumber(rate.sellTotalShipmentCost, "sell total shipment cost"),
     accessorialCharges: (rate.accessorialCharges ?? []).map((charge, index) => ({
       accessorialCode: charge.accessorialCode?.trim() || "ACC",
       accessorialDescription:

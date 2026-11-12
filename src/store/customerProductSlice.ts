@@ -37,7 +37,13 @@ type ProductApiItem = {
   width?: number;
   isActive?: boolean;
   commodity?: string;
-  hazmatContact?: string;
+  hazmatContact?: string | null;
+  hazmatContactName?: string | null;
+  hazmatUN?: string | null;
+  hazmatProperShippingName?: string | null;
+  hazmatClass?: string | null;
+  hazmatGroup?: string | null;
+  hazmatPhone?: string | null;
   productGroup?: string;
   notes?: string;
   isApproved?: boolean;
@@ -94,7 +100,12 @@ export const saveCustomerProduct = createAsyncThunk(
         weight: payloadData.weight || 0,
         pallets: Number(payloadData.pallets) || 0,
         isHazmat: payloadData.isHazmat ?? false,
-        hazmatUN: "",
+        hazmatUN: payloadData.hazmatUN ?? "",
+        hazmatProperShippingName: payloadData.hazmatProperShippingName ?? "",
+        hazmatClass: payloadData.hazmatClass ?? "",
+        hazmatGroup: payloadData.hazmatGroup ?? "",
+        hazmatPhone: payloadData.hazmatPhone ?? "",
+        hazmatContactName: payloadData.hazmatContact ?? "",
         packagingGroup: payloadData.packageGroup || "",
         clientCode: (getState() as RootState)?.clientContext?.customerProduct_selectedClientCode || "1",
         length: payloadData.length || 0,
@@ -150,7 +161,12 @@ export const updateCustomerProduct = createAsyncThunk(
         weight: payloadData.weight || 0,
         pallets: Number(payloadData.pallets) || 0,
         isHazmat: payloadData.isHazmat ?? false,
-        hazmatUN: "",
+        hazmatUN: payloadData.hazmatUN ?? "",
+        hazmatProperShippingName: payloadData.hazmatProperShippingName ?? "",
+        hazmatClass: payloadData.hazmatClass ?? "",
+        hazmatGroup: payloadData.hazmatGroup ?? "",
+        hazmatPhone: payloadData.hazmatPhone ?? "",
+        hazmatContactName: payloadData.hazmatContact ?? "",
         packagingGroup: payloadData.packageGroup || "",
         clientCode: (getState() as RootState)?.clientContext?.customerProduct_selectedClientCode || "1",
         length: payloadData.length || 0,
@@ -172,7 +188,7 @@ export const updateCustomerProduct = createAsyncThunk(
 
       console.log("UpdateProduct Response:", response.data);
 
-      if (!response.data?.isSuccess && response.data?.message) {
+      if (!response.data?.isSuccess) {
          return rejectWithValue(response.data?.message || "Failed to update product.");
       }
 
@@ -273,7 +289,12 @@ export const getCustomerProducts = createAsyncThunk<
         productClass: product.productClass ?? "",
         commodity: product.commodity ?? "",
         isHazmat: product.hazmat ?? product.isHazmat ?? false,
-        hazmatContact: product.hazmatContact ?? "",
+        hazmatContact: product.hazmatContactName ?? product.hazmatContact ?? "",
+        hazmatUN: product.hazmatUN ?? "",
+        hazmatProperShippingName: product.hazmatProperShippingName ?? "",
+        hazmatClass: product.hazmatClass ?? "",
+        hazmatGroup: product.hazmatGroup ?? "",
+        hazmatPhone: product.hazmatPhone ?? "",
         length: product.length ?? 0,
         height: product.height ?? 0,
         weight: product.weight ?? 0,
@@ -348,7 +369,12 @@ export const getCustomerProductByDesc = createAsyncThunk<
         productClass: prod.productClass ?? "",
         commodity: prod.commodity ?? "",
         isHazmat: prod.isHazmat ?? false,
-        hazmatContact: prod.hazmatContact ?? "",
+        hazmatContact: prod.hazmatContactName ?? prod.hazmatContact ?? "",
+        hazmatUN: prod.hazmatUN ?? "",
+        hazmatProperShippingName: prod.hazmatProperShippingName ?? "",
+        hazmatClass: prod.hazmatClass ?? "",
+        hazmatGroup: prod.hazmatGroup ?? "",
+        hazmatPhone: prod.hazmatPhone ?? "",
         length: prod.length ?? 0,
         height: prod.height ?? 0,
         weight: prod.weight ?? 0,
@@ -452,7 +478,12 @@ export const getCustomerProductByID = createAsyncThunk<
         productClass: prod.productClass ?? "",
         commodity: prod.commodity ?? "",
         isHazmat: prod.isHazmat ?? false,
-        hazmatContact: prod.hazmatContact ?? "",
+        hazmatContact: prod.hazmatContactName ?? prod.hazmatContact ?? "",
+        hazmatUN: prod.hazmatUN ?? "",
+        hazmatProperShippingName: prod.hazmatProperShippingName ?? "",
+        hazmatClass: prod.hazmatClass ?? "",
+        hazmatGroup: prod.hazmatGroup ?? "",
+        hazmatPhone: prod.hazmatPhone ?? "",
         length: prod.length ?? 0,
         height: prod.height ?? 0,
         weight: prod.weight ?? 0,
@@ -534,7 +565,12 @@ export const searchCustomerProducts = createAsyncThunk<
         productClass: product.productClass ?? "",
         commodity: product.commodity ?? "",
         isHazmat: product.hazmat ?? product.isHazmat ?? false,
-        hazmatContact: product.hazmatContact ?? "",
+        hazmatContact: product.hazmatContactName ?? product.hazmatContact ?? "",
+        hazmatUN: product.hazmatUN ?? "",
+        hazmatProperShippingName: product.hazmatProperShippingName ?? "",
+        hazmatClass: product.hazmatClass ?? "",
+        hazmatGroup: product.hazmatGroup ?? "",
+        hazmatPhone: product.hazmatPhone ?? "",
         length: product.length ?? 0,
         height: product.height ?? 0,
         weight: product.weight ?? 0,

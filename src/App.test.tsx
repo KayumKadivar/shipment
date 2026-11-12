@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { configureStore } from "@reduxjs/toolkit";
+import { theme } from "antd";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { Link, MemoryRouter, useLocation } from "react-router-dom";
@@ -11,7 +12,7 @@ import customerLocationReducer from "./store/customerLocationSlice";
 import customerProductReducer from "./store/customerProductSlice";
 
 vi.mock("./components/Navbar.tsx", () => ({ default: () => <nav>Navbar</nav> }));
-vi.mock("./components/Sidebar.tsx", () => ({ default: () => <aside>Sidebar</aside> }));
+vi.mock("./components/Sidebar.tsx", () => ({ default: () => <aside>Sidebar<ThemeProbe /></aside> }));
 vi.mock("./pages/Login.tsx", () => ({ default: ({ onLogin }: { onLogin: () => void }) => (
   <main aria-label="Login page"><button onClick={onLogin}>Complete login transition</button></main>
 ) }));
@@ -31,6 +32,14 @@ vi.mock("./store/paymentTermSlice", () => ({ fetchPaymentTerm: () => ({ type: "t
 function LocationProbe() {
   const location = useLocation();
   return <output aria-label="Current URL">{location.pathname + location.search + location.hash}</output>;
+}
+
+/** Exposes resolved theme colors from the application's real configuration provider. */
+function ThemeProbe() {
+  const { token } = theme.useToken();
+  return <>{(["colorPrimary", "colorInfo", "colorError"] as const).map((name) => (
+    <output key={name} aria-label={name}>{token[name]}</output>
+  ))}</>;
 }
 
 /** Creates a fresh Redux runtime for each authentication scenario. */
@@ -60,6 +69,15 @@ afterEach(() => {
 });
 
 describe("application authentication routing", () => {
+  it.each(["colorPrimary", "colorInfo", "colorError"])(
+    "App_whenAuthenticated_suppliesNewRedFor%s",
+    (name) => {
+      const store = createTestStore();
+      store.dispatch(login({ token: "test-token" }));
+      renderApp(store, "/shipments");
+      expect(screen.getByLabelText(name).textContent).toBe("#a31d14");
+    },
+  );
   it.each(["/quotes", "/shipments/LOAD-1?tab=load#products", "/?previous=quotes#load"])(
     "App_whenLoggedOutAtProtectedUrl_showsLoginAndReplacesUrlWithRoot_%s",
     async (path) => {

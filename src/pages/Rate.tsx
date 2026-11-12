@@ -399,7 +399,11 @@ export const getGrossSellAmount = (rate: CarrierRate): string | number | undefin
 };
 
 export const getChargeSellDetails = (rate: CarrierRate) => {
-  if (rate.grossSell !== undefined || rate.fuelSell !== undefined) {
+  if (
+    rate.grossSell !== undefined ||
+    rate.fuelSell !== undefined ||
+    rate.discountSell !== undefined
+  ) {
     return {
       grossSell: rate.grossSell ?? rate.grossCharge ?? 0,
       discountSell: rate.discountSell ?? (rate.isNetSellActive ? 0 : (rate.discount ?? 0)),

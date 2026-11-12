@@ -1,6 +1,6 @@
 import axios, { AxiosHeaders, type AxiosResponse } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { API_BASE_URL, DEFAULT_CLIENT_CODE, SRV_TOKEN } from "../config/apiConfig";
+import { API_BASE_URL, SRV_TOKEN } from "../config/apiConfig";
 import type {
   ShipmentApiResponse,
   ShipmentDetails,
@@ -97,9 +97,10 @@ describe("shipment API configuration", () => {
       undefined,
     );
 
+    const targetCode = "DEVTS";
     expect(action.type).toBe("shipment/fetchShipments/fulfilled");
     expect(getRequest).toHaveBeenCalledWith(
-      `${API_BASE_URL}/Shipment/GetShipmentsByClientCode/${encodeURIComponent(DEFAULT_CLIENT_CODE)}`,
+      `${API_BASE_URL}/Shipment/GetShipmentsByClientCode/${encodeURIComponent(targetCode)}`,
       {
         params: { pageNumber: 2, pageSize: 25 },
         headers: { Accept: "text/plain" },

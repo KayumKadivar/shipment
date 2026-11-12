@@ -15,6 +15,7 @@ import { useRef, useState } from "react";
 import CountrySelect from "../components/CountrySelect";
 import { usePostalLookup } from "../hooks/usePostalLookup";
 import { formatPhoneNumber } from "../utils/formatPhoneNumber";
+import { TIME_OPTIONS } from "../utils/locationTimeOptions";
 // import { useAppSelector } from "../app/hooks";
 import type {
   CustomerLocation,
@@ -52,18 +53,6 @@ interface PostalOption {
 //   "SOUTHEAST",
 //   "WEST COAST",
 // ];
-
-const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
-  const hour = Math.floor(index / 2);
-  const minutes = index % 2 === 0 ? "00" : "30";
-  const displayHour = hour % 12 || 12;
-  const period = hour < 12 ? "AM" : "PM";
-
-  return {
-    value: `${String(hour).padStart(2, "0")}:${minutes}`,
-    label: `${displayHour}:${minutes} ${period}`,
-  };
-});
 
 function getToday() {
   return new Intl.DateTimeFormat("en-US", {

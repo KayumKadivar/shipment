@@ -30,7 +30,6 @@ import { API_BASE_URL } from "../../config/apiConfig";
 import ChargePricingControls from "./ChargePricingControls";
 import {
   applyChargePricing,
-  calculateChargeMarkup,
   chargePricingFromConfig,
   defaultChargePricing,
   type ChargePricingDraft,
@@ -742,9 +741,7 @@ function Charges({
   const handleApplyMarkup = () => {
     if (liabilityDraft || insuranceDraft || lineEditor) return;
     pricingTouched.current = true;
-    const lines = sourceLines;
-    const increments = calculateChargeMarkup(lines, pricingDraft);
-    setCharges((current) => ({ ...current, lines: applyChargePricing(lines, pricingDraft, increments) }));
+    setCharges((current) => ({ ...current, lines: applyChargePricing(sourceLines, pricingDraft) }));
     setIsPricingDirty(false);
     onChangeCommitted();
   };

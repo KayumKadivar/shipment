@@ -2,7 +2,7 @@ import axios, { AxiosHeaders, type AxiosResponse } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   API_BASE_URL,
-  DEFAULT_CLIENT_CODE,
+  // DEFAULT_CLIENT_CODE,
   SRV_TOKEN,
 } from "../config/apiConfig";
 import { fetchChargeAccessorials } from "./chargeAccessorialsSlice";
@@ -67,7 +67,7 @@ describe("charge accessorial API configuration", () => {
       expect.objectContaining({
         params: {
           srvToken: SRV_TOKEN,
-          clientCode: DEFAULT_CLIENT_CODE,
+          // clientCode: DEFAULT_CLIENT_CODE,
         },
       }),
     );

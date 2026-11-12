@@ -14,6 +14,7 @@ import {
 import CountrySelect from "../components/CountrySelect";
 import { usePostalLookup } from "../hooks/usePostalLookup";
 import { formatPhoneNumber } from "../utils/formatPhoneNumber";
+import { TIME_OPTIONS } from "../utils/locationTimeOptions";
 import {
   Button,
   Checkbox,
@@ -1029,6 +1030,12 @@ function CustomerLocationPage({
               name='email'
               rules={[{ type: "email", message: "Enter a valid email address" }]}>
               <Input />
+            </Form.Item>
+            <Form.Item label='Open Time' name='openTime'>
+              <Select placeholder='-- Select --' allowClear options={TIME_OPTIONS} />
+            </Form.Item>
+            <Form.Item label='Close Time' name='closeTime' style={{ gridColumn: "-2 / -1" }}>
+              <Select placeholder='-- Select --' allowClear options={TIME_OPTIONS} />
             </Form.Item>
             {/* <Form.Item label='Group' name='group'>
               <Input />

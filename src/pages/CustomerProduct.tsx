@@ -53,6 +53,7 @@ import type {
   ProductView,
 } from "../types/customerProduct.types";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
+import ProductHazmatFields from "../components/ProductHazmatFields";
 
 interface CustomerProductPageProps {
   products: CustomerProduct[];
@@ -183,6 +184,7 @@ function CustomerProductPage({
     useState<CustomerProduct | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [form] = Form.useForm<ProductFormValues>();
+  const isHazmat = Form.useWatch("isHazmat", form) ?? false;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [messageApi, messageContext] = message.useMessage();
   const [modalApi, modalContext] = Modal.useModal();
@@ -333,6 +335,11 @@ function CustomerProductPage({
   };
 
   const openEditForm = async (product: CustomerProduct) => {
+    form.resetFields();
+    form.setFieldsValue({
+      hazmatUN: "", hazmatProperShippingName: "", hazmatClass: "",
+      hazmatGroup: "", hazmatPhone: "", hazmatContact: "",
+    });
     try {
       messageApi.loading({ content: "Fetching product details...", key: "fetchProd" });
 
@@ -359,23 +366,49 @@ function CustomerProductPage({
   };
 
   const saveProduct = async () => {
-    const values = await form.validateFields();
-    if (!editingProduct) return;
+    try {
+      const hazmatFieldNames = [
+        "hazmatUN", "hazmatProperShippingName", "hazmatClass",
+        "hazmatGroup", "hazmatPhone", "hazmatContact",
+      ];
+      const values = await form.validateFields(
+        form.getFieldValue("isHazmat")
+          ? undefined
+          : Object.keys(form.getFieldsValue()).filter(
+              (name) => !hazmatFieldNames.includes(name),
+            ),
+      );
+      if (!editingProduct) return;
 
-    setProducts((current) =>
-      current.map((product) =>
-        product.key === editingProduct.key ? { ...product, ...values } : product,
-      ),
-    );
-    messageApi.success("Product updated");
-    closeForm();
-
-    dispatch(
-      updateCustomerProduct({
+      const updatedValues = {
         ...values,
+        hazmatUN: values.isHazmat ? values.hazmatUN ?? "" : "",
+        hazmatProperShippingName: values.isHazmat
+          ? values.hazmatProperShippingName ?? "" : "",
+        hazmatClass: values.isHazmat ? values.hazmatClass ?? "" : "",
+        hazmatGroup: values.isHazmat ? values.hazmatGroup ?? "" : "",
+        hazmatPhone: values.isHazmat ? values.hazmatPhone ?? "" : "",
+        hazmatContact: values.isHazmat ? values.hazmatContact ?? "" : "",
+      };
+
+      await dispatch(updateCustomerProduct({
+        ...updatedValues,
         productID: Number(editingProduct.productID),
-      })
-    );
+      })).unwrap();
+
+      setProducts((current) =>
+        current.map((product) =>
+          product.key === editingProduct.key
+            ? { ...product, ...updatedValues }
+            : product,
+        ),
+      );
+      messageApi.success("Product updated");
+      closeForm();
+    } catch (error: unknown) {
+      if (error && typeof error === "object" && "errorFields" in error) return;
+      messageApi.error(getApiErrorMessage(error, "Failed to update product."));
+    }
   };
 
   const confirmDelete = () => {
@@ -870,34 +903,39 @@ function CustomerProductPage({
                 }))}
               />
             </Form.Item>
-            <Form.Item label='Hazmat' name='isHazmat' valuePropName='checked'>
-              <Switch checkedChildren='Yes' unCheckedChildren='No' />
-            </Form.Item>
-            <Form.Item label='Length' name='length'>
-              <InputNumber min={0} precision={0} />
-            </Form.Item>
-            <Form.Item label='Height' name='height'>
-              <InputNumber min={0} precision={0} />
-            </Form.Item>
-            <Form.Item 
-              label='Weight' 
-              name='weight'
-              required
-              rules={[
-                { required: true, message: "Weight is required" },
-                {
-                  validator: (_, value) =>
-                    value > 0
-                      ? Promise.resolve()
-                      : Promise.reject(new Error("Weight must be greater than 0")),
-                },
-              ]}
-            >
-              <InputNumber min={0} precision={0} />
-            </Form.Item>
-            <Form.Item label='Width' name='width'>
-              <InputNumber min={0} precision={0} />
-            </Form.Item>
+            <div>
+              <Form.Item label='Hazmat' name='isHazmat' valuePropName='checked'>
+                <Switch checkedChildren='Yes' unCheckedChildren='No' />
+              </Form.Item>
+              <ProductHazmatFields visible={isHazmat} />
+            </div>
+            <div>
+              <Form.Item label='Length' name='length'>
+                <InputNumber min={0} precision={0} />
+              </Form.Item>
+              <Form.Item label='Height' name='height'>
+                <InputNumber min={0} precision={0} />
+              </Form.Item>
+              <Form.Item
+                label='Weight'
+                name='weight'
+                required
+                rules={[
+                  { required: true, message: "Weight is required" },
+                  {
+                    validator: (_, value) =>
+                      value > 0
+                        ? Promise.resolve()
+                        : Promise.reject(new Error("Weight must be greater than 0")),
+                  },
+                ]}
+              >
+                <InputNumber min={0} precision={0} />
+              </Form.Item>
+              <Form.Item label='Width' name='width'>
+                <InputNumber min={0} precision={0} />
+              </Form.Item>
+            </div>
           </div>
         </Form>
       </Modal>

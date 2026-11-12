@@ -114,9 +114,76 @@ const normalizedMatchingRate: ShipmentRerateRate = {
   ],
 };
 
+/** Distinct buy and sell amounts reproduce the SAIA rerate response. */
+const sellRate = {
+  ...matchingRate,
+  carrierName: "SAIA LTL FREIGHT",
+  scac: "SAIA",
+  grossCharge: 3474.72,
+  discount: 3320.09,
+  fuelSurcharge: 148.02,
+  totalShipmentCost: 407.15,
+  sellGrossCharge: 3513.38,
+  sellDiscount: 3320.09,
+  sellFuelSurcharge: 185.03,
+  sellTotalShipmentCost: 482.81,
+};
+
+/** Optional sell fields normalized independently of buy amounts. */
+const sellFields = [
+  "sellGrossCharge", "sellDiscount", "sellFuelSurcharge", "sellTotalShipmentCost",
+] as const;
+
 describe("shipment rerate API", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("rerateShipment_whenSellAmountsAreReturned_preservesSellAmounts", async () => {
+    vi.spyOn(axios, "post").mockResolvedValue(createAxiosResponse({
+      isSuccess: true, data: { leastCostCarriers: [sellRate] },
+    }));
+    const action = await rerateShipment(request)(vi.fn(), vi.fn(), undefined);
+    expect(action.payload).toEqual([expect.objectContaining({
+      grossCharge: 3474.72, discount: 3320.09, fuelSurcharge: 148.02, totalShipmentCost: 407.15,
+      sellGrossCharge: 3513.38, sellDiscount: 3320.09, sellFuelSurcharge: 185.03,
+      sellTotalShipmentCost: 482.81, transitDays: 2,
+    })]);
+  });
+
+  it.each(sellFields)("rerateShipment_when%sIsZero_preservesZeroValue", async (field) => {
+    vi.spyOn(axios, "post").mockResolvedValue(createAxiosResponse({
+      isSuccess: true, data: { leastCostCarriers: [{ ...sellRate, [field]: 0 }] },
+    }));
+    const action = await rerateShipment(request)(vi.fn(), vi.fn(), undefined);
+    expect(action.payload).toEqual([expect.objectContaining({ [field]: 0 })]);
+  });
+
+  it.each([null, undefined])("rerateShipment_whenSellAmountsAre%j_preservesBuyOnlySupport", async (value) => {
+    const sellAmounts = Object.fromEntries(sellFields.map((field) => [field, value]));
+    vi.spyOn(axios, "post").mockResolvedValue(createAxiosResponse({
+      isSuccess: true, data: { leastCostCarriers: [{ ...matchingRate, ...sellAmounts }] },
+    }));
+    const action = await rerateShipment(request)(vi.fn(), vi.fn(), undefined);
+    expect(action.type).toBe("shipmentRerate/rerateShipment/fulfilled");
+    expect(action.payload).toEqual([normalizedMatchingRate]);
+  });
+
+  it.each(sellFields)("rerateShipment_when%sIsNumericText_normalizesTheAmount", async (field) => {
+    vi.spyOn(axios, "post").mockResolvedValue(createAxiosResponse({
+      isSuccess: true, data: { leastCostCarriers: [{ ...sellRate, [field]: "12.34" }] },
+    }));
+    const action = await rerateShipment(request)(vi.fn(), vi.fn(), undefined);
+    expect(action.payload).toEqual([expect.objectContaining({ [field]: 12.34 })]);
+  });
+
+  it.each(sellFields)("rerateShipment_when%sIsInvalid_rejectsTheResponse", async (field) => {
+    vi.spyOn(axios, "post").mockResolvedValue(createAxiosResponse({
+      isSuccess: true, data: { leastCostCarriers: [{ ...sellRate, [field]: "invalid" }] },
+    }));
+    const action = await rerateShipment(request)(vi.fn(), vi.fn(), undefined);
+    expect(action.type).toBe("shipmentRerate/rerateShipment/rejected");
+    expect(action.payload).toMatch(/The rating response contains an invalid sell/);
   });
 
   it("rerateShipment_whenInputHasExtraMetadata_postsOnlyTheWireDto", async () => {

@@ -46,6 +46,8 @@ type ClientLookupApiResponse =
   | ApiResponse<ClientApiItem[] | ClientApiItem>;
 
 type LocationApiItem = {
+  openTime?: string | null;
+  closeTime?: string | null;
   locationId?: number;
   locationID?: number;
   locationName?: string;
@@ -380,6 +382,8 @@ export const updateCustomerLocation = createAsyncThunk(
         contactName: payloadData.contactName || "",
         contactPhone: payloadData.phone || (payloadData as any).contactPhone || "",
         contactEmail: payloadData.email || (payloadData as any).contactEmail || "",
+        openTime: payloadData.openTime?.trim() || null,
+        closeTime: payloadData.closeTime?.trim() || null,
         isActive: payloadData.isActive ?? true,
         createdBy: "",
         createdDate: new Date().toISOString(),
@@ -578,6 +582,8 @@ export const getAllCustomerLocations = createAsyncThunk<
           modifiedDate: loc.modifiedDate ?? "",
           group: loc.group ?? "STANDARD",
           locationType: (loc.locationType as LocationType) ?? "All",
+          openTime: loc.openTime ?? undefined,
+          closeTime: loc.closeTime ?? undefined,
         };
       });
 
@@ -675,6 +681,8 @@ export const getCustomerLocationByID = createAsyncThunk<
         group: loc.group ?? "STANDARD",
 
         locationType: (loc.locationType as LocationType) ?? "All",
+        openTime: loc.openTime ?? undefined,
+        closeTime: loc.closeTime ?? undefined,
       };
 
       console.log(

@@ -189,7 +189,7 @@
 
 .shipment-product-table__head span em {
   font-style: normal;
-  color: #df2027;
+  color: #a31d14;
   margin-left: 2px;
   font-weight: 700;
 }
@@ -608,19 +608,19 @@
   background-color: rgba(82, 196, 26, 0.12);
 }
 .rate-cancel-btn {
-  color: #ff4d4f;
+  color: #a31d14;
   font-size: 14px;
   padding: 4px 5px;
 }
 .rate-cancel-btn:hover {
-  color: #ff4d4f;
-  background-color: rgba(255, 77, 79, 0.12);
+  color: #a31d14;
+  background-color: rgba(163, 29, 20, 0.12);
 }
 .rate-remove-btn {
   background: none;
   border: none;
   cursor: pointer;
-  color: #ff4d4f;
+  color: #a31d14;
   padding: 4px 4px;
   font-size: 13px;
   line-height: 1;
@@ -628,8 +628,8 @@
   transition: all 0.15s ease;
 }
 .rate-remove-btn:hover {
-  color: #cf1322;
-  background-color: rgba(255, 77, 79, 0.1);
+  color: #a31d14;
+  background-color: rgba(163, 29, 20, 0.1);
 }
 .rate-inline-edit-input,
 .rate-inline-edit-input.ant-input-affix-wrapper,
@@ -683,7 +683,7 @@
   border-top: none !important;
   border-left: none !important;
   border-right: none !important;
-  border-bottom: 2px solid #ff4d4f !important;
+  border-bottom: 2px solid #a31d14 !important;
   box-shadow: none !important;
 }
 
@@ -761,8 +761,8 @@
 .ant-input.border-red-highlight,
 .ant-input.border-red-highlight:hover,
 .ant-input.border-red-highlight:focus {
-  border-color: #ff4d4f !important;
-  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2) !important;
+  border-color: #a31d14 !important;
+  box-shadow: 0 0 0 2px rgba(163, 29, 20, 0.2) !important;
 }
 
 
@@ -785,7 +785,7 @@
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  background-color: #d71920;
+  background-color: #a31d14;
   color: #ffffff;
   font-size: 11px;
   font-weight: 700;
@@ -840,7 +840,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #d71920;
+  color: #a31d14;
   margin-bottom: 6px;
   display: flex;
   align-items: center;
@@ -895,7 +895,7 @@
 .rate-empty-state .ant-spin-dot-item,
 .carrier-modal-loading .ant-spin-dot-item,
 .ant-spin-dot-item {
-  background-color: #d71920 !important;
+  background-color: #a31d14 !important;
 }
 
 
@@ -1160,7 +1160,7 @@
 
 .hazmat-edit-link {
   font-size: 11px;
-  color: #c9302c;
+  color: #a31d14;
   cursor: pointer;
   font-weight: 600;
   text-decoration: underline;
@@ -1168,7 +1168,7 @@
 }
 
 .hazmat-edit-link:hover {
-  color: #a02622;
+  color: #a31d14;
 }
 
 .pcf-density-input {
@@ -1213,7 +1213,7 @@
 }
 
 .rate-cell-loss {
-  color: #ff4d4f !important;
+  color: #a31d14 !important;
   font-weight: 600;
 }
 

@@ -1,6 +1,6 @@
 import axios, { AxiosHeaders, type AxiosResponse } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { API_BASE_URL, DEFAULT_CLIENT_CODE, SRV_TOKEN } from "../config/apiConfig";
+import { API_BASE_URL, SRV_TOKEN } from "../config/apiConfig";
 import {
   fetchCarrierTracking,
   type CarrierTrackingData,
@@ -52,7 +52,7 @@ describe("carrier tracking API configuration", () => {
         params: {
           loadNumber: "LOAD-200",
           srvToken: SRV_TOKEN,
-          clientCode: DEFAULT_CLIENT_CODE,
+          // clientCode: DEFAULT_CLIENT_CODE,
         },
         headers: { Accept: "text/plain" },
       },

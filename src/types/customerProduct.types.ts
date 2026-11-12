@@ -8,6 +8,11 @@ export interface CustomerProduct {
   commodity?: string;
   isHazmat: boolean;
   hazmatContact?: string;
+  hazmatUN?: string;
+  hazmatProperShippingName?: string;
+  hazmatClass?: string;
+  hazmatGroup?: string;
+  hazmatPhone?: string;
   length: number;
   height: number;
   weight: number;

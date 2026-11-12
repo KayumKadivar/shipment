@@ -111,6 +111,11 @@ vi.mock("../components/New Shipment/CarrierRateModal", () => ({
             <span>{rate.code}</span>
             <span>{rate.service}</span>
             <span>{rate.price}</span>
+            <output data-testid='modal-charge-values'>{JSON.stringify({
+              price: rate.price, grossCharge: rate.grossCharge, discount: rate.discount,
+              fuelSurcharge: rate.fuelSurcharge, sellPrice: rate.sellPrice,
+              grossSell: rate.grossSell, discountSell: rate.discountSell, fuelSell: rate.fuelSell,
+            })}</output>
             <span>{rate.transitDays} business days</span>
             <span>{rate.estimatedDelivery}</span>
             <span>{rate.quoteExpiry}</span>
@@ -582,6 +587,31 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
     await waitFor(() => expect(rerateShipmentMock).toHaveBeenCalledWith(
       expect.objectContaining({ ratingProfileCode: "CLIENT-BUY-PROFILE", ratingClientCode: "CLIENT-BUY-CODE" }),
     ));
+  });
+
+  it("ShipmentDetail_whenRerateHasSellAmounts_mapsThemToModalFields", async () => {
+    const sellRate = {
+      ...returnedRerate,
+      carrierName: "SAIA LTL FREIGHT", scac: "SAIA", grossCharge: 3474.72,
+      discount: 3320.09, fuelSurcharge: 148.02, totalShipmentCost: 407.15,
+      sellGrossCharge: 3513.38, sellDiscount: 3320.09, sellFuelSurcharge: 185.03,
+      sellTotalShipmentCost: 482.81,
+    };
+    const previousDispatch = dispatchMock.getMockImplementation()!;
+    dispatchMock.mockImplementation((action: { type?: string; payload?: string }) => {
+      if (action.type === "shipmentRerate/request") {
+        rerateState.rates = [sellRate];
+        return Promise.resolve({ type: "shipmentRerate/rerateShipment/fulfilled", payload: [sellRate] });
+      }
+      return previousDispatch(action);
+    });
+    renderShipmentDetail();
+    requestRerate();
+    const dialog = within(await screen.findByRole("dialog", { name: "Quote Results" }));
+    expect(JSON.parse(dialog.getByTestId("modal-charge-values").textContent!)).toEqual({
+      price: 407.15, grossCharge: 3474.72, discount: 3320.09, fuelSurcharge: 148.02,
+      sellPrice: 482.81, grossSell: 3513.38, discountSell: 3320.09, fuelSell: 185.03,
+    });
   });
 
   it("ShipmentDetail_whenRerateSucceeds_opensResultsWithoutChangingCharges", async () => {

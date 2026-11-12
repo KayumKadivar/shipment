@@ -124,6 +124,17 @@ describe("Shipment status cards", () => {
     await waitFor(() => expect(cardValues()).toEqual(Array(8).fill("0")));
   });
 
+  it.each(["Booked", "Pickup Failed"])(
+    "Shipment_whenStatusIs%s_rendersNewRedIndicator",
+    async (status) => {
+      renderShipment();
+      await waitFor(() => expect(cardValues()).toEqual(Array(8).fill("0")));
+      const label = within(screen.getByLabelText("Shipment status counts")).getByText(status);
+      const indicator = label.closest(".shipment-stat-card")?.querySelector("i");
+      expect(indicator?.style.background).toBe("rgb(163, 29, 20)");
+    },
+  );
+
   it("Shipment_whenCountsAreLoading_showsLoadingFeedbackAndPlaceholders", () => {
     vi.mocked(axios.get).mockImplementation((url) => String(url).includes("GetShipmentStatusCounts")
       ? new Promise(() => {}) : Promise.resolve({ data: { isSuccess: true, data: [] } }));

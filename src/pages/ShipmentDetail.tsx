@@ -361,7 +361,7 @@ function ShipmentRouteMap({ shipment }: { shipment: ShipmentDetails }) {
           <PolylineF
             path={route.path}
             options={{
-              strokeColor: "#d71920",
+              strokeColor: "#a31d14",
               strokeOpacity: 0.9,
               strokeWeight: 5,
             }}
@@ -450,6 +450,10 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
         code: rate.scac ?? "",
         service: rate.rateType,
         price: rate.totalShipmentCost,
+        sellPrice: rate.sellTotalShipmentCost,
+        grossSell: rate.sellGrossCharge,
+        discountSell: rate.sellDiscount,
+        fuelSell: rate.sellFuelSurcharge,
         transitDays: rate.transitDays,
         estimatedDelivery: displayRerateDate(rate.deliveryDate),
         logoKind: "image",
@@ -668,7 +672,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
             <Tag className='shipment-detail-pro'>
               Pro&nbsp;&nbsp;{text(shipment.proNumber)}
             </Tag>
-            <Tag color='red' className='shipment-detail-status'>
+            <Tag color='#a31d14' className='shipment-detail-status'>
               • {text(shipment.bolStatus)}
             </Tag>
           </div>
