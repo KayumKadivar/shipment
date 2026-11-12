@@ -31,6 +31,7 @@ import {
   COST_NAME_FUEL,
 } from "../store/customerRateSlice";
 import { fetchClientsAndSubclients } from "../store/customerLocationSlice";
+import { sendQuoteMail } from "../store/quoteSlice";
 import "../components/New Shipment/newshipment.css";
 // import abfLogo from "../assets/image 55.png";
 // import rlLogo from "../assets/image 57.png";
@@ -767,6 +768,7 @@ function Rate() {
   const [sendRecipients, setSendRecipients] = useState<string[]>([""]);
   const [sendRateIds, setSendRateIds] = useState<string[]>([]);
   const [sendValidationError, setSendValidationError] = useState("");
+  const [isSendingRates, setIsSendingRates] = useState(false);
 
   const dynamicOrigin = quoteRequest 
     ? `${quoteRequest.origCity || ''}, ${quoteRequest.origState || ''} ${quoteRequest.origZip || ''}, ${quoteRequest.origCountry || ''}`.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ', ')
@@ -1236,16 +1238,18 @@ function Rate() {
     setSendRecipients([""]);
     setSendRateIds([]);
     setSendValidationError("");
+    setIsSendingRates(false);
   };
 
   const openSendDialog = (rateIds: string[] = []) => {
     setSendRecipients([""]);
     setSendRateIds(rateIds);
     setSendValidationError("");
+    setIsSendingRates(false);
     setIsSendDialogOpen(true);
   };
 
-  const sendRates = () => {
+  const sendRates = async () => {
     const enteredRecipients = sendRecipients
       .map((recipient) => recipient.trim())
       .filter(Boolean);
@@ -1266,10 +1270,41 @@ function Rate() {
       return;
     }
 
-    messageApi.success(
-      `${sendRateIds.length} ${sendRateIds.length === 1 ? "rate" : "rates"} sent to ${enteredRecipients.length} ${enteredRecipients.length === 1 ? "recipient" : "recipients"}`,
+    const quoteReqId = Number(
+      rawQuote?.quoteRequestId || (quoteRequest as any)?.quoteRequestId || 0
     );
-    closeSendDialog();
+
+    const emailIds = enteredRecipients.map((email) => String(email).trim());
+    const quoteResultIds = sendRateIds.map((id) => {
+      const matched = validRates.find((r) => String(r.id) === String(id));
+      const rawId = (matched as any)?.rawQuoteResult?.quoteResultId ?? id;
+      return String(rawId);
+    });
+
+    const payload = {
+      quoteRequestId: quoteReqId,
+      emailIds,
+      quoteResultIds,
+    };
+
+    setIsSendingRates(true);
+    setSendValidationError("");
+
+    try {
+      const result = await dispatch(sendQuoteMail(payload)).unwrap();
+
+      messageApi.success(result.message);
+      closeSendDialog();
+    } catch (error: any) {
+      const errMsg =
+        typeof error === "string"
+          ? error
+          : error?.message || "Failed to send rates. Please try again.";
+      messageApi.error(errMsg);
+      setSendValidationError(errMsg);
+    } finally {
+      setIsSendingRates(false);
+    }
   };
 
   return (
@@ -1615,10 +1650,28 @@ function Rate() {
 
       <SendRatesDialog
         open={isSendDialogOpen}
-        rates={ratesFromStore || []}
+        rates={validRates}
         recipients={sendRecipients}
         selectedRateIds={sendRateIds}
         validationError={sendValidationError}
+        loading={isSendingRates}
+        quoteNumber={
+          rawQuote?.quoteRequestId
+            ? String(rawQuote.quoteRequestId)
+            : (rawQuote as any)?.quoteNumber
+              ? String((rawQuote as any).quoteNumber)
+              : ""
+        }
+        origin={
+          quoteRequest?.origCity && quoteRequest?.origState
+            ? `${quoteRequest.origCity}, ${quoteRequest.origState}`
+            : dynamicOrigin
+        }
+        destination={
+          quoteRequest?.destCity && quoteRequest?.destState
+            ? `${quoteRequest.destCity}, ${quoteRequest.destState}`
+            : dynamicDestination
+        }
         onClose={closeSendDialog}
         onRecipientsChange={(recipients) => {
           setSendRecipients(recipients);

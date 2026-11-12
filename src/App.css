@@ -4673,7 +4673,7 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 14px 18px 12px;
+  /* padding: 14px 18px 12px; */
   border-bottom: 1px solid #e5e5e5;
 }
 
@@ -4725,7 +4725,7 @@ body {
 
 .send-rates-dialog__recipients {
   flex: 0 0 auto;
-  padding: 12px 18px 13px;
+  padding: 12px 0px;
 }
 
 .send-rates-dialog__recipients h3,
@@ -4798,7 +4798,7 @@ body {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  padding: 11px 18px 12px;
+  padding: 12px 0px;
   border-top: 1px solid #e7e7e7;
 }
 

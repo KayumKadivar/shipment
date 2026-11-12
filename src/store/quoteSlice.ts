@@ -136,6 +136,7 @@ interface QuoteState {
   totalCount: number;
   currentQuote: QuoteResult | null;
   loading: boolean;
+  sendingMail: boolean;
   error: string | null;
 }
 
@@ -144,6 +145,7 @@ const initialState: QuoteState = {
   totalCount: 0,
   currentQuote: null,
   loading: false,
+  sendingMail: false,
   error: null,
 };
 
@@ -253,6 +255,59 @@ export const fetchQuoteById = createAsyncThunk<
   }
 );
 
+export interface SendQuoteMailPayload {
+  quoteRequestId: number;
+  emailIds: string[];
+  quoteResultIds: string[];
+}
+
+export const sendQuoteMail = createAsyncThunk<
+  { message: string },
+  SendQuoteMailPayload,
+  { state: RootState; rejectValue: string }
+>(
+  "quote/sendQuoteMail",
+  async (payload: SendQuoteMailPayload, { getState, rejectWithValue }) => {
+    try {
+      const state = typeof getState === "function" ? (getState() as RootState) : undefined;
+      const token = state?.app?.token;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        accept: "application/json, text/plain, */*",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await axios.post<ApiResponse<any>>(
+        `${API_BASE_URL}/SendQuoteMail/SendQuote`,
+        {
+          quoteRequestId: Number(payload.quoteRequestId),
+          emailIds: payload.emailIds.map((email) => String(email).trim()),
+          quoteResultIds: payload.quoteResultIds.map((id) => String(id)),
+        },
+        { headers }
+      );
+
+      if (response.data && response.data.isSuccess === false) {
+        return rejectWithValue(response.data.message || "Failed to send quote mail");
+      }
+
+      return {
+        message:
+          response.data?.message ||
+          `${payload.quoteResultIds.length} ${
+            payload.quoteResultIds.length === 1 ? "rate" : "rates"
+          } sent successfully!`,
+      };
+    } catch (error: unknown) {
+      return rejectWithValue(
+        getApiErrorMessage(error, "Failed to send quote mail")
+      );
+    }
+  }
+);
+
 const quoteSlice = createSlice({
   name: "quote",
   initialState,
@@ -302,6 +357,15 @@ const quoteSlice = createSlice({
           action.payload ||
           action.error.message ||
           "Failed to fetch quote by id";
+      })
+      .addCase(sendQuoteMail.pending, (state) => {
+        state.sendingMail = true;
+      })
+      .addCase(sendQuoteMail.fulfilled, (state) => {
+        state.sendingMail = false;
+      })
+      .addCase(sendQuoteMail.rejected, (state) => {
+        state.sendingMail = false;
       });
   },
 });

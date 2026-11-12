@@ -4,7 +4,8 @@ import {
   SendOutlined,
 } from "@ant-design/icons";
 import { Button, Checkbox, Input, Modal } from "antd";
-import { formatDateTimeDisplay } from "../../pages/Rate";
+import { useMemo } from "react";
+import { formatDateTimeDisplay, CarrierLogo } from "../../pages/Rate";
 
 export type SendRateItem = {
   id: string;
@@ -12,6 +13,10 @@ export type SendRateItem = {
   code: string;
   service: string;
   price: number;
+  grossCharge?: number;
+  grossSell?: number;
+  grossSellAmount?: number;
+  sellPrice?: number;
   transitDays: number;
   estimatedDelivery: string;
   logo?: string;
@@ -24,24 +29,15 @@ type SendRatesDialogProps = {
   recipients: string[];
   selectedRateIds: string[];
   validationError: string;
+  quoteNumber?: string;
+  origin?: string;
+  destination?: string;
+  loading?: boolean;
   onClose: () => void;
   onRecipientsChange: (recipients: string[]) => void;
   onSelectedRateIdsChange: (rateIds: string[]) => void;
   onSubmit: () => void;
 };
-
-function DialogCarrierLogo({ rate }: { rate: SendRateItem }) {
-  if (rate.logoKind === "fedex") {
-    return (
-      <span className='rate-fedex-logo' aria-label='FedEx Freight'>
-        <span>Fed</span>
-        <strong>Ex</strong>
-      </span>
-    );
-  }
-
-  return <img src={rate.logo} alt={`${rate.name} logo`} />;
-}
 
 export default function SendRatesDialog({
   open,
@@ -49,14 +45,31 @@ export default function SendRatesDialog({
   recipients,
   selectedRateIds,
   validationError,
+  quoteNumber,
+  origin,
+  destination,
+  loading = false,
   onClose,
   onRecipientsChange,
   onSelectedRateIdsChange,
   onSubmit,
 }: SendRatesDialogProps) {
-  const allRatesSelected = rates.every((rate) =>
-    selectedRateIds.includes(rate.id),
-  );
+
+  const displayableRates = useMemo(() => {
+    return rates.filter((rate) => (Number(rate.price) || 0) > 0);
+  }, [rates]);
+
+  const allRatesSelected =
+    displayableRates.length > 0 &&
+    displayableRates.every((rate) => selectedRateIds.includes(rate.id));
+
+  const routeText = [origin, destination].filter(Boolean).join(" \u2192 ");
+  const subtitle = [
+    quoteNumber ? `Quote #${quoteNumber}` : "",
+    routeText,
+  ]
+    .filter(Boolean)
+    .join(" \u00b7 ");
 
   const updateRecipient = (index: number, email: string) => {
     onRecipientsChange(
@@ -82,7 +95,7 @@ export default function SendRatesDialog({
 
   const toggleAllRates = () => {
     onSelectedRateIdsChange(
-      allRatesSelected ? [] : rates.map((rate) => rate.id),
+      allRatesSelected ? [] : displayableRates.map((rate) => rate.id),
     );
   };
 
@@ -104,7 +117,7 @@ export default function SendRatesDialog({
         <header className='send-rates-dialog__header'>
           <div>
             <h2>Send freight rates</h2>
-            <p>Quote #60113985278 {"\u00b7"} Chandler, AZ {"\u2192"} Southington, CT</p>
+            {subtitle ? <p>{subtitle}</p> : null}
           </div>
           <button
             type='button'
@@ -164,10 +177,19 @@ export default function SendRatesDialog({
           </div>
 
           <div className='send-rates-dialog__rate-list'>
-            {rates.map((rate) => {
+            {displayableRates.map((rate) => {
               const checked = selectedRateIds.includes(rate.id);
               const serviceLabel =
-                rate.service === "STANDARD RATE" ? "Standard" : "Economy";
+                rate.service === "STANDARD RATE" ? "Standard" : rate.service || "Economy";
+
+              const displayGrossCharge =
+                rate.grossSell !== undefined && rate.grossSell !== null
+                  ? Number(rate.grossSell)
+                  : rate.grossSellAmount !== undefined && rate.grossSellAmount !== null
+                    ? Number(rate.grossSellAmount)
+                    : rate.grossCharge !== undefined && rate.grossCharge !== null
+                      ? Number(rate.grossCharge)
+                      : Number(rate.sellPrice ?? rate.price) || 0;
 
               return (
                 <label
@@ -179,7 +201,7 @@ export default function SendRatesDialog({
                     aria-label={`Include ${rate.name}`}
                   />
                   <span className='send-rates-dialog__logo'>
-                    <DialogCarrierLogo rate={rate} />
+                    <CarrierLogo rate={rate as any} />
                   </span>
                   <span className='send-rates-dialog__rate-details'>
                     <span className='send-rates-dialog__rate-name'>
@@ -191,18 +213,18 @@ export default function SendRatesDialog({
                       {formatDateTimeDisplay(rate.estimatedDelivery)}
                       <em
                         className={
-                          rate.service === "ECONOMY" ? "is-economy" : ""
+                          (rate.service || "").toUpperCase().includes("ECONOMY") ? "is-economy" : ""
                         }>
                         {serviceLabel}
                       </em>
                     </span>
                   </span>
                   <span className='send-rates-dialog__price'>
-                    {rate.price.toLocaleString("en-US", {
+                    {displayGrossCharge.toLocaleString("en-US", {
                       style: "currency",
                       currency: "USD",
                     })}
-                    <small>Net + FSC</small>
+                    <small>Gross Charge</small>
                   </span>
                 </label>
               );
@@ -223,10 +245,14 @@ export default function SendRatesDialog({
             {recipients.length === 1 ? "recipient" : "recipients"}
           </p>
           <div>
-            <Button htmlType='button' onClick={onClose}>
+            <Button htmlType='button' onClick={onClose} disabled={loading}>
               Cancel
             </Button>
-            <Button type='primary' htmlType='submit' icon={<SendOutlined />}>
+            <Button
+              type='primary'
+              htmlType='submit'
+              loading={loading}
+              icon={<SendOutlined />}>
               Send rates
             </Button>
           </div>

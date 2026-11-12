@@ -1,6 +1,6 @@
 import axios, { AxiosHeaders, type AxiosResponse } from "axios";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchQuoteById, fetchQuotes } from "./quoteSlice";
+import { fetchQuoteById, fetchQuotes, sendQuoteMail } from "./quoteSlice";
 
 const createAxiosResponse = <T>(data: T): AxiosResponse<T> => ({
   data,
@@ -48,7 +48,7 @@ describe("quote API behavior", () => {
     );
 
     expect(action.type).toBe("quote/fetchQuotes/fulfilled");
-    expect(action.payload).toEqual([quote]);
+    expect(action.payload).toEqual({ quotes: [quote], totalCount: 1 });
   });
 
   it("fetchQuoteById_whenAxiosFails_returnsTheServerMessage", async () => {
@@ -66,5 +66,31 @@ describe("quote API behavior", () => {
 
     expect(action.type).toBe("quote/fetchQuoteById/rejected");
     expect(action.payload).toBe("Quote missing");
+  });
+
+  it("sendQuoteMail_whenApiSucceeds_dispatchesFulfilledWithMessage", async () => {
+    vi.spyOn(axios, "post").mockResolvedValue(
+      createAxiosResponse({ isSuccess: true, message: "Quote mail sent successfully!" }),
+    );
+
+    const action = await sendQuoteMail({
+      quoteRequestId: 123,
+      emailIds: ["test@example.com"],
+      quoteResultIds: ["456"],
+    })(vi.fn(), () => ({ app: { token: "fake-token" } } as any), undefined);
+
+    expect(action.type).toBe("quote/sendQuoteMail/fulfilled");
+    expect((action.payload as any).message).toBe("Quote mail sent successfully!");
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringContaining("/SendQuoteMail/SendQuote"),
+      {
+        quoteRequestId: 123,
+        emailIds: ["test@example.com"],
+        quoteResultIds: ["456"],
+      },
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer fake-token" }),
+      })
+    );
   });
 });
