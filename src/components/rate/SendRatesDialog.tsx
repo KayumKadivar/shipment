@@ -182,14 +182,10 @@ export default function SendRatesDialog({
               const serviceLabel =
                 rate.service === "STANDARD RATE" ? "Standard" : rate.service || "Economy";
 
-              const displayGrossCharge =
-                rate.grossSell !== undefined && rate.grossSell !== null
-                  ? Number(rate.grossSell)
-                  : rate.grossSellAmount !== undefined && rate.grossSellAmount !== null
-                    ? Number(rate.grossSellAmount)
-                    : rate.grossCharge !== undefined && rate.grossCharge !== null
-                      ? Number(rate.grossCharge)
-                      : Number(rate.sellPrice ?? rate.price) || 0;
+              const displayPrice =
+                rate.sellPrice !== undefined && rate.sellPrice !== null
+                  ? Number(rate.sellPrice)
+                  : Number(rate.price) || 0;
 
               return (
                 <label
@@ -220,11 +216,11 @@ export default function SendRatesDialog({
                     </span>
                   </span>
                   <span className='send-rates-dialog__price'>
-                    {displayGrossCharge.toLocaleString("en-US", {
+                    {displayPrice.toLocaleString("en-US", {
                       style: "currency",
                       currency: "USD",
                     })}
-                    <small>Gross Charge</small>
+                    <small>Total</small>
                   </span>
                 </label>
               );
