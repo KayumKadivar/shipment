@@ -178,6 +178,58 @@ export const fetchShipmentByLoadNumber = createAsyncThunk<
   }
 });
 
+export const copyShipment = createAsyncThunk<
+  { message: string; data?: any },
+  string,
+  { state: RootState; rejectValue: string }
+>("shipment/copyShipment", async (bolNo: string, { getState, rejectWithValue }) => {
+  try {
+    const state = typeof getState === "function" ? (getState() as RootState) : undefined;
+    const token = state?.app?.token;
+    const headers: Record<string, string> = {
+      Accept: "application/json, text/plain, */*",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const trimmedBolNo = bolNo.trim();
+    const response = await axios.post(
+      `${API_BASE_URL}/CopyShipment/CopyShipment`,
+      { bolNo: trimmedBolNo },
+      {
+        params: { bolNo: trimmedBolNo },
+        headers,
+      }
+    );
+
+    if (response.data && response.data.isSuccess === false) {
+      return rejectWithValue(
+        response.data.message || `Failed to copy shipment ${bolNo}.`
+      );
+    }
+
+    return {
+      message:
+        (typeof response.data === "string" ? response.data : response.data?.message) ||
+        "Shipment copied successfully!",
+      data: response.data?.data ?? response.data,
+    };
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+          error.response?.data?.title ||
+          error.message ||
+          `Failed to copy shipment ${bolNo}.`
+      );
+    }
+    return rejectWithValue(
+      error instanceof Error ? error.message : `Failed to copy shipment ${bolNo}.`
+    );
+  }
+});
+
 const shipmentSlice = createSlice({
   name: "shipment",
   initialState,

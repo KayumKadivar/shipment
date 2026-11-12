@@ -104,6 +104,7 @@ function QuoteRateDetail() {
     numericNetSellRate: 0,
   });
   const [carrierMarkupMap, setCarrierMarkupMap] = useState<Record<string, AppliedMarkupConfig>>({});
+  const [hasUnsavedMarkup, setHasUnsavedMarkup] = useState(false);
 
   const getRateMarkupConfig = (rate: CarrierRate): AppliedMarkupConfig => {
     const nameKey = (rate.name || "").trim().toLowerCase();
@@ -164,6 +165,7 @@ function QuoteRateDetail() {
 
     setIsMarkupRateDirty(false);
     setIsNetSellDirty(false);
+    setHasUnsavedMarkup(true);
 
     if (isMarkupEnabled && (numRate > 0 || numMin > 0)) {
       messageApi.success("Applied " + markupDropdownOption + " markup");
@@ -487,7 +489,7 @@ function QuoteRateDetail() {
 
   const [isSavingQuote, setIsSavingQuote] = useState(false);
 
-  const handleSaveQuote = async () => {
+  const performSaveQuote = async (showSuccessToast = true): Promise<boolean> => {
     setIsSavingQuote(true);
     try {
       const marginTypeToPass = appliedMarkupConfig.isNetSellRateEnabled
@@ -546,19 +548,23 @@ function QuoteRateDetail() {
         await dispatch(fetchQuoteById(reference)).unwrap();
       }
 
-      messageApi.success("Quote saved successfully!");
-
-      
-
+      setHasUnsavedMarkup(false);
+      if (showSuccessToast) {
+        messageApi.success("Quote saved successfully!");
+      }
+      return true;
     } catch (error: unknown) {
       const errorMsg =
         (error as any)?.message ||
         (typeof error === "string" ? error : "Failed to save quote.");
       messageApi.error(errorMsg);
+      return false;
     } finally {
       setIsSavingQuote(false);
     }
   };
+
+  const handleSaveQuote = () => performSaveQuote(true);
 
 
   const handleShipIt = (rate: CarrierRate) => {
@@ -660,25 +666,33 @@ function QuoteRateDetail() {
       return;
     }
 
-    const quoteReqId = Number(apiQuote?.quoteRequestId || reference || 0);
-
-    const emailIds = enteredRecipients.map((email) => String(email).trim());
-    const quoteResultIds = sendRateIds.map((id) => {
-      const matched = validRates.find((r) => String(r.id) === String(id));
-      const rawId = (matched as any)?.rawQuoteResult?.quoteResultId ?? id;
-      return String(rawId);
-    });
-
-    const payload = {
-      quoteRequestId: quoteReqId,
-      emailIds,
-      quoteResultIds,
-    };
-
     setIsSendingRates(true);
     setSendValidationError("");
 
     try {
+      if (hasUnsavedMarkup) {
+        const saved = await performSaveQuote(false);
+        if (!saved) {
+          setSendValidationError("Failed to save quote. Cannot send rates.");
+          return;
+        }
+      }
+
+      const quoteReqId = Number(apiQuote?.quoteRequestId || reference || 0);
+
+      const emailIds = enteredRecipients.map((email) => String(email).trim());
+      const quoteResultIds = sendRateIds.map((id) => {
+        const matched = validRates.find((r) => String(r.id) === String(id));
+        const rawId = (matched as any)?.rawQuoteResult?.quoteResultId ?? id;
+        return String(rawId);
+      });
+
+      const payload = {
+        quoteRequestId: quoteReqId,
+        emailIds,
+        quoteResultIds,
+      };
+
       const result = await dispatch(sendQuoteMail(payload)).unwrap();
 
       messageApi.success(result.message);
