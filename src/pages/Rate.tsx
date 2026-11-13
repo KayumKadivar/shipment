@@ -609,11 +609,11 @@ export function CarrierCard({
             {showBuyCharges && (
               <div className='rate-detail-charges'>
                 <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {rate.grossCharge}</dt>
-                <dt>Discount : {rate.isNetSellActive ? 0 : rate.discount}</dt>
-                <dt>Fuel Surcharge : {rate.isNetSellActive ? 0 : rate.fuelSurcharge}</dt>
+                <dt>Discount : {rate.discount}</dt>
+                <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
                 {rate.accessorialCharges?.map((charge, idx) => (
                   <dt key={idx}>
-                    {charge.accessorialDescription} : {rate.isNetSellActive ? 0 : charge.accessorialCharge}
+                    {charge.accessorialDescription} : {charge.accessorialCharge}
                   </dt>
                 ))}
               </div>

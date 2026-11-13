@@ -734,6 +734,11 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     const ppsFuel =
       isMarkupActive || isNetSellActive ? appliedMarkupConfig.ppsFuel || 0 : 0;
 
+    const rawTotalBuy = rawItems.reduce((acc, item) => {
+      const overrideBuy = editedAmounts[item.id]?.buyAmount;
+      return acc + (overrideBuy !== undefined ? overrideBuy : item.buyAmount);
+    }, 0);
+
     return rawItems.map((item) => {
       const isDiscount = isDiscountCharge(item.code);
       const isFreight = !isDiscount && isFreightCharge(item.code);
@@ -752,10 +757,9 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
         if (isFreight) {
           isEligible = true;
           calculatedCust = appliedMarkupConfig.numericNetSellRate;
-          calculatedMarkup = calculatedCust - currentBuy;
+          calculatedMarkup = calculatedCust - rawTotalBuy;
         } else {
           isEligible = false;
-          currentBuy = 0;
           calculatedCust = 0;
           calculatedMarkup = 0;
         }
@@ -778,14 +782,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
             ? overrideCust
             : calculatedCust;
       const buyAmt =
-        isNetSellActive && !isFreight
-          ? 0
-          : overrideBuy !== undefined
-            ? overrideBuy
-            : currentBuy;
+        overrideBuy !== undefined
+          ? overrideBuy
+          : currentBuy;
       const finalMarkup = isNetSellActive
         ? isFreight
-          ? custAmt - buyAmt
+          ? appliedMarkupConfig.numericNetSellRate - rawTotalBuy
           : 0
         : calculatedMarkup;
 
