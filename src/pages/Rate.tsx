@@ -512,6 +512,28 @@ export function CarrierCard({
       : (storeIsCorporate ??
         false);
 
+  const grossBuy = Number(rate.grossCharge) || 0;
+  const grossSell = Number(sellDetails.grossSell) || 0;
+  const markupGross = rate.ppsFreight !== undefined
+    ? rate.ppsFreight
+    : Math.round((grossSell - grossBuy) * 100) / 100;
+
+  const fuelBuy = Number(rate.fuelSurcharge) || 0;
+  const fuelSell = Number(sellDetails.fuelSell) || 0;
+  const markupFuel = rate.ppsFuel !== undefined
+    ? rate.ppsFuel
+    : Math.round((fuelSell - fuelBuy) * 100) / 100;
+
+  const accessorialsMarkup = (rate.accessorialCharges || []).map((charge, idx) => {
+    const buyCharge = Number(charge.accessorialCharge) || 0;
+    const sellCharge = Number(sellDetails.accessorialsSell?.[idx]?.accessorialCharge ?? buyCharge);
+    const diff = Math.round((sellCharge - buyCharge) * 100) / 100;
+    return {
+      description: charge.accessorialDescription || "Accessorial",
+      markup: diff !== 0 ? diff : "0",
+    };
+  });
+
   return (
     <article
       className={`rate-card ${checked ? "rate-card--selected" : ""}`}
@@ -602,6 +624,14 @@ export function CarrierCard({
               <dt>Fuel Surcharge : {sellDetails.fuelSell}</dt>
               {sellDetails.accessorialsSell?.map((charge, idx) => (
                 <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
+              ))}
+            </div>
+            <div className='rate-detail-charges rate-detail-charges-markup'>
+              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {markupGross}</dt>
+              <dt>Discount : -</dt>
+              <dt>Fuel Surcharge : {markupFuel}</dt>
+              {accessorialsMarkup.map((charge, idx) => (
+                <dt key={idx}>{charge.description} : {charge.markup}</dt>
               ))}
             </div>
           </dl>

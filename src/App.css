@@ -5812,8 +5812,8 @@ body {
 
 .rate-card__details {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 7px 22px;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 7px 20px;
   margin: 11px 0 0;
 }
 
@@ -5821,43 +5821,11 @@ body {
   min-width: 0;
 }
 
-.rate-detail-expiry {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.rate-detail-transit {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.rate-detail-delivery {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.rate-detail-liability-new {
-  grid-column: 3;
-  grid-row: 1;
-}
-
-.rate-detail-liability-used {
-  grid-column: 3;
-  grid-row: 2;
-}
-
-.rate-detail-charges {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.rate-detail-accessorials {
-  grid-column: 3;
-  grid-row: 1;
-}
-
-.rate-detail-charges-sell {
-  grid-column: 3;
+.rate-detail-expiry,
+.rate-detail-charges,
+.rate-detail-charges-sell,
+.rate-detail-charges-markup {
+  grid-column: auto;
   grid-row: 1;
 }
 
