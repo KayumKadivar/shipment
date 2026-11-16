@@ -26,6 +26,7 @@ import { formatPhoneNumber } from '../../utils/formatPhoneNumber';
 import { calculatePCF } from '../../utils/calculatePCF';
 import axios from 'axios';
 import { API_BASE_URL, SRV_TOKEN } from '../../config/apiConfig';
+import { createShipmentRateRequest } from '../../lib/createShipmentRateRequest';
 
 const handlingUnitOptions = ["Pallet", "Crate", "Carton", "Drum", "Piece", "Box"].map(
   (value) => ({ value, label: value })
@@ -1182,6 +1183,7 @@ const NewShipment: React.FC = () => {
       markupAmount: rawCarrier.markupAmount ?? rawCarrier.markup,
       ppsFreight: rawCarrier.ppsFreight,
       ppsFuel: rawCarrier.ppsFuel,
+      isNetSellActive: Boolean(rawCarrier.isNetSellActive || String(rawCarrier.markupType || (quote as any)?.marginType || (quote as any)?.marganType || "").toLowerCase().includes("netsell")),
       markupType: rawCarrier.markupType || (quote as any)?.marginType || (quote as any)?.marganType,
       rate: rawCarrier.rate ?? (quote as any)?.marginPercent,
       minimum: rawCarrier.minimum,
@@ -1888,8 +1890,8 @@ const NewShipment: React.FC = () => {
         deliveryDate: toIsoOrCurrent(destinationVals.deliveryDate || destinationVals.expDeliveryDate),
         deliveryTime: destinationVals.delOpenTime || destinationVals.openTime || destinationForm?.getFieldValue?.("delOpenTime") || destinationForm?.getFieldValue?.("openTime") || "08:00 AM",
         carrierBolNo: shipmentInfoValues.carrierBolNo || "",
-        buyRate,
-        sellRate,
+        buyRate: createShipmentRateRequest(buyRate),
+        sellRate: createShipmentRateRequest(sellRate),
         // shipmentMode: shipmentInfoValues.mode || quote?.mode || "LTL",
         equipment: shipmentInfoValues.equipment || "LTL",
         totalLength,

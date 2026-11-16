@@ -69,7 +69,7 @@ describe("createEditShipmentRequest", () => {
 
   it("createEditShipmentRequest_AcceptedRates_PreservesZeroDiscountAndBilledAmounts", () => {
     const result = createEditShipmentRequest({ shipment, detailValues: createShipmentDetailEditValues(shipment), username: null });
-    expect(result.sellRate).toEqual({ freight: 180, fuel: 0, discount: -30, accesorialCostDetails: [
+    expect(result.sellRate).toEqual({ freight: 180, fuel: 0, discount: 30, accesorialCostDetails: [
       { accCode: "LFG", description: "Lift gate", ratedCost: 12, billedCost: 14 },
     ] });
   });
@@ -80,5 +80,19 @@ describe("createEditShipmentRequest", () => {
     expect(result.bolDispatchNotes).not.toBe(shipment.bolDispatchNotes);
     expect(result.accessorials).toEqual(["LFG"]);
     expect(result.accessorials).not.toBe(shipment.accessorials);
+  });
+
+  it("createEditShipmentRequest_NegativeDiscounts_ReturnsAbsoluteAmountsOnBothSides", () => {
+    const result = createEditShipmentRequest({ shipment, detailValues: createShipmentDetailEditValues(shipment), username: null });
+    expect(result.buyRate.discount).toBe(25);
+    expect(result.sellRate.discount).toBe(30);
+  });
+
+  it.each(["buyRate", "sellRate"] as const)("createEditShipmentRequest_MissingBilledCost_FillsFromRatedCost_%s", (side) => {
+    const source = { ...shipment, [side]: { ...shipment[side], accesorialCostDetails: [
+      { accCode: "MIS", description: "Charge", ratedCost: 104.5, billedCost: null },
+    ] } };
+    const result = createEditShipmentRequest({ shipment: source, detailValues: createShipmentDetailEditValues(source), username: null });
+    expect(result[side].accesorialCostDetails[0]).toMatchObject({ ratedCost: 104.5, billedCost: 104.5 });
   });
 });

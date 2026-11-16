@@ -511,18 +511,28 @@ export function CarrierCard({
       ? isCorporate
       : (storeIsCorporate ??
         false);
+  const showMarkupCharges =
+    isCorporate !== undefined
+      ? isCorporate
+      : (storeIsCorporate ??
+        false);
 
   const grossBuy = Number(rate.grossCharge) || 0;
   const grossSell = Number(sellDetails.grossSell) || 0;
-  const markupGross = rate.ppsFreight !== undefined
-    ? rate.ppsFreight
-    : Math.round((grossSell - grossBuy) * 100) / 100;
+  const markupGross = rate.isNetSellActive || rate.ppsFreight === undefined
+    ? Math.round((grossSell - grossBuy) * 100) / 100
+    : rate.ppsFreight;
 
+  const discountBuy = Number(rate.discount) || 0;
+  const discountSell = Number(sellDetails.discountSell) || 0;
+  const markupDiscount = rate.isNetSellActive
+    ? Math.round((discountBuy - discountSell) * 100) / 100
+    : 0;
   const fuelBuy = Number(rate.fuelSurcharge) || 0;
   const fuelSell = Number(sellDetails.fuelSell) || 0;
-  const markupFuel = rate.ppsFuel !== undefined
-    ? rate.ppsFuel
-    : Math.round((fuelSell - fuelBuy) * 100) / 100;
+  const markupFuel = rate.isNetSellActive || rate.ppsFuel === undefined
+    ? Math.round((fuelSell - fuelBuy) * 100) / 100
+    : rate.ppsFuel;
 
   const accessorialsMarkup = (rate.accessorialCharges || []).map((charge, idx) => {
     const buyCharge = Number(charge.accessorialCharge) || 0;
@@ -608,28 +618,32 @@ export function CarrierCard({
             </div>
             {showBuyCharges && (
               <div className='rate-detail-charges'>
-                <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {rate.grossCharge}</dt>
-                <dt>Discount : {rate.discount}</dt>
-                <dt>Fuel Surcharge : {rate.fuelSurcharge}</dt>
+                <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {Number(rate.grossCharge || 0).toFixed(2)}</dt>
+                <dt>Discount : {Number(rate.discount || 0).toFixed(2)}</dt>
+                <dt>Fuel Surcharge : {Number(rate.fuelSurcharge || 0).toFixed(2)}</dt>
                 {rate.accessorialCharges?.map((charge, idx) => (
                   <dt key={idx}>
-                    {charge.accessorialDescription} : {charge.accessorialCharge}
+                    {charge.accessorialDescription} : {Number(charge.accessorialCharge || 0).toFixed(2) }
                   </dt>
                 ))}
               </div>
             )}
-            <div className='rate-detail-charges rate-detail-charges-sell'>
-              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {sellDetails.grossSell}</dt>
-              <dt>Discount : {sellDetails.discountSell}</dt>
-              <dt>Fuel Surcharge : {sellDetails.fuelSell}</dt>
+
+            {showMarkupCharges && (
+              <div className='rate-detail-charges rate-detail-charges-sell'>
+              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {Number(sellDetails.grossSell || 0).toFixed(2)}</dt>
+              <dt>Discount : {Number(sellDetails.discountSell || 0).toFixed(2)}</dt>
+              <dt>Fuel Surcharge : {Number(sellDetails.fuelSell || 0).toFixed(2)}</dt>
               {sellDetails.accessorialsSell?.map((charge, idx) => (
-                <dt key={idx}>{charge.accessorialDescription} : {charge.accessorialCharge}</dt>
+                <dt key={idx}>{charge.accessorialDescription} : {Number(charge.accessorialCharge || 0).toFixed(2)}</dt>
               ))}
-            </div>
+                </div>
+            )}
+            
             <div className='rate-detail-charges rate-detail-charges-markup'>
-              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {markupGross}</dt>
-              <dt>Discount : -</dt>
-              <dt>Fuel Surcharge : {markupFuel}</dt>
+              <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {Number(markupGross || 0).toFixed(2)}</dt>
+              <dt>Discount : {Number(markupDiscount || 0).toFixed(2)}</dt>
+              <dt>Fuel Surcharge : {Number(markupFuel || 0).toFixed(2)}</dt>
               {accessorialsMarkup.map((charge, idx) => (
                 <dt key={idx}>{charge.description} : {charge.markup}</dt>
               ))}
@@ -1248,6 +1262,7 @@ function Rate() {
           markupType: carrierConfig.isNetSellRateEnabled
             ? "netSellRate"
             : (carrierConfig.markupDropdownOption || markupDropdownOption || "Flat"),
+          isNetSellActive: Boolean(carrierConfig.isNetSellRateEnabled),
           rate: carrierConfig.isNetSellRateEnabled
             ? String(carrierConfig.numericNetSellRate || netSellRate || "0")
             : String(carrierConfig.numericMarkupRate || markupRate || "0"),

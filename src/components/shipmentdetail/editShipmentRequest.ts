@@ -1,4 +1,5 @@
 import { SRV_TOKEN } from "../../config/apiConfig";
+import { createShipmentRateRequest } from "../../lib/createShipmentRateRequest";
 import type { EditShipmentRequest, EditShipmentRateRequest } from "../../types/editShipment.types";
 import type { ShipmentDetails, ShipmentRate } from "../../types/shipment.types";
 import { createShipmentDetailEditValues, type ShipmentDetailEditValues } from "./detailEditValues";
@@ -12,13 +13,7 @@ function amount(value: number | null | undefined): number {
 
 /** Creates a detached rate body using the edit endpoint's non-null numeric contract. */
 function rateRequest(rate: ShipmentRate | null): EditShipmentRateRequest {
-  return {
-    freight: amount(rate?.freight), fuel: amount(rate?.fuel), discount: amount(rate?.discount),
-    accesorialCostDetails: (rate?.accesorialCostDetails ?? []).map((detail) => ({
-      accCode: detail.accCode ?? "", description: detail.description ?? "",
-      ratedCost: amount(detail.ratedCost), billedCost: amount(detail.billedCost),
-    })),
-  };
+  return createShipmentRateRequest(rate);
 }
 
 /** Parses a displayed calendar date without applying the browser's timezone. */
