@@ -1076,12 +1076,15 @@ const NewShipment: React.FC = () => {
   const carrierRateData = useMemo(() => {
     if (!rawCarrier) return undefined;
 
-    const matchingQuoteResult = quote?.quoteResults?.find(
-      (r: any) =>
-        (rawCarrier.id && String(r.quoteResultId) === String(rawCarrier.id)) ||
-        (rawCarrier.code && r.scac?.toUpperCase() === rawCarrier.code?.toUpperCase()) ||
-        (rawCarrier.name && r.carrierName?.toLowerCase() === rawCarrier.name?.toLowerCase())
-    );
+    const isExplicitlySelected = Boolean(selectedCarrierRate);
+    const matchingQuoteResult = isExplicitlySelected
+      ? undefined
+      : quote?.quoteResults?.find(
+          (r: any) =>
+            (rawCarrier.id && String(r.quoteResultId) === String(rawCarrier.id)) ||
+            (rawCarrier.code && r.scac?.toUpperCase() === rawCarrier.code?.toUpperCase()) ||
+            (rawCarrier.name && r.carrierName?.toLowerCase() === rawCarrier.name?.toLowerCase())
+        );
 
     let grossCharge = Number(rawCarrier.grossCharge ?? matchingQuoteResult?.grossCharge) || 0;
     let grossSellAmount = Number(rawCarrier.grossSellAmount ?? rawCarrier.grossSell ?? matchingQuoteResult?.grossSellAmount) || undefined;
@@ -1091,7 +1094,7 @@ const NewShipment: React.FC = () => {
     let fuelSell = Number(rawCarrier.fuelSell ?? matchingQuoteResult?.fuelSell) || undefined;
     const accessorialCharges: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
 
-    const costDetails = rawCarrier.quoteCostDetails || rawCarrier.costDetails || matchingQuoteResult?.quoteCostDetails;
+    const costDetails = rawCarrier.quoteCostDetails || rawCarrier.costDetails || (!isExplicitlySelected ? matchingQuoteResult?.quoteCostDetails : undefined);
     if (Array.isArray(costDetails) && costDetails.length > 0) {
       costDetails.forEach((cd: any) => {
         const code = (cd.accCode || cd.code || "").trim().toUpperCase();
@@ -2584,7 +2587,7 @@ const NewShipment: React.FC = () => {
       <Row gutter={[16, 16]} align="stretch" className="ns-bottom-row">
         <Col xs={24} xl={16}>
           <CustomerRate
-            key={selectedClientCode}
+            key={`${selectedClientCode}-${selectedCarrierRate?.id || selectedCarrierInfo?.carrierId || 'default'}`}
             carrierData={carrierRateData}
             onRate={handleFetchRatesForShipment}
             loadingRate={ratesLoading}

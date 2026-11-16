@@ -23,6 +23,7 @@ import editShipmentReducer from "../store/editShipmentSlice.ts";
 import equipmentReducer from "../store/equipmentSlice.ts";
 import serviceLevelReducer from "../store/serviceLevelSlice.ts";
 import paymentTermReducer from "../store/paymentTermSlice.ts";
+import shipmentDocumentReducer from "../store/shipmentDocumentSlice.ts";
 
 
 export const store = configureStore({
@@ -49,6 +50,7 @@ export const store = configureStore({
     equipment: equipmentReducer,
     serviceLevel: serviceLevelReducer,
     paymentTerm: paymentTermReducer,
+    shipmentDocument: shipmentDocumentReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

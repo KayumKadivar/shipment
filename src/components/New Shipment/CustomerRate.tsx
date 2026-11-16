@@ -139,7 +139,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   onClearError,
   onSelectCarrier,
   onRateDetailsChange,
-  
+  clientMarkupConfig,
   isFromReference: _isFromReference = false,
   hasRateChanged = false,
   onRateChanged,
@@ -243,104 +243,68 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     ppsFuel: 0,
   });
 
+  // Initialize markup controls from carrierData or Redux store without making repetitive network calls
   useEffect(() => {
-    if (carrierData?.isNetSellActive || String(carrierData?.markupType || "").toLowerCase().includes("netsell")) return;
+    const rawQuote = customerRate?.rawQuote;
+    const config =
+      clientMarkupConfig ||
+      (carrierData as any)?.clientMarkupConfig ||
+      (rawQuote as any)?.clientMarkupConfig;
 
-    const clientCodeToUse =
-      clientCode ||
-      reduxClientContext?.customerLocation_selectedClientCode ||
-      reduxClientContext?.quotes_selectedClientCode ||
-      reduxApp?.clientCode ||
+    const markupType =
+      carrierData?.markupType ||
+      config?.markupType ||
+      (rawQuote as any)?.marginType ||
+      (rawQuote as any)?.marganType ||
       "";
+    const raw = String(markupType).toLowerCase();
+    const isNetSell = Boolean(
+      carrierData?.isNetSellActive ||
+      raw.includes("netsell")
+    );
 
-    if (!clientCodeToUse) return;
+    const rateVal = carrierData?.rate != null
+      ? String(carrierData.rate)
+      : config?.rate != null
+      ? String(config.rate)
+      : (rawQuote as any)?.marginPercent != null
+      ? String((rawQuote as any).marginPercent)
+      : "0";
 
-    const fetchClientMarkup = async () => {
-      const token = reduxApp?.token;
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        accept: "application/json, text/plain, */*",
-      };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+    const minVal = carrierData?.minimum != null
+      ? String(carrierData.minimum)
+      : config?.minimum != null
+      ? String(config.minimum)
+      : "0";
 
-      try {
-        console.log(
-          `[CustomerRate] Calling GetClientMarkup API for clientCode: ${clientCodeToUse}`,
-        );
-        const response = await axios.get(
-          `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCodeToUse)}`,
-          { headers },
-        );
-        console.log(
-          "[CustomerRate] GetClientMarkup API response:",
-          response.data,
-        );
-
-        if (response.data?.isSuccess && response.data?.data) {
-          const rawData = response.data.data;
-          const config = Array.isArray(rawData) ? rawData[0] : rawData;
-          if (config) {
-            const raw = String(config.markupType || "").toLowerCase();
-            if (raw.includes("netsell")) {
-              setIsNetSellRateEnabled(true);
-              setIsMarkupEnabled(false);
-              const rateVal = config.rate != null ? String(config.rate) : "0";
-              setNetSellRate(rateVal);
-              setAppliedMarkupConfig({
-                isMarkupEnabled: false,
-                markupDropdownOption: "",
-                numericMarkup: 0,
-                numericMarkupRate: 0,
-                isNetSellRateEnabled: true,
-                numericNetSellRate: Number(rateVal) || 0,
-                ppsFreight: 0,
-                ppsFuel: 0,
-              });
-            } else {
-              setIsMarkupEnabled(true);
-              setIsNetSellRateEnabled(false);
-              let opt = "Flat";
-              if (raw.includes("flat")) {
-                opt = "Flat";
-              } else if (raw.includes("acc")) {
-                opt = "% Freight + Fuel + Accessorial";
-              } else if (raw.includes("fuel")) {
-                opt = "% Freight + Fuel";
-              } else {
-                opt = "% Freight";
-              }
-              setMarkupDropdownOption(opt);
-              const rateVal = config.rate != null ? String(config.rate) : "0";
-              setMarkupRate(rateVal);
-              const minVal =
-                config.minimum != null
-                  ? String(config.minimum)
-                  : config.rate != null
-                    ? String(config.rate)
-                    : "0";
-              setMarkup(minVal);
-              setMinimumRate(Number(minVal) || 0);
-
-              setAppliedMarkupConfig({
-                isMarkupEnabled: true,
-                markupDropdownOption: opt,
-                numericMarkup: Number(minVal) || 0,
-                numericMarkupRate: Number(rateVal) || 0,
-                isNetSellRateEnabled: false,
-                numericNetSellRate: 0,
-                ppsFreight: (carrierData as any)?.ppsFreight || 0,
-                ppsFuel: (carrierData as any)?.ppsFuel || 0,
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error("[CustomerRate] Error fetching GetClientMarkup:", error);
+    if (isNetSell) {
+      setIsNetSellRateEnabled(true);
+      setIsMarkupEnabled(false);
+      setNetSellRate(rateVal);
+    } else {
+      let opt = "Flat";
+      if (raw.includes("flat")) {
+        opt = "Flat";
+      } else if (raw.includes("acc")) {
+        opt = "% Freight + Fuel + Accessorial";
+      } else if (raw.includes("fuel")) {
+        opt = "% Freight + Fuel";
+      } else if (raw.includes("freight") || Number(rateVal) > 0) {
+        opt = "% Freight";
       }
-    };
-
-    fetchClientMarkup();
-  }, [carrierData?.isNetSellActive, carrierData?.markupType, clientCode, reduxApp?.token, reduxApp?.clientCode, reduxClientContext?.customerLocation_selectedClientCode, reduxClientContext?.quotes_selectedClientCode]);
+      setMarkupDropdownOption(opt);
+      setMarkupRate(rateVal);
+      setMarkup(minVal);
+      setMinimumRate(Number(minVal) || 0);
+    }
+  }, [
+    carrierData?.isNetSellActive,
+    carrierData?.markupType,
+    carrierData?.rate,
+    carrierData?.minimum,
+    clientMarkupConfig,
+    customerRate?.rawQuote,
+  ]);
 
   // Carrier inputs and autocomplete state
   const [carrierName, setCarrierName] = useState<string>("");

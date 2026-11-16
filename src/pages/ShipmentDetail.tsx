@@ -402,9 +402,23 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
   const saveInProgress = useRef(false);
   const editState = useAppSelector((state) => state.editShipment);
   const username = useAppSelector((state) => state.app?.username);
+  const appClientCode = useAppSelector((state) => state.app?.clientCode);
   const savedCarrierName = useAppSelector((state) => state.shipment.shipments?.find(
     (row) => row.loadNumber === shipment.loadNumber)?.carrier);
   const saving = editState?.saving ?? false;
+
+  const shipmentContext: unknown = location.state;
+  const hasMatchingRowContext = shipmentContext !== null
+    && typeof shipmentContext === "object"
+    && "loadNumber" in shipmentContext
+    && shipmentContext.loadNumber === shipment.loadNumber
+    && "clientCode" in shipmentContext;
+  const resolvedClientCode = (
+    (hasMatchingRowContext && typeof shipmentContext.clientCode === "string" ? shipmentContext.clientCode.trim() : "") ||
+    shipment.clientCode?.trim() ||
+    appClientCode?.trim() ||
+    ""
+  );
   const collectLoadValues = useCallback((values: Pick<ShipmentDetails, "products" | "accessorials" | "bolDispatchNotes">) => {
     setCommittedShipment((current) => ({ ...current, ...values }));
   }, []);
@@ -609,15 +623,7 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
     setRerateValidationError(null);
 
     try {
-      const shipmentContext: unknown = location.state;
-      const hasMatchingRowContext = shipmentContext !== null
-        && typeof shipmentContext === "object"
-        && "loadNumber" in shipmentContext
-        && shipmentContext.loadNumber === shipment.loadNumber
-        && "clientCode" in shipmentContext;
-      const clientCode = hasMatchingRowContext
-        ? (typeof shipmentContext.clientCode === "string" ? shipmentContext.clientCode.trim() : "")
-        : shipment.clientCode?.trim() || "";
+      const clientCode = resolvedClientCode;
       if (!clientCode) {
         throw new Error("A shipment client code is required to re-rate the shipment.");
       }
@@ -943,7 +949,12 @@ function ShipmentDetailContent({ shipment }: { shipment: ShipmentDetails }) {
               onEditorStateChange={handleTrackingEditingStateChange}
             />
           </div>
-          {activeTab === "Documents" && <DocumentTab />}
+          {activeTab === "Documents" && (
+            <DocumentTab
+              shipment={shipment}
+              clientCode={resolvedClientCode}
+            />
+          )}
           {activeTab === "Audit" && <AuditTab />}
         </main>
       </div>
