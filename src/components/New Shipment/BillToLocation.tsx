@@ -9,13 +9,42 @@ import { API_BASE_URL } from '../../config/apiConfig';
 
 interface BillToLocationProps {
   clientCode?: string;
+  brokerCarrierCode?: string | null;
   onChange?: (values: any) => void;
 }
 
-const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange }) => {
+const DEFAULT_BILL_TO = {
+  companyName: "INLAND TRANSPORT, INC.",
+  address1: "777 PALM DRIVE",
+  address2: "",
+  city: "OCOEE",
+  state: "FL",
+  postal: "34761",
+  country: "USA",
+  fax: "",
+  phone: "407-858-3039",
+  email: "stan@shipinland.com",
+};
+
+const BROKER_BILL_TO = {
+  companyName: "Priority One Bill to",
+  address1: "Priority 1 Attn: Accounts Payable",
+  address2: "PO Box 398",
+  city: "NORTH LITTLE ROCK",
+  state: "AR",
+  postal: "72115",
+  country: "USA",
+  fax: "",
+  phone: "501-487-6420",
+  email: "",
+};
+
+const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, brokerCarrierCode, onChange }) => {
   const reduxApp = useAppSelector((state) => state.app);
   const reduxClientContext = useAppSelector((state) => state.clientContext);
   const [form] = Form.useForm();
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const { searchPostals, lookupPostal, loadingPostal } = usePostalLookup();
   const [loading, setLoading] = useState(false);
   const [locationsList, setLocationsList] = useState<any[]>([]);
@@ -27,6 +56,14 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
   const postalRef = useRef("");
   const postalRowRef = useRef<HTMLDivElement>(null);
   const [postalDropdownWidth, setPostalDropdownWidth] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const values = String(brokerCarrierCode || "").trim()
+      ? BROKER_BILL_TO
+      : DEFAULT_BILL_TO;
+    form.setFieldsValue(values);
+    onChangeRef.current?.(values);
+  }, [brokerCarrierCode, form]);
 
   const updateDropdownWidth = useCallback(() => {
     if (!postalRowRef.current) return;
@@ -393,7 +430,7 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
       <Form
         layout="vertical"
         form={form}
-        initialValues={{ country: "USA" }}
+        initialValues={DEFAULT_BILL_TO}
         onValuesChange={(_, all) => {
           if (onChange) onChange(all);
         }}
@@ -474,6 +511,12 @@ const BillToLocation: React.FC<BillToLocationProps> = ({ clientCode, onChange })
         </div>
         <Form.Item label="Fax No" name="fax">
           <Input placeholder="Fax No" />
+        </Form.Item>
+        <Form.Item label="Phone" name="phone">
+          <Input placeholder="Phone" />
+        </Form.Item>
+        <Form.Item label="Email" name="email">
+          <Input placeholder="Email" />
         </Form.Item>
       </Form>
     </Card>

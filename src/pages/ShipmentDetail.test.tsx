@@ -18,6 +18,7 @@ import type { ShipmentRerateRate } from "../store/shipmentRerateSlice";
 import type { ShipmentDetails } from "../types/shipment.types";
 import type { CarrierRate } from "./Rate";
 import ShipmentDetail from "./ShipmentDetail";
+import { fetchCarrierTracking } from "../store/carrierTrackingSlice";
 
 const { editState, editShipmentMock, dispatchMock, shipmentState, rerateState, rerateShipmentMock, lookupUnwrapMock, lookupAbortMock, lookupMock } =
   vi.hoisted(() => ({
@@ -82,7 +83,7 @@ vi.mock("../store/shipmentSlice", () => ({
 }));
 
 vi.mock("../store/carrierTrackingSlice", () => ({
-  fetchCarrierTracking: vi.fn((payload: { loadNumber: string }) => ({
+  fetchCarrierTracking: vi.fn((payload: { loadNumber: string; clientCode: string }) => ({
     payload,
     type: "carrierTracking/fetch",
   })),
@@ -373,6 +374,59 @@ describe("ShipmentDetail", { timeout: 20_000 }, () => {
     cleanup();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("ShipmentDetail_whenShipmentIsPending_doesNotRequestCarrierTracking", () => {
+    shipmentState.currentShipment = null;
+    shipmentState.loading = true;
+
+    renderShipmentDetail();
+
+    expect(fetchCarrierTracking).not.toHaveBeenCalled();
+  });
+
+  it("ShipmentDetail_whenMatchingShipmentLoads_requestsTrackingWithTrimmedClientCode", () => {
+    shipmentState.currentShipment = null;
+    shipmentState.loading = true;
+    const view = renderShipmentDetail();
+
+    shipmentState.currentShipment = { ...shipment, clientCode: " CLIENT-42 " };
+    shipmentState.loading = false;
+    view.refresh();
+
+    expect(fetchCarrierTracking).toHaveBeenCalledExactlyOnceWith({
+      loadNumber: "LOAD-100",
+      clientCode: "CLIENT-42",
+    });
+  });
+
+  it("ShipmentDetail_whenShipmentBelongsToAnotherLoad_doesNotRequestCarrierTracking", () => {
+    shipmentState.currentShipment = { ...shipment, loadNumber: "LOAD-OTHER" };
+
+    renderShipmentDetail();
+
+    expect(fetchCarrierTracking).not.toHaveBeenCalled();
+  });
+
+  it.each([null, "", "   "])("ShipmentDetail_whenClientCodeIsMissing_doesNotRequestCarrierTracking (%s)", (clientCode) => {
+    shipmentState.currentShipment = { ...shipment, clientCode };
+
+    renderShipmentDetail();
+
+    expect(fetchCarrierTracking).not.toHaveBeenCalled();
+  });
+
+  it("ShipmentDetail_whenTrackingIsPendingAndUnmounted_abortsTrackingRequest", () => {
+    const view = renderShipmentDetail();
+    const trackingDispatchIndex = dispatchMock.mock.calls.findIndex(
+      ([action]) => action.type === "carrierTracking/fetch",
+    );
+    const trackingRequest = dispatchMock.mock.results[trackingDispatchIndex].value;
+    expect(trackingRequest.abort).not.toHaveBeenCalled();
+
+    view.unmount();
+
+    expect(trackingRequest.abort).toHaveBeenCalledOnce();
   });
 
   it("ShipmentDetail_whenRendered_placesReadOnlyBookingInfoAfterReferenceNumbers", () => {

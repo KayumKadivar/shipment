@@ -145,7 +145,7 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
   onRateChanged,
 }) => {
   const reduxApp = useAppSelector((state) => state.app);
-  const reduxClientContext = useAppSelector((state) => state.clientContext);
+  // const reduxClientContext = useAppSelector((state) => state.clientContext);
   const dispatch = useDispatch<AppDispatch>();
   const customerRate = useSelector((state: RootState) => state.customerRate);
   const accessorialsList =
@@ -383,16 +383,6 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       setHasUnappliedChanges(false);
       const isCarrierNetSell = Boolean(activeCarrier?.isNetSellActive || String(activeCarrier?.markupType || "").toLowerCase().includes("netsell"));
       const carrierNetSellValue = Number(activeCarrier?.rate ?? activeCarrier?.grossSellAmount ?? activeCarrier?.grossSell ?? activeCarrier?.sellPrice) || 0;
-      setAppliedMarkupConfig({
-        isMarkupEnabled: false,
-        markupDropdownOption: "",
-        numericMarkup: 0,
-        numericMarkupRate: 0,
-        isNetSellRateEnabled: isCarrierNetSell,
-        numericNetSellRate: isCarrierNetSell ? carrierNetSellValue : 0,
-        ppsFreight: isCarrierNetSell ? Number(activeCarrier?.grossSellAmount ?? activeCarrier?.grossSell ?? activeCarrier?.sellPrice) || 0 : 0,
-        ppsFuel: 0,
-      });
       setIsNetSellRateEnabled(isCarrierNetSell);
       setNetSellRate(isCarrierNetSell ? String(carrierNetSellValue) : "0");
       if (isCarrierNetSell) setIsMarkupEnabled(false);
@@ -788,6 +778,40 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     editedCellKeys,
   ]);
 
+  // Recalculate an already-applied markup against the newly selected carrier.
+  const appliedCarrierRef = useRef<any>(activeCarrier);
+  useEffect(() => {
+    const previousCarrier = appliedCarrierRef.current;
+    const carrierChanged =
+      previousCarrier?.carrierName !== activeCarrier?.carrierName ||
+      previousCarrier?.carrierCode !== activeCarrier?.carrierCode ||
+      previousCarrier?.price !== activeCarrier?.price;
+    appliedCarrierRef.current = activeCarrier;
+
+    if (!carrierChanged || !appliedMarkupConfig.isMarkupEnabled) return;
+
+    const { ppsFreight, ppsFuel } = calculateMarkupDistribution({
+      netFreightBuy:
+        lineItems
+          .filter((item) => !isDiscountCharge(item.code) && isFreightCharge(item.code))
+          .reduce((sum, item) => sum + item.buyAmount, 0) +
+        lineItems
+          .filter((item) => isDiscountCharge(item.code))
+          .reduce((sum, item) => sum + item.buyAmount, 0),
+      fuelBuy: lineItems
+        .filter((item) => isFuelCharge(item.code))
+        .reduce((sum, item) => sum + item.buyAmount, 0),
+      totalBuy: lineItems.reduce((sum, item) => sum + item.buyAmount, 0),
+      markupDropdownOption: appliedMarkupConfig.markupDropdownOption,
+      markupRate: appliedMarkupConfig.numericMarkupRate ?? 0,
+      minimum: appliedMarkupConfig.numericMarkup,
+      isMarkupEnabled: appliedMarkupConfig.isMarkupEnabled,
+      isNetSellRateEnabled: false,
+      netSellRate: 0,
+    });
+    setAppliedMarkupConfig((current) => ({ ...current, ppsFreight, ppsFuel }));
+  }, [activeCarrier, appliedMarkupConfig, lineItems]);
+
   // Totals
   const freightLines = lineItems.filter(
     (i) => !isDiscountCharge(i.code) && isFreightCharge(i.code),
@@ -932,6 +956,93 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
     isCustomerInputDirty,
     onRateDetailsChange,
   ]);
+
+  const markupRequestRef = useRef(0);
+
+useEffect(() => {
+  const fetchClientMarkup = async () => {
+    const requestId = ++markupRequestRef.current;
+
+    if (!clientCode) return;
+
+    const token = reduxApp?.token;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      accept: "application/json, text/plain, */*",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCode)}`,
+        { headers }
+      );
+
+      // Ignore responses belonging to an older client
+      if (requestId !== markupRequestRef.current) return;
+
+      if (response.data?.isSuccess && response.data?.data) {
+        const rawData = response.data.data;
+        const config = Array.isArray(rawData) ? rawData[0] : rawData;
+
+        if (config?.markupType) {
+          const raw = String(config.markupType).toLowerCase();
+          const rateVal = config.rate != null
+            ? String(config.rate)
+            : "0";
+
+          if (raw.includes("netsell")) {
+            setIsNetSellRateEnabled(true);
+            setIsMarkupEnabled(false);
+            setNetSellRate(rateVal);
+          } else {
+            setIsNetSellRateEnabled(false);
+            setIsMarkupEnabled(true);
+
+            let opt = "Flat";
+
+            if (raw.includes("flat")) {
+              opt = "Flat";
+            } else if (raw.includes("acc")) {
+              opt = "% Freight + Fuel + Accessorial";
+            } else if (raw.includes("fuel")) {
+              opt = "% Freight + Fuel";
+            } else {
+              opt = "% Freight";
+            }
+
+            const minVal = config.minimum != null
+              ? String(config.minimum)
+              : rateVal;
+
+            setMarkupDropdownOption(opt);
+            setMarkupRate(rateVal);
+            setMarkup(minVal);
+            setMinimumRate(Number(minVal) || 0);
+          }
+
+          setIsMarkupRateDirty(false);
+          setIsNetSellDirty(false);
+          setHasUnappliedChanges(false);
+        }
+      }
+    } catch (error) {
+      if (requestId === markupRequestRef.current) {
+        console.error("[Rate] Error fetching client markup:", error);
+      }
+    }
+  };
+
+  fetchClientMarkup();
+
+  return () => {
+    markupRequestRef.current++;
+  };
+}, [clientCode, reduxApp?.token]);
 
   // Options for Charge type Select dropdown from Accessorials API list
   const chargeTypeOptions = useMemo(() => {

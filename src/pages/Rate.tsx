@@ -530,9 +530,13 @@ export function CarrierCard({
     : 0;
   const fuelBuy = Number(rate.fuelSurcharge) || 0;
   const fuelSell = Number(sellDetails.fuelSell) || 0;
-  const markupFuel = rate.isNetSellActive || rate.ppsFuel === undefined
-    ? Math.round((fuelSell - fuelBuy) * 100) / 100
-    : rate.ppsFuel;
+
+  const markupFuel =
+    rate.isNetSellActive || !Number(rate.ppsFuel)
+      ? Math.round((fuelSell - fuelBuy) * 100) / 100
+      : Number(rate.ppsFuel);
+  
+  
 
   const accessorialsMarkup = (rate.accessorialCharges || []).map((charge, idx) => {
     const buyCharge = Number(charge.accessorialCharge) || 0;
@@ -629,7 +633,7 @@ export function CarrierCard({
               </div>
             )}
 
-            {showMarkupCharges && (
+            
               <div className='rate-detail-charges rate-detail-charges-sell'>
               <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {Number(sellDetails.grossSell || 0).toFixed(2)}</dt>
               <dt>Discount : {Number(sellDetails.discountSell || 0).toFixed(2)}</dt>
@@ -638,8 +642,8 @@ export function CarrierCard({
                 <dt key={idx}>{charge.accessorialDescription} : {Number(charge.accessorialCharge || 0).toFixed(2)}</dt>
               ))}
                 </div>
-            )}
             
+            {showMarkupCharges && (
             <div className='rate-detail-charges rate-detail-charges-markup'>
               <dt style={{ whiteSpace: "nowrap" }}>Gross Charge : {Number(markupGross || 0).toFixed(2)}</dt>
               <dt>Discount : {Number(markupDiscount || 0).toFixed(2)}</dt>
@@ -648,6 +652,7 @@ export function CarrierCard({
                 <dt key={idx}>{charge.description} : {charge.markup}</dt>
               ))}
             </div>
+            )}
           </dl>
         </div>
       </div>
@@ -841,6 +846,14 @@ function Rate() {
           setIsMarkupEnabled(false);
           const val = quoteMarginVal ?? "0";
           setNetSellRate(val);
+          setAppliedMarkupConfig({
+            isMarkupEnabled: false,
+            markupDropdownOption: "",
+            numericMarkup: 0,
+            numericMarkupRate: 0,
+            isNetSellRateEnabled: true,
+            numericNetSellRate: Number(val) || 0,
+          });
         } else {
           setIsMarkupEnabled(true);
           setIsNetSellRateEnabled(false);
@@ -858,6 +871,14 @@ function Rate() {
           const rateVal = quoteMarginVal ?? "0";
           setMarkupRate(rateVal);
           setMarkup(rateVal);
+          setAppliedMarkupConfig({
+            isMarkupEnabled: true,
+            markupDropdownOption: opt,
+            numericMarkup: Number(rateVal) || 0,
+            numericMarkupRate: Number(rateVal) || 0,
+            isNetSellRateEnabled: false,
+            numericNetSellRate: 0,
+          });
         }
       }
     }
@@ -895,6 +916,16 @@ function Rate() {
             if (isNetSell) {
               const rateVal = config.rate != null ? String(config.rate) : "0";
               setNetSellRate(rateVal);
+              setIsNetSellRateEnabled(true);
+              setIsMarkupEnabled(false);
+              setAppliedMarkupConfig({
+                isMarkupEnabled: false,
+                markupDropdownOption: "",
+                numericMarkup: 0,
+                numericMarkupRate: 0,
+                isNetSellRateEnabled: true,
+                numericNetSellRate: Number(rateVal) || 0,
+              });
             } else {
               let opt = "Flat";
               if (raw.includes("flat")) {
@@ -916,6 +947,16 @@ function Rate() {
                     ? String(config.rate)
                     : "0";
               setMarkup(minVal);
+              setIsMarkupEnabled(true);
+              setIsNetSellRateEnabled(false);
+              setAppliedMarkupConfig({
+                isMarkupEnabled: true,
+                markupDropdownOption: opt,
+                numericMarkup: Number(minVal) || 0,
+                numericMarkupRate: Number(rateVal) || 0,
+                isNetSellRateEnabled: false,
+                numericNetSellRate: 0,
+              });
             }
           }
         }
@@ -1139,12 +1180,37 @@ function Rate() {
                     ? Math.round((grossSellAmount - (discountSell ?? discount) + (fuelSell ?? fuelSurcharge) + otherAccessorials.reduce((acc, c) => acc + (c.sellCharge ?? c.accessorialCharge ?? 0), 0)) * 100) / 100
                     : calculatedPrice;
 
-                const existingMatching = (calculatedRatesToSave || []).find(
-                  (cr: any) =>
-                    (result.quoteResultId && String(cr.id) === String(result.quoteResultId)) ||
-                    (result.scac && cr.code && cr.code.toUpperCase() === result.scac.toUpperCase()) ||
-                    (result.carrierName && cr.name && cr.name.toLowerCase() === result.carrierName.toLowerCase())
-                );
+                const resultSaasQuoteId = String(result.saasQuoteId ?? "").trim();
+                const resultCarrierQuoteNo = String(result.carrierQuoteNo ?? "").trim();
+                const resultScac = String(result.scac ?? "").trim().toUpperCase();
+                const resultCarrierName = String(result.carrierName ?? "").trim().toLowerCase();
+                const resultBrokerCode = String(result.brokerCode ?? "").trim().toUpperCase();
+                const existingMatching =
+                  (result.quoteResultId && (calculatedRatesToSave || []).find((cr: any) =>
+                    String(cr.rawQuoteResult?.quoteResultId ?? "") === String(result.quoteResultId)
+                  )) ||
+                  (resultSaasQuoteId && (calculatedRatesToSave || []).find((cr: any) =>
+                    String(cr.rawQuoteResult?.saasQuoteId ?? cr.saasQuoteId ?? "").trim() === resultSaasQuoteId
+                  )) ||
+                  (resultCarrierQuoteNo && (calculatedRatesToSave || []).find((cr: any) =>
+                    String(cr.rawQuoteResult?.carrierQuoteNo ?? cr.carrierQuoteNo ?? "").trim() === resultCarrierQuoteNo
+                  )) ||
+                  (resultScac && resultCarrierName && (calculatedRatesToSave || []).find((cr: any) =>
+                    String(cr.code ?? "").trim().toUpperCase() === resultScac &&
+                    String(cr.name ?? "").trim().toLowerCase() === resultCarrierName &&
+                    (!resultBrokerCode || !cr.rawQuoteResult?.brokerCode || String(cr.rawQuoteResult.brokerCode).trim().toUpperCase() === resultBrokerCode)
+                  )) ||
+                  (resultCarrierName && (calculatedRatesToSave || []).find((cr: any) =>
+                    String(cr.name ?? "").trim().toLowerCase() === resultCarrierName
+                  )) ||
+                  (resultScac && (calculatedRatesToSave || []).find((cr: any) =>
+                    String(cr.code ?? "").trim().toUpperCase() === resultScac
+                  ));
+
+                const resultWarning = result.errorMessage?.trim() || result.warning?.trim() || "";
+                const isGenericUnavailableWarning =
+                  resultWarning.toLowerCase() === "rate unavailable or capacity rules exceeded." ||
+                  resultWarning.toLowerCase() === "rate unavailable or carrier error.";
 
                 return {
                   id: String(result.quoteResultId || `${result.scac}-${index}`),
@@ -1156,7 +1222,9 @@ function Rate() {
                   price: calculatedPrice > 0 ? calculatedPrice : 0,
                   transitDays: parseInt(result.transitDays || "0") || existingMatching?.transitDays || 0,
                   estimatedDelivery: result.estimatedDeliveryDate || existingMatching?.estimatedDelivery || "",
-                  warning: result.errorMessage?.trim() || result.warning?.trim() || existingMatching?.warning || (calculatedPrice <= 0 ? "Rate unavailable or carrier error." : ""),
+                  warning: isGenericUnavailableWarning && calculatedPrice > 0
+                    ? ""
+                    : resultWarning || (calculatedPrice <= 0 ? existingMatching?.warning || "Rate unavailable or carrier error." : ""),
                   quoteExpiry: savedData.requestedDate || existingMatching?.quoteExpiry || "N/A",
                   liabilityNew: "",
                   liabilityUsed: "",

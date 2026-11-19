@@ -139,6 +139,12 @@ interface ShipmentPrefillCarrier {
   netCharge?: number;
   quoteCostDetails?: Array<any>;
   costDetails?: Array<any>;
+  brokerCarrierCode?: string | null;
+  brokerCode?: string | null;
+  rawQuoteResult?: {
+    brokerCarrierCode?: string | null;
+    brokerCode?: string | null;
+  };
   accessorialCharges?: Array<{
     accessorialDescription?: string;
     accessorialCharge?: number;
@@ -179,6 +185,7 @@ const NewShipment: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const location = useLocation();
+  
 
   const prefillData = location.state as NewShipmentLocationState | null;
   const quote = prefillData?.quote;
@@ -221,6 +228,7 @@ const NewShipment: React.FC = () => {
   const [selectedClientCode, setSelectedClientCode] = useState<string>(
     () => quote?.clientCode || loggedInClientCode || ""
   );
+const [clientMarkupConfig, setClientMarkupConfig] = useState<any>(null);
 
   const clientsFetchedRef = useRef(false);
   useEffect(() => {
@@ -243,6 +251,55 @@ const NewShipment: React.FC = () => {
       }
     }
   }, [clients, selectedClientCode, defaultLoggedClient]);
+
+  useEffect(() => {
+  const fetchClientMarkup = async () => {
+    const clientCodeToUse = selectedClientCode || "";
+
+    if (!clientCodeToUse) {
+      setClientMarkupConfig(null);
+      return;
+    }
+
+    const token = reduxApp?.token;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      accept: "application/json, text/plain, */*",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    try {
+      // Clear previous client's configuration immediately
+      setClientMarkupConfig(null);
+
+      const response = await axios.get(
+        `${API_BASE_URL}/ClientMarkupConfig/GetClientMarkup/${encodeURIComponent(clientCodeToUse)}`,
+        { headers }
+      );
+
+      // Prevent stale responses from updating the latest client
+      if (selectedClientCode !== clientCodeToUse) return;
+
+      if (response.data?.isSuccess && response.data?.data) {
+        const rawData = response.data.data;
+        const config = Array.isArray(rawData) ? rawData[0] : rawData;
+
+        setClientMarkupConfig(config || null);
+      } else {
+        setClientMarkupConfig(null);
+      }
+    } catch (error) {
+      console.error("[Rate] Error fetching GetClientMarkup:", error);
+      setClientMarkupConfig(null);
+    }
+  };
+
+  fetchClientMarkup();
+}, [selectedClientCode, reduxApp?.token]);
 
   const clientOptions = useMemo(() => {
     let list = [...clients];
@@ -1111,8 +1168,12 @@ const NewShipment: React.FC = () => {
           name.includes("freight") ||
           name === "freight"
         ) {
-          grossCharge = amount;
-          if (sellAmount !== undefined) {
+          if (rawCarrier.grossCharge == null) grossCharge = amount;
+          if (
+            sellAmount !== undefined &&
+            rawCarrier.grossSellAmount == null &&
+            rawCarrier.grossSell == null
+          ) {
             grossSellAmount = sellAmount;
           }
         } else if (
@@ -1121,8 +1182,8 @@ const NewShipment: React.FC = () => {
           code === "DISCOUNT" ||
           name.includes("discount")
         ) {
-          discount = Math.abs(amount);
-          if (sellAmount !== undefined) {
+          if (rawCarrier.discount == null) discount = Math.abs(amount);
+          if (sellAmount !== undefined && rawCarrier.discountSell == null) {
             discountSell = Math.abs(sellAmount);
           }
         } else if (
@@ -1131,8 +1192,8 @@ const NewShipment: React.FC = () => {
           code === "FUEL SURCHARGE" ||
           name.includes("fuel")
         ) {
-          fuelSurcharge = amount;
-          if (sellAmount !== undefined) {
+          if (rawCarrier.fuelSurcharge == null) fuelSurcharge = amount;
+          if (sellAmount !== undefined && rawCarrier.fuelSell == null) {
             fuelSell = sellAmount;
           }
         } else {
@@ -1886,6 +1947,8 @@ const NewShipment: React.FC = () => {
         billToStateCode: billToValues.state || "",
         billToCityName: billToValues.city || "",
         billToFaxNo: billToValues.fax || "",
+        billToPhoneNo: billToValues.phone || "",
+        billToEmail: billToValues.email || "",
         bolDispatchNotes,
         accessorials: selectedAccessorialCodes,
         paymentTerms: shipmentInfoValues.paymentTerms || "3rd Party Prep",
@@ -2587,7 +2650,7 @@ const NewShipment: React.FC = () => {
       <Row gutter={[16, 16]} align="stretch" className="ns-bottom-row">
         <Col xs={24} xl={16}>
           <CustomerRate
-            key={`${selectedClientCode}-${selectedCarrierRate?.id || selectedCarrierInfo?.carrierId || 'default'}`}
+            key={selectedClientCode || 'default'}
             carrierData={carrierRateData}
             onRate={handleFetchRatesForShipment}
             loadingRate={ratesLoading}
@@ -2598,12 +2661,25 @@ const NewShipment: React.FC = () => {
             isFromReference={isFromReference}
             hasRateChanged={hasRateChanged}
             onRateChanged={setHasRateChanged}
+            clientMarkupConfig={clientMarkupConfig}
           />
         </Col>
         <Col xs={24} xl={8}>
           <BillToLocation
             key={selectedClientCode}
             clientCode={selectedClientCode || quote?.clientCode}
+            brokerCarrierCode={
+              [
+                (selectedCarrierRate as any)?.brokerCarrierCode,
+                (selectedCarrierRate as any)?.brokerCode,
+                selectedCarrierRate?.rawQuoteResult?.brokerCarrierCode,
+                selectedCarrierRate?.rawQuoteResult?.brokerCode,
+                selectedCarrier?.brokerCarrierCode,
+                selectedCarrier?.brokerCode,
+                selectedCarrier?.rawQuoteResult?.brokerCarrierCode,
+                selectedCarrier?.rawQuoteResult?.brokerCode,
+              ].find((code) => String(code || "").trim()) || null
+            }
             onChange={(vals) => { billToValuesRef.current = vals; }}
           />
         </Col>

@@ -5,6 +5,7 @@ import { API_BASE_URL, SRV_TOKEN } from "../config/apiConfig";
 export type FetchShipmentDocumentsArgs = {
   loadNumber: string;
   clientCode?: string | null;
+  force?: boolean;
 };
 
 export type ShipmentDocumentsApiResponse = {
@@ -19,6 +20,8 @@ export type ShipmentDocumentState = {
   error: string | null;
   requestedLoadNumber: string | null;
   loadedLoadNumber: string | null;
+  loadedClientCode: string | null;
+  requestedClientCode: string | null;
 };
 
 const initialState: ShipmentDocumentState = {
@@ -27,12 +30,14 @@ const initialState: ShipmentDocumentState = {
   error: null,
   requestedLoadNumber: null,
   loadedLoadNumber: null,
+  loadedClientCode: null,
+  requestedClientCode: null,
 };
 
 export const fetchShipmentDocuments = createAsyncThunk<
   any,
   FetchShipmentDocumentsArgs,
-  { rejectValue: string }
+  { rejectValue: string; state: { shipmentDocument: ShipmentDocumentState } }
 >(
   "shipmentDocument/fetchShipmentDocuments",
   async ({ loadNumber, clientCode }, { rejectWithValue }) => {
@@ -87,6 +92,16 @@ export const fetchShipmentDocuments = createAsyncThunk<
           : `Unable to load documents for shipment ${resolvedLoadNumber}.`
       );
     }
+  },
+  {
+    condition: ({ loadNumber, clientCode, force }, { getState }) => {
+      if (force) return true;
+      const state = getState().shipmentDocument;
+      const keyLoadNumber = loadNumber.trim();
+      const keyClientCode = clientCode?.trim() || "";
+      if (state.loading && state.requestedLoadNumber === keyLoadNumber && state.requestedClientCode === keyClientCode) return false;
+      return !(state.loadedLoadNumber === keyLoadNumber && state.loadedClientCode === keyClientCode && state.data !== null);
+    },
   }
 );
 
@@ -100,6 +115,8 @@ const shipmentDocumentSlice = createSlice({
       state.error = null;
       state.requestedLoadNumber = null;
       state.loadedLoadNumber = null;
+      state.loadedClientCode = null;
+      state.requestedClientCode = null;
     },
   },
   extraReducers: (builder) => {
@@ -108,12 +125,14 @@ const shipmentDocumentSlice = createSlice({
         state.loading = true;
         state.error = null;
         state.requestedLoadNumber = action.meta.arg.loadNumber.trim();
+        state.requestedClientCode = action.meta.arg.clientCode?.trim() || "";
       })
       .addCase(fetchShipmentDocuments.fulfilled, (state, action) => {
         state.loading = false;
         state.error = null;
         state.data = action.payload;
         state.loadedLoadNumber = action.meta.arg.loadNumber.trim();
+        state.loadedClientCode = action.meta.arg.clientCode?.trim() || "";
       })
       .addCase(fetchShipmentDocuments.rejected, (state, action) => {
         state.loading = false;

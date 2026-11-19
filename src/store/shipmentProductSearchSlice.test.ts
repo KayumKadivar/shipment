@@ -36,6 +36,10 @@ const product: ShipmentProductSearchResult = {
   isHazmat: false,
   hazmatClass: "",
   hazmatUn: "",
+  hazmatProperShippingName: "",
+  hazmatGroup: "",
+  hazmatPhone: "",
+  hazmatContactName: "",
   isActive: true,
 };
 
@@ -123,9 +127,36 @@ describe("shipment product search API configuration", () => {
         isHazmat: true,
         hazmatClass: "3",
         hazmatUn: "UN1993",
+        hazmatProperShippingName: "",
+        hazmatGroup: "",
+        hazmatPhone: "",
+        hazmatContactName: "",
         isActive: true,
       },
     ]);
+  });
+
+  it.each([
+    ["hazmatProperShippingName", "Flammable liquid"],
+    ["hazmatGroup", "II"],
+    ["hazmatPhone", "(555) 123-4567"],
+    ["hazmatContactName", "Emergency desk"],
+  ])("searchShipmentProducts_WithHazmatDetails_Preserves_%s", async (field, value) => {
+    vi.spyOn(axios, "post").mockResolvedValue(createAxiosResponse({
+      isSuccess: true, data: [{ isHazmat: true, [field]: value }],
+    }));
+    const action = await searchShipmentProducts(searchArgs)(vi.fn(), vi.fn(), undefined);
+    expect(action.payload).toEqual([expect.objectContaining({ [field]: value })]);
+  });
+
+  it.each([undefined, null])("searchShipmentProducts_WithMissingHazmatDetails_ReturnsEmptyStrings_%s", async (value) => {
+    vi.spyOn(axios, "post").mockResolvedValue(createAxiosResponse({
+      isSuccess: true, data: [{ hazmatProperShippingName: value, hazmatGroup: value,
+        hazmatPhone: value, hazmatContactName: value }],
+    }));
+    const action = await searchShipmentProducts(searchArgs)(vi.fn(), vi.fn(), undefined);
+    expect(action.payload).toEqual([expect.objectContaining({ hazmatProperShippingName: "",
+      hazmatGroup: "", hazmatPhone: "", hazmatContactName: "" })]);
   });
 
   it("searchShipmentProducts_whenApiReportsFailure_rejectsWithTheApiMessage", async () => {

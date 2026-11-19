@@ -977,16 +977,30 @@ function ShipmentDetail() {
     dispatch(clearShipmentRerate());
     dispatch(resetEditShipment());
     const shipmentRequest = dispatch(fetchShipmentByLoadNumber(loadNumber));
-    const trackingRequest = dispatch(
-      fetchCarrierTracking({ loadNumber }),
-    );
 
     return () => {
       dispatch(resetEditShipment());
       shipmentRequest.abort();
-      trackingRequest.abort();
     };
   }, [dispatch, loadNumber]);
+
+  useEffect(() => {
+    const clientCode = currentShipment?.clientCode?.trim();
+
+    if (
+      !loadNumber ||
+      currentShipment?.loadNumber !== loadNumber ||
+      !clientCode
+    ) {
+      return;
+    }
+
+    const trackingRequest = dispatch(
+      fetchCarrierTracking({ loadNumber, clientCode }),
+    );
+
+    return () => trackingRequest.abort();
+  }, [dispatch, loadNumber, currentShipment?.loadNumber, currentShipment?.clientCode]);
 
   if (loading || (loadNumber && requestedLoadNumber !== loadNumber)) {
     return (

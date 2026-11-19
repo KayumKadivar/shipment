@@ -78,6 +78,10 @@ const reduxMocks = vi.hoisted(() => ({
       isHazmat: boolean;
       hazmatClass: string;
       hazmatUn: string;
+      hazmatProperShippingName: string;
+      hazmatGroup: string;
+      hazmatPhone: string;
+      hazmatContactName: string;
       isActive: boolean | null;
     }>,
     loading: false,
@@ -150,7 +154,7 @@ const shipment = {
       productWeight: 100,
       pallets: 1,
       pieces: 1,
-      nmfc: "12345",
+      nmfc: "123456-12",
       hazMat: false,
       length: 40,
       width: 48,
@@ -179,6 +183,10 @@ const productSearchResult = {
   isHazmat: false,
   hazmatClass: "",
   hazmatUn: "",
+  hazmatProperShippingName: "",
+  hazmatGroup: "",
+  hazmatPhone: "",
+  hazmatContactName: "",
   isActive: true,
 };
 
@@ -194,7 +202,7 @@ describe("LoadTab", () => {
     fireEvent.change(screen.getByLabelText("Weight in pounds"), { target: { value: "250" } });
     fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
     expect(onValuesChange).toHaveBeenLastCalledWith(expect.objectContaining({ products: [expect.objectContaining({
-      productWeight: 250, skuNumber: "SKU-42", accountNumber: "ACCOUNT-1", pcf: 12.5,
+      productWeight: 250, skuNumber: "SKU-42", accountNumber: "ACCOUNT-1", pcf: 4.5,
     })] }));
   });
 
@@ -206,7 +214,329 @@ describe("LoadTab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel load line editing" }));
     expect(onValuesChange).not.toHaveBeenCalled();
   });
+  /** Renders a row editor with observable commit and rate callbacks. */
+  function renderEditor(source = shipment) {
+    const onValuesChange = vi.fn();
+    const onRateInputsChange = vi.fn();
+    const onChangeCommitted = vi.fn();
+    render(<LoadTab shipment={source} onChangeCommitted={onChangeCommitted}
+      onEditorStateChange={vi.fn()} onValuesChange={onValuesChange}
+      onRateInputsChange={onRateInputsChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit load line" }));
+    return { onValuesChange, onRateInputsChange, onChangeCommitted };
+  }
+
+  it.each(["", "123456-12", "000001-02"])("LoadTab_WhenNmfcIsValid_%s_AllowsSaving", (nmfc) => {
+    const callbacks = renderEditor();
+    fireEvent.change(screen.getByLabelText("NMFC"), { target: { value: nmfc } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].nmfc).toBe(nmfc);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it.each(["12345-12", "123456-1", "12345612", "123456--12", "abcdef-12", "123456-123", " 123456-12", "123456-12 ", " "])(
+    "LoadTab_WhenNmfcIsInvalid_%s_BlocksSaving", (nmfc) => {
+      const callbacks = renderEditor();
+      fireEvent.change(screen.getByLabelText("NMFC"), { target: { value: nmfc } });
+      fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+      expect(screen.getByRole("alert").textContent).toContain("six digits");
+      expect(callbacks.onValuesChange).not.toHaveBeenCalled();
+      expect(callbacks.onChangeCommitted).not.toHaveBeenCalled();
+      expect(callbacks.onRateInputsChange).not.toHaveBeenCalled();
+    },
+  );
+
+  it("LoadTab_WhenNmfcIsBlurredWithInvalidValue_ShowsAccessibleError", () => {
+    renderEditor();
+    const input = screen.getByLabelText("NMFC");
+    fireEvent.change(input, { target: { value: "123" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.blur(input);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(input.getAttribute("aria-describedby")).toBe(screen.getByRole("alert").id);
+  });
+
+  it.each(["123456-12", ""])("LoadTab_WhenNmfcErrorIsCorrectedTo%s_ClearsErrorAndAllowsSave", (nmfc) => {
+    const callbacks = renderEditor();
+    const input = screen.getByLabelText("NMFC");
+    fireEvent.change(input, { target: { value: "123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(screen.getByRole("alert")).toBeTruthy();
+    fireEvent.change(input, { target: { value: nmfc } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].nmfc).toBe(nmfc);
+  });
+
+  it("LoadTab_WhenNewLineNmfcIsInvalid_BlocksSaving", () => {
+    const onValuesChange = vi.fn();
+    render(<LoadTab shipment={shipment} onChangeCommitted={vi.fn()}
+      onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Enter a new load line" }));
+    fireEvent.change(screen.getByLabelText("NMFC"), { target: { value: "12345612" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save new load line" }));
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
+
+  it("LoadTab_WhenNmfcEditingIsCancelled_DiscardsValueAndValidationState", () => {
+    const callbacks = renderEditor();
+    fireEvent.change(screen.getByLabelText("NMFC"), { target: { value: "123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel load line editing" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit load line" }));
+    expect(screen.getByLabelText<HTMLInputElement>("NMFC").value).toBe("123456-12");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(callbacks.onValuesChange).not.toHaveBeenCalled();
+  });
+
+  it.each(["Pallet", "Bag", "Carton"])("LoadTab_WhenUnitsAreSavedWith%s_PublishesPalletQuantity", (packageType) => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], packageType }] });
+    fireEvent.change(screen.getByLabelText("Units"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].pallets).toBe(5);
+  });
+
+  it.each(["Pallet", "Bag", "Carton"])("LoadTab_WhenUnitsAreReratedWith%s_UsesPalletQuantity", (packageType) => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], packageType }] });
+    fireEvent.change(screen.getByLabelText("Units"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onRateInputsChange.mock.lastCall?.[0].shipments[0]).toMatchObject({ units: 5, pallets: 5 });
+    expect(callbacks.onChangeCommitted).toHaveBeenCalledWith(true);
+  });
+
+  it("LoadTab_WhenNewLineUnitsAreSaved_PublishesPalletQuantity", async () => {
+    const onValuesChange = vi.fn();
+    render(<LoadTab shipment={shipment} onChangeCommitted={vi.fn()}
+      onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Enter a new load line" }));
+    fireEvent.change(screen.getByLabelText("Units"), { target: { value: "5" } });
+    fireEvent.mouseDown(screen.getByLabelText("Package"));
+    fireEvent.click(await screen.findByRole("option", { name: "Bag" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save new load line" }));
+    expect(onValuesChange.mock.lastCall?.[0].products[1].pallets).toBe(5);
+  });
+
+  it("LoadTab_WhenSavedUnitsAreReopened_DisplaysAcceptedPalletQuantity", () => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], packageType: "Bag" }] });
+    fireEvent.change(screen.getByLabelText("Units"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    const products = callbacks.onValuesChange.mock.lastCall?.[0].products;
+    cleanup();
+    renderEditor({ ...shipment, products });
+    expect(screen.getByLabelText<HTMLInputElement>("Units").value).toBe("5");
+  });
+
+  it("LoadTab_WhenUnitsChange_PreservesIndependentPieces", () => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], pieces: 8 }] });
+    fireEvent.change(screen.getByLabelText("Units"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].pieces).toBe(8);
+  });
+
+  it.each([[0, "0"], [null, ""]] as const)("LoadTab_WhenUnitsPalletsAre%s_DoesNotSubstitutePieces", (pallets, expected) => {
+    renderEditor({ ...shipment, products: [{ ...shipment.products[0], pallets, pieces: 8 }] });
+    expect(screen.getByLabelText<HTMLInputElement>("Units").value).toBe(expected);
+  });
+
+  it("LoadTab_WhenUnitsAreMissing_CalculatesDensityWithoutSubstitutingPieces", () => {
+    renderEditor({ ...shipment, products: [{ ...shipment.products[0], pallets: null, pieces: 8, pcf: null }] });
+    expect(screen.getByLabelText<HTMLInputElement>("PCF/Density").value).toBe("1.80");
+  });
+
+  it("LoadTab_WhenPackageChanges_PreservesUnchangedUnits", async () => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], pallets: 5 }] });
+    fireEvent.mouseDown(screen.getByLabelText("Package"));
+    fireEvent.click(await screen.findByRole("option", { name: "Bag" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].pallets).toBe(5);
+  });
+
+  it("LoadTab_WhenPiecesAreSaved_PublishesEditedPiecesAndRequestsRerating", () => {
+    const callbacks = renderEditor();
+    fireEvent.change(screen.getByLabelText("Pieces"), { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].pieces).toBe(8);
+    expect(callbacks.onRateInputsChange.mock.lastCall?.[0].shipments[0].pieces).toBe(8);
+    expect(callbacks.onChangeCommitted).toHaveBeenCalledWith(true);
+  });
+
+  it("LoadTab_WhenStackableIsSaved_PublishesEditedStackableAndRequestsRerating", () => {
+    const callbacks = renderEditor();
+    fireEvent.click(screen.getByLabelText("Stackable"));
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].stackable).toBe(true);
+    expect(callbacks.onRateInputsChange.mock.lastCall?.[0].shipments[0].stackable).toBe(true);
+    expect(callbacks.onChangeCommitted).toHaveBeenCalledWith(true);
+  });
+
+  it("LoadTab_WhenUnitsChange_RecalculatesReadOnlyDensity", () => {
+    renderEditor();
+    fireEvent.change(screen.getByLabelText("Units"), { target: { value: "2" } });
+    const density = screen.getByLabelText<HTMLInputElement>("PCF/Density");
+    expect(density.value).toBe("0.90");
+    expect(density.readOnly).toBe(true);
+  });
+
+  it("LoadTab_WhenDensityInputsAreInvalid_PublishesNullDensity", () => {
+    const callbacks = renderEditor();
+    fireEvent.change(screen.getByLabelText("Length in inches"), { target: { value: "" } });
+    expect(screen.getByLabelText<HTMLInputElement>("PCF/Density").value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].pcf).toBeNull();
+  });
+
+  it("LoadTab_WhenOnlyPiecesChange_PreservesSuppliedDensity", () => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], pcf: 12.5 }] });
+    fireEvent.change(screen.getByLabelText("Pieces"), { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].pcf).toBe(12.5);
+  });
+
+  it("LoadTab_WhenNewLineIsSaved_PublishesNewProductControls", () => {
+    const onValuesChange = vi.fn();
+    render(<LoadTab shipment={shipment} onChangeCommitted={vi.fn()}
+      onEditorStateChange={vi.fn()} onValuesChange={onValuesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "Enter a new load line" }));
+    fireEvent.change(screen.getByLabelText("Pieces"), { target: { value: "8" } });
+    fireEvent.click(screen.getByLabelText("Stackable"));
+    fireEvent.click(screen.getByLabelText("Hazmat"));
+    fireEvent.change(screen.getByLabelText("Hazmat Class"), { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save new load line" }));
+    expect(onValuesChange.mock.lastCall?.[0].products[1]).toMatchObject({
+      pieces: 8, stackable: false, hazMat: true, hazmatClass: "3", pcf: null,
+    });
+  });
+
+  it("LoadTab_WhenNonHazmatProductIsSelected_ClearsPreviousHazmatDetails", async () => {
+    reduxMocks.shipmentProductSearch.data = [productSearchResult];
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], hazMat: true,
+      hazmatClass: "3", hazmatUnNaNumber: "UN1203", hazmatProperShippingName: "Gasoline",
+      hazmatGroup: "II", hazmatPhone: "5551234567", hazmatContact: "Dispatch" }] });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "DO" } });
+    await screen.findByRole("option", { name: "DO NOT SHIP" });
+    fireEvent.click(screen.getByText("DO NOT SHIP", { selector: "strong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0]).toMatchObject({
+      hazMat: false, hazmatClass: "", hazmatUnNaNumber: "", hazmatProperShippingName: "",
+      hazmatGroup: "", hazmatPhone: "", hazmatContact: "", pcf: 9.38,
+    });
+  });
+
+  const hazmatFields = [
+    ["HAZMAT UN/NA#", "hazmatUnNaNumber", "hazMatUN"],
+    ["Hazmat Proper Shipping Name", "hazmatProperShippingName", "hazMatProperShippingName"],
+    ["Hazmat Class", "hazmatClass", "hazMatClass"],
+    ["Hazmat Packing Group", "hazmatGroup", "hazMatPackingGroup"],
+    ["Hazmat Phone", "hazmatPhone", "hazMatPhone"],
+    ["Hazmat Contact", "hazmatContact", "hazMatContact"],
+  ] as const;
+
+  /** Saved shipment values used to verify the six-field popup contract. */
+  const savedHazmatProduct = { ...shipment.products[0], hazMat: true,
+    hazmatUnNaNumber: "UN : 123", hazmatClass: "2.5",
+    hazmatProperShippingName: "Flammable liquid", hazmatGroup: "II",
+    hazmatPhone: "(555) 123-4567", hazmatContact: "Emergency desk" };
+
+  it("LoadTab_WithSavedHazmatDetails_PopulatesAllPopupFields", () => {
+    renderEditor({ ...shipment, products: [savedHazmatProduct] });
+    fireEvent.click(screen.getByRole("button", { name: "Edit Hazmat" }));
+    hazmatFields.forEach(([label, field]) => {
+      expect(screen.getByLabelText<HTMLInputElement>(label).value).toBe(savedHazmatProduct[field]);
+    });
+  });
+
+  it("LoadTab_WithSelectedHazmatDetails_PopulatesAllPopupFields", async () => {
+    reduxMocks.shipmentProductSearch.data = [{ ...productSearchResult, isHazmat: true,
+      hazmatUn: "UN : 123", hazmatClass: "2.5", hazmatProperShippingName: "Flammable liquid",
+      hazmatGroup: "II", hazmatPhone: "(555) 123-4567", hazmatContactName: "Emergency desk" }];
+    renderEditor({ ...shipment, products: [{ ...savedHazmatProduct,
+      hazmatProperShippingName: "Old name", hazmatGroup: "I",
+      hazmatPhone: "(555) 999-9999", hazmatContact: "Old contact" }] });
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "DO" } });
+    fireEvent.click(await screen.findByText("DO NOT SHIP", { selector: "strong" }));
+    expect(screen.getByLabelText("Package").closest(".ant-select")?.textContent).toContain("Carton");
+    fireEvent.click(screen.getByRole("button", { name: "Edit Hazmat" }));
+    hazmatFields.forEach(([label, field]) => {
+      expect(screen.getByLabelText<HTMLInputElement>(label).value).toBe(savedHazmatProduct[field]);
+    });
+  });
+
+  it("LoadTab_WithSavedHazmatDetails_RetainsAcceptedValuesAfterRemount", () => {
+    const callbacks = renderEditor({ ...shipment, products: [savedHazmatProduct] });
+    fireEvent.click(screen.getByRole("button", { name: "Edit Hazmat" }));
+    fireEvent.change(screen.getByLabelText("Hazmat Contact"), { target: { value: "Updated desk" } });
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    const products = callbacks.onValuesChange.mock.lastCall?.[0].products;
+    cleanup();
+    renderEditor({ ...shipment, products });
+    fireEvent.click(screen.getByRole("button", { name: "Edit Hazmat" }));
+    hazmatFields.forEach(([label, field]) => {
+      expect(screen.getByLabelText<HTMLInputElement>(label).value)
+        .toBe(field === "hazmatContact" ? "Updated desk" : savedHazmatProduct[field]);
+    });
+  });
+
+  it.each(hazmatFields)("LoadTab_When%sIsSaved_PublishesDetailAndRequestsRerating", (label, productField, rateField) => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], hazMat: true }] });
+    fireEvent.click(screen.getByRole("button", { name: "Edit Hazmat" }));
+    const value = label === "Hazmat Phone" ? "(555) 123-4567" : "Updated";
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(callbacks.onValuesChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0][productField]).toBe(value);
+    expect(callbacks.onRateInputsChange.mock.lastCall?.[0].shipments[0][rateField]).toBe(value);
+    expect(callbacks.onChangeCommitted).toHaveBeenCalledWith(true);
+  });
+
+  it("LoadTab_WhenHazmatPopupIsCancelled_PreservesPreviousDetails", () => {
+    renderEditor({ ...shipment, products: [{ ...shipment.products[0], hazMat: true, hazmatClass: "3" }] });
+    fireEvent.click(screen.getByRole("button", { name: "Edit Hazmat" }));
+    fireEvent.change(screen.getByLabelText("Hazmat Class"), { target: { value: "9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit Hazmat" }));
+    expect(screen.getByLabelText<HTMLInputElement>("Hazmat Class").value).toBe("3");
+  });
+
+  it("LoadTab_WhenHazmatIsEnabled_ClearsStackableAndRequestsRerating", () => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], stackable: true }] });
+    fireEvent.click(screen.getByLabelText("Hazmat"));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    expect(screen.getByLabelText<HTMLInputElement>("Stackable").checked).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    expect(callbacks.onValuesChange.mock.lastCall?.[0].products[0].hazMat).toBe(true);
+    expect(callbacks.onChangeCommitted).toHaveBeenCalledWith(true);
+  });
+
+  it("LoadTab_WhenHazmatIsDisabled_ClearsAllHazmatDetails", () => {
+    const callbacks = renderEditor({ ...shipment, products: [{ ...shipment.products[0], hazMat: true,
+      hazmatClass: "3", hazmatUnNaNumber: "UN1203", hazmatProperShippingName: "Gasoline",
+      hazmatGroup: "II", hazmatPhone: "5551234567", hazmatContact: "Dispatch" }] });
+    fireEvent.click(screen.getByLabelText("Hazmat"));
+    fireEvent.click(screen.getByRole("button", { name: "Save load line" }));
+    const product = callbacks.onValuesChange.mock.lastCall?.[0].products[0];
+    expect(product.hazMat).toBe(false);
+    hazmatFields.forEach(([, field]) => expect(product[field]).toBe(""));
+  });
+
+  it("LoadTab_WhenRowEditingIsCancelled_DiscardsNewFieldChanges", () => {
+    const callbacks = renderEditor();
+    fireEvent.change(screen.getByLabelText("Pieces"), { target: { value: "8" } });
+    fireEvent.click(screen.getByLabelText("Stackable"));
+    fireEvent.click(screen.getByLabelText("Hazmat"));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel load line editing" }));
+    expect(callbacks.onValuesChange).not.toHaveBeenCalled();
+    expect(callbacks.onChangeCommitted).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn() })));
     reduxMocks.dispatch.mockReset();
     reduxMocks.fetchAccessorials.mockClear();
     reduxMocks.fetchPackageTypes.mockClear();
@@ -790,7 +1120,7 @@ describe("LoadTab", () => {
 
   it.each([
     ["Description", "Updated freight"],
-    ["NMFC", "67890"],
+    ["NMFC", "678901-23"],
   ])(
     "LoadTab_when%sIsChangedAndSaved_doesNotRequestRerating",
     (label, value) => {

@@ -3,13 +3,13 @@ import type { ColumnsType } from "antd/es/table";
 import { 
   SendOutlined, 
   SyncOutlined,
-  PlusOutlined
+  // PlusOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useEffect, useMemo } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import { fetchShipmentDocuments } from "../../store/shipmentDocumentSlice";
+import { fetchShipmentDocuments } from "../../store/shipmentDocumentSlice.ts";
 import type { ShipmentDetails } from "../../types/shipment.types";
 
 interface DocumentRecord {
@@ -122,6 +122,7 @@ function Document({ shipment, loadNumber: propLoadNumber, clientCode: propClient
       dispatch(fetchShipmentDocuments({
         loadNumber: resolvedLoadNumber,
         clientCode: resolvedClientCode,
+        force: true,
       }));
     }
   };
@@ -305,14 +306,14 @@ function Document({ shipment, loadNumber: propLoadNumber, clientCode: propClient
         />
       </div>
       
-      <div className="shipments-header">
+      {/* <div className="shipments-header">
         <div />
         <div className="shipment-detail-actions">
           <Button type="text" icon={<PlusOutlined />}>
             Add Document
           </Button>
         </div>                                            
-      </div>
+      </div> */}
     </div>
   );
 }

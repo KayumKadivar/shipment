@@ -10,6 +10,9 @@ import { formatPhoneNumber } from '../../utils/formatPhoneNumber';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config/apiConfig';
 
+const getLocationOptionValue = (location: any, index: number) =>
+  `${location.locationName || `Location-${index + 1}`} — ${[location.city, location.stateCode, location.zipCode].filter(Boolean).join(', ')} [${location.locationId ?? location.locationID ?? index}]`;
+
 export interface OriginLocationProps {
   form?: FormInstance;
   initialData?: {
@@ -150,12 +153,10 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
       locationsList.forEach((loc: any, idx: number) => {
         const id = loc.locationId ?? loc.locationID ?? idx;
         locationsMapRef.current.set(String(id), loc);
-        const name = (loc.locationName || "").trim().toLowerCase();
-        if (name) locationsMapRef.current.set(name, loc);
       });
       setCompanyOptions(
         locationsList.map((loc: any, idx: number) => ({
-          value: loc.locationName || `Location-${idx + 1}`,
+          value: getLocationOptionValue(loc, idx),
           key: `prop-loc-${loc.locationId || idx}`,
           location: loc,
           label: (
@@ -216,7 +217,7 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
       if (locationsList && locationsList.length > 0) {
         setCompanyOptions(
           locationsList.map((loc: any, idx: number) => ({
-            value: loc.locationName || `Location-${idx + 1}`,
+            value: getLocationOptionValue(loc, idx),
             key: `prop-loc-${loc.locationId || idx}`,
             location: loc,
             label: (
@@ -274,12 +275,10 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
           dataList.forEach((loc: any, idx: number) => {
             const id = loc.locationId ?? loc.locationID ?? idx;
             locationsMapRef.current.set(String(id), loc);
-            const name = (loc.locationName || "").trim().toLowerCase();
-            if (name) locationsMapRef.current.set(name, loc);
           });
           setCompanyOptions(
             dataList.map((loc: any, idx: number) => ({
-              value: loc.locationName || trimmed,
+              value: getLocationOptionValue(loc, idx),
               key: `search-loc-${loc.locationId || idx}-${idx}`,
               location: loc,
               label: (
@@ -509,10 +508,9 @@ const OriginLocation: React.FC<OriginLocationProps> = ({
             onSelect={handleSelectCompany}
             onChange={(val) => {
               form.setFieldsValue({ companyName: val });
-              const valKey = String(val || "").trim().toLowerCase();
-              const matchedLoc = locationsMapRef.current.get(valKey);
-              if (matchedLoc) {
-                handleSelectCompany(val, { location: matchedLoc });
+              const selectedOption = companyOptions.find((item) => item.value === val);
+              if (selectedOption) {
+                handleSelectCompany(val, { location: selectedOption.location });
               } else if (onChange) {
                 onChange(form.getFieldsValue());
               }

@@ -1,9 +1,9 @@
 import { EyeInvisibleOutlined, EyeTwoTone } from "@ant-design/icons";
-import { Alert, Button, Input } from "antd";
+import { Alert, Button, Checkbox, Input } from "antd";
 import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 
 import loginLogoDown from "../assets/login-logo-down.svg";
-import loginLogo from "../assets/login-logo.png";
+import loginLogo from "../assets/Vector-login.svg";
 import nicoLogo from "../assets/nico1.png";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { loginUser } from "../store/appSlice";
@@ -16,7 +16,17 @@ type LoginProps = {
 };
 
 function Login({ onLogin }: LoginProps) {
-  const [username, setUsername] = useState("");
+  const [rememberedCredentials] = useState(() => {
+    try {
+      const savedUsername = localStorage.getItem("rememberedUsername")?.trim() ?? "";
+      return localStorage.getItem("rememberUsername") === "true" ? savedUsername : "";
+    } catch {
+      return "";
+    }
+  });
+  const [rememberUsername, setRememberUsername] = useState(Boolean(rememberedCredentials));
+
+  const [username, setUsername] = useState(rememberedCredentials);
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -52,6 +62,18 @@ function Login({ onLogin }: LoginProps) {
           password,
         })
       ).unwrap();
+
+      try {
+        if (rememberUsername) {
+          localStorage.setItem("rememberedUsername", username.trim());
+          localStorage.setItem("rememberUsername", "true");
+        } else {
+          localStorage.removeItem("rememberUsername");
+          localStorage.removeItem("rememberedUsername");
+        }
+      } catch {
+        // Browser storage availability must not prevent successful login.
+      }
 
       // Show sync animation screen after successful API login
       setIsLoggingIn(true);
@@ -90,7 +112,7 @@ function Login({ onLogin }: LoginProps) {
   }
 
   return (
-    <main className='login-page' aria-label='Login page'>
+    <main className='login-page login-page--entry' aria-label='Login page'>
       <section className='login-card' aria-labelledby='login-title'>
         <div className='login-logo' id='login-title'>
           <img src={loginLogo} alt='NICO LTL' />
@@ -140,7 +162,13 @@ function Login({ onLogin }: LoginProps) {
           </label>
 
           <div className='login-options'>
-
+            <Checkbox
+              className='login-remember'
+              checked={rememberUsername}
+              disabled={isSubmitting}
+              onChange={(event) => setRememberUsername(event.target.checked)}>
+              Remember me
+            </Checkbox>
             <button className='login-link' type='button'>
               Forgot Password?
             </button>
@@ -162,6 +190,9 @@ function Login({ onLogin }: LoginProps) {
           <img src={loginLogoDown} alt='Powered by Inland' />
         </div>
       </section>
+      <aside className='login-tagline'>
+        <p>A Smarter way to<br />Run LTL Freight.</p>
+      </aside>
     </main>
   );
 }

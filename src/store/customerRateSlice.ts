@@ -10,9 +10,15 @@ export const COST_CODE_GROSS = "GROSS";
 export const COST_CODE_DISC = "DISC";
 export const COST_CODE_FUEL = "FUEL";
 
-export const COST_NAME_GROSS = "Gross Charge";
+export const COST_NAME_GROSS = "ore";
 export const COST_NAME_DISC = "Discount";
 export const COST_NAME_FUEL = "Fuel Surcharge";
+
+const cleanTerminalName = (value: unknown): string =>
+  String(value ?? "")
+    .replace(/\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 export interface RateAccessorialCharge {
   sellCharge?: number;
@@ -600,12 +606,33 @@ export const saveCustomerQuote = createAsyncThunk<
       let quoteResults = baseQuote.quoteResults;
       if (Array.isArray(quoteResults) && quoteResults.length > 0) {
         quoteResults = quoteResults.map((resultItem: any, idx: number) => {
-          const matchingRate = calculatedRates.find(
-            (r: any) =>
-              (r.code && resultItem.scac && r.code.toUpperCase() === resultItem.scac.toUpperCase()) ||
-              (r.name && resultItem.carrierName && r.name.toLowerCase() === resultItem.carrierName.toLowerCase()) ||
-              (r.id && resultItem.saasQuoteId && String(r.id) === String(resultItem.saasQuoteId))
-          );
+          const resultSaasQuoteId = String(resultItem.saasQuoteId ?? "").trim();
+          const resultCarrierQuoteNo = String(resultItem.carrierQuoteNo ?? "").trim();
+          const resultScac = String(resultItem.scac ?? "").trim().toUpperCase();
+          const resultCarrierName = String(resultItem.carrierName ?? "").trim().toLowerCase();
+          const resultBrokerCode = String(resultItem.brokerCode ?? "").trim().toUpperCase();
+
+          // A carrier can return multiple quotes under one SCAC. Match the
+          // individual quote first so we don't apply another quote's sell rate.
+          const matchingRate =
+            (resultSaasQuoteId && calculatedRates.find((r: any) =>
+              String(r.rawQuoteResult?.saasQuoteId ?? r.saasQuoteId ?? "").trim() === resultSaasQuoteId ||
+              String(r.id ?? "").trim() === resultSaasQuoteId
+            )) ||
+            (resultCarrierQuoteNo && calculatedRates.find((r: any) =>
+              String(r.rawQuoteResult?.carrierQuoteNo ?? r.carrierQuoteNo ?? "").trim() === resultCarrierQuoteNo
+            )) ||
+            (resultScac && resultCarrierName && calculatedRates.find((r: any) =>
+              String(r.code ?? "").trim().toUpperCase() === resultScac &&
+              String(r.name ?? "").trim().toLowerCase() === resultCarrierName &&
+              (!resultBrokerCode || !r.rawQuoteResult?.brokerCode || String(r.rawQuoteResult.brokerCode).trim().toUpperCase() === resultBrokerCode)
+            )) ||
+            (resultCarrierName && calculatedRates.find((r: any) =>
+              String(r.name ?? "").trim().toLowerCase() === resultCarrierName
+            )) ||
+            (resultScac && calculatedRates.find((r: any) =>
+              String(r.code ?? "").trim().toUpperCase() === resultScac
+            ));
 
           const buyGross = Number(matchingRate?.grossCharge ?? resultItem.grossCharge) || 0;
           const sellGross = Number(matchingRate?.grossSell ?? matchingRate?.grossSellAmount ?? matchingRate?.sellPrice ?? buyGross) || buyGross;
@@ -712,11 +739,11 @@ export const saveCustomerQuote = createAsyncThunk<
             transitDays: String(resultItem.transitDays ?? matchingRate?.transitDays ?? "0"),
             saasQuoteId: String(resultItem.saasQuoteId ?? matchingRate?.id ?? ""),
             originTerminalCode: resultItem.originTerminalCode || "",
-            originTerminalName: resultItem.originTerminalName || "",
+            originTerminalName: cleanTerminalName(resultItem.originTerminalName),
             originTerminalZip: resultItem.originTerminalZip || "",
             originTerminalPhone: resultItem.originTerminalPhone || "",
             destinationTerminalCode: resultItem.destinationTerminalCode || "",
-            destinationTerminalName: resultItem.destinationTerminalName || "",
+            destinationTerminalName: cleanTerminalName(resultItem.destinationTerminalName),
             destinationTerminalZip: resultItem.destinationTerminalZip || "",
             destinationTerminalPhone: resultItem.destinationTerminalPhone || "",
             quoteCostDetails: costDetails,

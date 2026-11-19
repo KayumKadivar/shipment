@@ -12,6 +12,10 @@ type ProductSearchApiItem = {
   isHazmat?: boolean | null;
   hazmatClass?: string | null;
   hazmatUN?: string | null;
+  hazmatProperShippingName?: string | null;
+  hazmatGroup?: string | null;
+  hazmatPhone?: string | null;
+  hazmatContactName?: string | null;
   packagingGroup?: string | null;
   length?: number | null;
   height?: number | null;
@@ -39,6 +43,10 @@ export type ShipmentProductSearchResult = {
   isHazmat: boolean;
   hazmatClass: string;
   hazmatUn: string;
+  hazmatProperShippingName: string;
+  hazmatGroup: string;
+  hazmatPhone: string;
+  hazmatContactName: string;
   isActive: boolean | null;
 };
 
@@ -106,6 +114,10 @@ export const searchShipmentProducts = createAsyncThunk<
         isHazmat: product.isHazmat ?? false,
         hazmatClass: product.hazmatClass ?? "",
         hazmatUn: product.hazmatUN ?? "",
+        hazmatProperShippingName: product.hazmatProperShippingName ?? "",
+        hazmatGroup: product.hazmatGroup ?? "",
+        hazmatPhone: product.hazmatPhone ?? "",
+        hazmatContactName: product.hazmatContactName ?? "",
         isActive: product.isActive ?? null,
       }));
     } catch (error: unknown) {

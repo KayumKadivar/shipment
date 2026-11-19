@@ -19,6 +19,24 @@ const shipment = {
 } as unknown as ShipmentDetails;
 
 describe("createEditShipmentRequest", () => {
+  it("createEditShipmentRequest_UnitsWithNonPalletPackage_PreservesPalletQuantity", () => {
+    const source = { ...shipment, products: [{ ...shipment.products[0], pallets: 5, pieces: 8, packageType: "Bag" }] };
+    const result = createEditShipmentRequest({ shipment: source,
+      detailValues: createShipmentDetailEditValues(source), username: null });
+    expect(result.products[0]).toMatchObject({ pallets: 5, pieces: 8, packageType: "Bag" });
+  });
+
+  it("createEditShipmentRequest_AcceptedLoadFields_PreservesProductValues", () => {
+    const product = { ...shipment.products[0], pieces: 8, pcf: 1.56, stackable: false,
+      hazMat: true, hazmatClass: "3", hazmatUnNaNumber: "UN1203",
+      hazmatProperShippingName: "Gasoline", hazmatGroup: "II",
+      hazmatPhone: "(555) 123-4567", hazmatContact: "Dispatch" };
+    const source = { ...shipment, products: [product] };
+    const result = createEditShipmentRequest({ shipment: source,
+      detailValues: createShipmentDetailEditValues(source), username: null });
+    expect(result.products[0]).toMatchObject(product);
+  });
+
   it("createEditShipmentRequest_UneditedMetadata_PreservesHiddenFields", () => {
     const result = createEditShipmentRequest({ shipment, detailValues: createShipmentDetailEditValues(shipment), username: null });
     expect(result).toMatchObject({ ref1Value: "hidden-reference", expectedShipDate: shipment.expectedShipDate, userName: "creator" });

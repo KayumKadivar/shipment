@@ -5,7 +5,7 @@ import {
   EditOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
-import { AutoComplete, Button, Input, Popconfirm, Select } from "antd";
+import { AutoComplete, Button, Checkbox, Form, Input, Modal, Popconfirm, Select } from "antd";
 import {
   useCallback,
   useEffect,
@@ -28,6 +28,8 @@ import type {
   ShipmentRerateLoadValues,
   ShipmentRerateProduct,
 } from "../../types/shipment.types";
+import { calculatePCF } from "../../utils/calculatePCF";
+import { formatPhoneNumber } from "../../utils/formatPhoneNumber";
 import LoadInternalNotes from "./LoadInternalNotes";
 import { createShipmentAccessorialLabels } from "./shipmentAccessorials";
 
@@ -50,7 +52,9 @@ type LoadLine = {
   hazMatPackingGroup: string;
   hazMatPhone: string;
   hazMatContact: string;
-  pieces: number;
+  pieces: string;
+  /** Displayed density, retained until measurements change. */
+  pcfDensity: string;
   linearFeet: number;
   stackable: boolean;
 };
@@ -59,6 +63,8 @@ type LineEditor = {
   line: LoadLine;
   isNew: boolean;
   packageTypeWasEdited: boolean;
+  /** Whether NMFC has been blurred or a row save has been attempted. */
+  nmfcWasTouched: boolean;
 };
 
 type PackageTypeOption = {
@@ -98,6 +104,15 @@ const RerateLoadLineFields: ReadonlyArray<keyof LoadLine> = [
   "width",
   "height",
   "freightClass",
+  "pieces",
+  "stackable",
+  "hazMat",
+  "hazMatClass",
+  "hazMatUN",
+  "hazMatProperShippingName",
+  "hazMatPackingGroup",
+  "hazMatPhone",
+  "hazMatContact",
 ];
 
 const FREIGHT_CLASS_OPTIONS = [
@@ -121,6 +136,11 @@ const FREIGHT_CLASS_OPTIONS = [
   "500",
 ].map((value) => ({ value, label: value }));
 
+/** Accepts an omitted NMFC or exactly six digits, a dash, and two digits. */
+function isValidNmfc(value: string): boolean {
+  return value === "" || /^\d{6}-\d{2}$/.test(value);
+}
+
 function numberText(value: number | null | undefined) {
   return value == null ? "" : String(value);
 }
@@ -133,7 +153,7 @@ function createShipmentLine(
   return {
     id: `shipment-load-${shipment.loadNumber}-${index}`,
     originalProduct: product,
-    units: numberText(product.pallets ?? product.pieces),
+    units: numberText(product.pallets),
     packageType: product.packageType ?? "",
     weight: numberText(product.productWeight),
     length: numberText(product.length),
@@ -149,7 +169,10 @@ function createShipmentLine(
     hazMatPackingGroup: product.hazmatGroup ?? "",
     hazMatPhone: product.hazmatPhone ?? "",
     hazMatContact: product.hazmatContact ?? "",
-    pieces: product.pieces ?? 1,
+    pieces: numberText(product.pieces ?? 1),
+    pcfDensity: product.pcf == null
+      ? calculatePCF(product.length, product.width, product.height, product.productWeight, product.pallets)
+      : numberText(product.pcf),
     linearFeet: product.linearFeet ?? 0,
     stackable: product.stackable ?? false,
   };
@@ -174,7 +197,8 @@ function createEmptyLine(): LoadLine {
     hazMatPackingGroup: "",
     hazMatPhone: "",
     hazMatContact: "",
-    pieces: 1,
+    pieces: "1",
+    pcfDensity: "",
     linearFeet: 0,
     stackable: false,
   };
@@ -186,20 +210,19 @@ function createEditedProduct(line: LoadLine): ShipmentProduct {
   const numeric = (value: string, previous: number | null | undefined) =>
     original && value === numberText(previous) ? previous ?? null : numericValue(value);
   const rate = createRerateProduct(line);
-  const unchangedUnits = original && line.units === numberText(original.pallets ?? original.pieces)
-    && line.packageType === (original.packageType ?? "");
+  const unchangedUnits = original && line.units === numberText(original.pallets);
   return {
     productDescription: line.description,
     productClass: line.freightClass,
     productWeight: numeric(line.weight, original?.productWeight),
     pallets: unchangedUnits ? original.pallets : rate.pallets,
-    pieces: line.pieces,
+    pieces: numericValue(line.pieces),
     nmfc: line.nmfc,
     hazMat: line.hazMat,
     length: numeric(line.length, original?.length),
     width: numeric(line.width, original?.width),
     height: numeric(line.height, original?.height),
-    pcf: original?.pcf ?? null,
+    pcf: line.pcfDensity === "" ? null : numericValue(line.pcfDensity),
     packageType: line.packageType,
     skuNumber: original?.skuNumber ?? null,
     accountNumber: original?.accountNumber ?? null,
@@ -238,9 +261,8 @@ function createRerateProduct(line: LoadLine): ShipmentRerateProduct {
     hazMatContact: line.hazMatContact.trim() || undefined,
     nmfc: line.nmfc.trim() || undefined,
     description: line.description.trim() || undefined,
-    pallets:
-      line.packageType.trim().toLocaleLowerCase() === "pallet" ? units : 0,
-    pieces: line.pieces,
+    pallets: units,
+    pieces: numericValue(line.pieces),
     length: numericValue(line.length),
     width: numericValue(line.width),
     height: numericValue(line.height),
@@ -298,9 +320,15 @@ function LoadLineInputs({
   packageTypeOptions,
   packageTypesLoading,
   packageTypesError,
+  onHazmatEdit,
+  nmfcHasError,
+  onNmfcBlur,
 }: {
   line: LoadLine;
-  onChange: (field: keyof LoadLine, value: string) => void;
+  onChange: <TField extends keyof LoadLine>(field: TField, value: LoadLine[TField]) => void;
+  onHazmatEdit: () => void;
+  nmfcHasError: boolean;
+  onNmfcBlur: () => void;
   onProductSearch: (value: string) => void;
   onProductSelect: (product: ShipmentProductSearchResult) => void;
   productOptions: ProductOption[];
@@ -356,10 +384,25 @@ function LoadLineInputs({
         />
       </td>
       <td>
+        <Input value={line.pieces} aria-label='Pieces'
+          onChange={(event) => onChange("pieces", event.target.value)} />
+      </td>
+      <td>
         <Input
           value={line.weight}
           aria-label='Weight in pounds'
           onChange={(event) => onChange("weight", event.target.value)}
+        />
+      </td>
+      <td>
+        <Select
+          value={line.freightClass || undefined}
+          aria-label='Freight class'
+          placeholder='-- Select --'
+          allowClear
+          options={FREIGHT_CLASS_OPTIONS}
+          virtual={false}
+          onChange={(value) => onChange("freightClass", value ?? "")}
         />
       </td>
       <td>
@@ -387,22 +430,34 @@ function LoadLineInputs({
         </div>
       </td>
       <td>
-        <Select
-          value={line.freightClass || undefined}
-          aria-label='Freight class'
-          placeholder='-- Select --'
-          allowClear
-          options={FREIGHT_CLASS_OPTIONS}
-          virtual={false}
-          onChange={(value) => onChange("freightClass", value ?? "")}
-        />
+        <Input value={line.pcfDensity} aria-label='PCF/Density' readOnly tabIndex={-1} />
       </td>
       <td>
         <Input
           value={line.nmfc}
           aria-label='NMFC'
+          placeholder='123456-12'
+          status={nmfcHasError ? "error" : undefined}
+          aria-invalid={nmfcHasError || undefined}
+          aria-describedby={nmfcHasError ? `${line.id}-nmfc-error` : undefined}
+          onBlur={onNmfcBlur}
           onChange={(event) => onChange("nmfc", event.target.value)}
         />
+        {nmfcHasError ? (
+          <div id={`${line.id}-nmfc-error`} className='shipment-load-nmfc-error' role='alert'>
+            NMFC must be six digits, a dash, and two digits (e.g. 123456-12).
+          </div>
+        ) : null}
+      </td>
+      <td>
+        <Checkbox checked={line.stackable} aria-label='Stackable'
+          onChange={(event) => onChange("stackable", event.target.checked)} />
+      </td>
+      <td>
+        <Checkbox checked={line.hazMat} aria-label='Hazmat'
+          onChange={(event) => event.target.checked ? onHazmatEdit() : onChange("hazMat", false)} />
+        {line.hazMat ? <Button type='text' size='small' icon={<EditOutlined />}
+          aria-label='Edit Hazmat' onClick={onHazmatEdit} /> : null}
       </td>
     </>
   );
@@ -437,6 +492,7 @@ function LoadTab({
     ),
   );
   const [lineEditor, setLineEditor] = useState<LineEditor | null>(null);
+  const [hazmatDraft, setHazmatDraft] = useState<LoadLine | null>(null);
   const [accessorials, setAccessorials] = useState(() =>
     createShipmentAccessorialLabels(shipment),
   );
@@ -542,6 +598,7 @@ function LoadTab({
       line: { ...createEmptyLine(), packageType: defaultPackageType },
       isNew: true,
       packageTypeWasEdited: false,
+      nmfcWasTouched: false,
     });
   };
 
@@ -554,20 +611,29 @@ function LoadTab({
       },
       isNew: false,
       packageTypeWasEdited: false,
+      nmfcWasTouched: false,
     });
   };
 
-  const updateLineDraft = (field: keyof LoadLine, value: string) => {
-    setLineEditor((current) =>
-      current
-        ? {
-            ...current,
-            line: { ...current.line, [field]: value },
-            packageTypeWasEdited:
-              current.packageTypeWasEdited || field === "packageType",
-          }
-        : current,
-    );
+  /** Updates one draft value and recalculates density only for measurement changes. */
+  const updateLineDraft = <TField extends keyof LoadLine>(field: TField, value: LoadLine[TField]) => {
+    setLineEditor((current) => {
+      if (!current) return current;
+      const line = { ...current.line, [field]: value };
+      if (["units", "weight", "length", "width", "height"].includes(field)) {
+        line.pcfDensity = calculatePCF(line.length, line.width, line.height, line.weight, line.units);
+      }
+      if (field === "hazMat" && value === false) {
+        line.hazMatClass = "";
+        line.hazMatUN = "";
+        line.hazMatProperShippingName = "";
+        line.hazMatPackingGroup = "";
+        line.hazMatPhone = "";
+        line.hazMatContact = "";
+      }
+      return { ...current, line,
+        packageTypeWasEdited: current.packageTypeWasEdited || field === "packageType" };
+    });
   };
 
   const requestProductSearch = (value: string) => {
@@ -604,8 +670,14 @@ function LoadTab({
               freightClass: product.freightClass,
               nmfc: product.nmfc,
               hazMat: product.isHazmat,
-              hazMatClass: product.hazmatClass,
-              hazMatUN: product.hazmatUn,
+              hazMatClass: product.isHazmat ? product.hazmatClass : "",
+              hazMatUN: product.isHazmat ? product.hazmatUn : "",
+              hazMatProperShippingName: product.isHazmat ? product.hazmatProperShippingName : "",
+              hazMatPackingGroup: product.isHazmat ? product.hazmatGroup : "",
+              hazMatPhone: product.isHazmat ? product.hazmatPhone : "",
+              hazMatContact: product.isHazmat ? product.hazmatContactName : "",
+              stackable: product.isHazmat ? false : current.line.stackable,
+              pcfDensity: calculatePCF(product.length, product.width, product.height, product.weight, product.pallets),
             },
             packageTypeWasEdited: true,
           }
@@ -616,10 +688,20 @@ function LoadTab({
   const cancelLineEditing = () => {
     resetProductSearch();
     setLineEditor(null);
+    setHazmatDraft(null);
+  };
+
+  /** Reveals NMFC feedback without publishing the row draft. */
+  const markNmfcTouched = () => {
+    setLineEditor((current) => current ? { ...current, nmfcWasTouched: true } : current);
   };
 
   const saveLine = () => {
     if (!lineEditor || !lineEditorLine) return;
+    if (!isValidNmfc(lineEditorLine.nmfc)) {
+      markNmfcTouched();
+      return;
+    }
     const existingLine = lines.find((line) => line.id === lineEditorLine.id);
     const hasChanges =
       lineEditor.isNew ||
@@ -640,6 +722,7 @@ function LoadTab({
     setLines(nextLines);
     resetProductSearch();
     setLineEditor(null);
+    setHazmatDraft(null);
     if (hasChanges) {
       onRateInputsChange?.({
         shipments: nextLines.map(createRerateProduct),
@@ -787,18 +870,22 @@ function LoadTab({
             <tr>
               <th>Description</th>
               <th>Units</th>
-              <th>Package</th>
-              <th>Weight</th>
-              <th>Dimensions</th>
+              <th>Handling Unit</th>
+              <th>Pieces</th>
+              <th>Weight [lbs]</th>
               <th>Class</th>
+              <th>Dimensions [in]</th>
+              <th>PCF/Density</th>
               <th>NMFC</th>
+              <th>Stackable</th>
+              <th>Hazmat</th>
               <th aria-label='Actions' />
             </tr>
           </thead>
           <tbody>
             {!lines.length && !lineEditor?.isNew ? (
               <tr>
-                <td colSpan={8}>No load products were returned.</td>
+                <td colSpan={12}>No load products were returned.</td>
               </tr>
             ) : null}
             {lines.map((line) => {
@@ -809,6 +896,9 @@ function LoadTab({
                     <LoadLineInputs
                       line={lineEditorLine ?? lineEditor.line}
                       onChange={updateLineDraft}
+                      nmfcHasError={lineEditor.nmfcWasTouched && !isValidNmfc((lineEditorLine ?? lineEditor.line).nmfc)}
+                      onNmfcBlur={markNmfcTouched}
+                  onHazmatEdit={() => setHazmatDraft({ ...(lineEditorLine ?? lineEditor.line) })}
                       onProductSearch={requestProductSearch}
                       onProductSelect={selectProduct}
                       productOptions={productOptions}
@@ -823,10 +913,14 @@ function LoadTab({
                       <td>{line.description}</td>
                       <td>{line.units}</td>
                       <td>{line.packageType}</td>
+                      <td>{line.pieces}</td>
                       <td>{line.weight ? `${line.weight}lbs` : ""}</td>
-                      <td>{displayDimensions(line)}</td>
                       <td>{line.freightClass}</td>
+                      <td>{displayDimensions(line)}</td>
+                      <td>{line.pcfDensity}</td>
                       <td>{line.nmfc}</td>
+                      <td>{line.stackable ? "Yes" : "No"}</td>
+                      <td>{line.hazMat ? "Yes" : "No"}</td>
                     </>
                   )}
                   <td className='shipment-load-actions'>
@@ -889,6 +983,9 @@ function LoadTab({
                 <LoadLineInputs
                   line={lineEditorLine ?? lineEditor.line}
                   onChange={updateLineDraft}
+                  nmfcHasError={lineEditor.nmfcWasTouched && !isValidNmfc((lineEditorLine ?? lineEditor.line).nmfc)}
+                  onNmfcBlur={markNmfcTouched}
+                  onHazmatEdit={() => setHazmatDraft({ ...(lineEditorLine ?? lineEditor.line) })}
                   onProductSearch={requestProductSearch}
                   onProductSelect={selectProduct}
                   productOptions={productOptions}
@@ -900,7 +997,7 @@ function LoadTab({
                 />
               ) : (
                 <>
-                  {Array.from({ length: 7 }, (_, index) => (
+                  {Array.from({ length: 11 }, (_, index) => (
                     <td key={index}>
                       <span aria-hidden='true' />
                     </td>
@@ -943,6 +1040,37 @@ function LoadTab({
           </tbody>
         </table>
       </div>
+
+      <Modal title='Hazmat Details' open={Boolean(hazmatDraft)} centered width={500}
+        onCancel={() => setHazmatDraft(null)}
+        footer={<Button type='primary' onClick={() => {
+          if (!hazmatDraft) return;
+          setLineEditor((current) => current ? { ...current,
+            line: { ...hazmatDraft, hazMat: true, stackable: false } } : current);
+          setHazmatDraft(null);
+        }}>OK</Button>}>
+        <Form layout='vertical'>
+          {([
+            ["hazMatUN", "HAZMAT UN/NA#"],
+            ["hazMatProperShippingName", "Hazmat Proper Shipping Name"],
+            ["hazMatClass", "Hazmat Class"],
+            ["hazMatPackingGroup", "Hazmat Packing Group"],
+            ["hazMatPhone", "Hazmat Phone"],
+            ["hazMatContact", "Hazmat Contact"],
+          ] as const).map(([field, label]) => (
+            <Form.Item label={label} key={field}>
+              <Input aria-label={label} value={hazmatDraft?.[field] ?? ""}
+                maxLength={field === "hazMatPhone" ? 14 : undefined}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setHazmatDraft((current) => current ? { ...current,
+                    [field]: field === "hazMatPhone" ? formatPhoneNumber(value, current[field]) : value,
+                  } : current);
+                }} />
+            </Form.Item>
+          ))}
+        </Form>
+      </Modal>
 
       <div className='shipment-load-add-line'>
         <Button
