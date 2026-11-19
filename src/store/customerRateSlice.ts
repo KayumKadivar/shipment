@@ -891,6 +891,7 @@ const customerRateSlice = createSlice({
         state.loading = false;
 
         state.rates = action.payload.map((rate: any, index: number) => {
+          let hasExplicitGrossCharge = rate.grossCharge != null;
           let grossCharge = Number(rate.grossCharge) || 0;
           let grossSellAmount = (rate as any).sellGrossCharge != null
             ? Number((rate as any).sellGrossCharge)
@@ -922,6 +923,7 @@ const customerRateSlice = createSlice({
                 name.includes("freight")
               ) {
                 grossCharge = amount;
+                hasExplicitGrossCharge = true;
                 const costSell = cd.sellAmount != null ? Number(cd.sellAmount) : (cd.sell != null ? Number(cd.sell) : undefined);
                 if (costSell !== undefined) {
                   grossSellAmount = costSell;
@@ -986,7 +988,7 @@ const customerRateSlice = createSlice({
               ? Math.round((grossSellAmount - (discountSell ?? discount) + (fuelSell ?? fuelSurcharge) + otherAccessorials.reduce((acc, c) => acc + (c.sellCharge ?? c.accessorialCharge ?? 0), 0)) * 100) / 100
               : price;
 
-          if (!grossCharge && price > 0) {
+          if (!hasExplicitGrossCharge && price > 0) {
             grossCharge = price;
           }
 
@@ -1034,6 +1036,7 @@ const customerRateSlice = createSlice({
         state.loading = false;
 
         state.rates = action.payload.map((rate: any, index: number) => {
+          let hasExplicitGrossCharge = rate.grossCharge != null;
           let grossCharge = Number(rate.grossCharge) || 0;
           let grossSellAmount = (rate as any).sellGrossCharge != null
             ? Number((rate as any).sellGrossCharge)
@@ -1065,6 +1068,7 @@ const customerRateSlice = createSlice({
                 name.includes("freight")
               ) {
                 grossCharge = amount;
+                hasExplicitGrossCharge = true;
                 const costSell = cd.sellAmount != null ? Number(cd.sellAmount) : (cd.sell != null ? Number(cd.sell) : undefined);
                 if (costSell !== undefined) {
                   grossSellAmount = costSell;
@@ -1129,7 +1133,7 @@ const customerRateSlice = createSlice({
               ? Math.round((grossSellAmount - (discountSell ?? discount) + (fuelSell ?? fuelSurcharge) + otherAccessorials.reduce((acc, c) => acc + (c.sellCharge ?? c.accessorialCharge ?? 0), 0)) * 100) / 100
               : price;
 
-          if (!grossCharge && price > 0) {
+          if (!hasExplicitGrossCharge && price > 0) {
             grossCharge = price;
           }
 

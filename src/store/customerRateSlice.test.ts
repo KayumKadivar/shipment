@@ -95,6 +95,29 @@ describe("customer rate API behavior", () => {
     expect(state.error).toBe("Rating service unavailable");
   });
 
+  it("fetchCarrierRates_whenFrtAmountIsZero_preservesZeroGrossChargeInsteadOfReplacingWithPrice", () => {
+    const action = {
+      type: "customerRate/fetchCarrierRates/fulfilled",
+      payload: [
+        {
+          scac: "XGSI",
+          carrierName: "Xpress Global Systems LLC",
+          quoteCostDetails: [
+            { accCode: "FRT", accName: "Freight", amount: 0.0, sellAmount: 0.0 },
+            { accCode: "FSC", accName: "Fuel Surcharge", amount: 71.05, sellAmount: 71.05 },
+            { accCode: "PALLET", accName: "Palletized Goods", amount: 254.25, sellAmount: 254.25 },
+          ],
+        },
+      ],
+      meta: { arg: {} },
+    };
+
+    const state = reducer(undefined, action as any);
+    expect(state.rates).toHaveLength(1);
+    expect(state.rates[0].grossCharge).toBe(0);
+    expect(state.rates[0].price).toBe(325.3);
+  });
+
   
 //   it("saveCustomerQuote_whenStateContainsQuote_mapsShipmentsRatesAndCostDetails", async () => {
 //     const postRequest = vi.spyOn(axios, "post").mockResolvedValue(

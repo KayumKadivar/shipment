@@ -1143,6 +1143,7 @@ const [clientMarkupConfig, setClientMarkupConfig] = useState<any>(null);
             (rawCarrier.name && r.carrierName?.toLowerCase() === rawCarrier.name?.toLowerCase())
         );
 
+    let hasExplicitGrossCharge = rawCarrier.grossCharge != null || matchingQuoteResult?.grossCharge != null;
     let grossCharge = Number(rawCarrier.grossCharge ?? matchingQuoteResult?.grossCharge) || 0;
     let grossSellAmount = Number(rawCarrier.grossSellAmount ?? rawCarrier.grossSell ?? matchingQuoteResult?.grossSellAmount) || undefined;
     let discount = Number(rawCarrier.discount ?? matchingQuoteResult?.discount) || 0;
@@ -1169,6 +1170,7 @@ const [clientMarkupConfig, setClientMarkupConfig] = useState<any>(null);
           name === "freight"
         ) {
           if (rawCarrier.grossCharge == null) grossCharge = amount;
+          hasExplicitGrossCharge = true;
           if (
             sellAmount !== undefined &&
             rawCarrier.grossSellAmount == null &&
@@ -1223,7 +1225,7 @@ const [clientMarkupConfig, setClientMarkupConfig] = useState<any>(null);
       Number(rawCarrier.totalShipmentCost ?? matchingQuoteResult?.totalShipmentCost) ||
       Number(rawCarrier.netCharge ?? matchingQuoteResult?.netCharge) ||
       0;
-    if (!grossCharge && price > 0) {
+    if (!hasExplicitGrossCharge && price > 0) {
       grossCharge = price;
     }
 
