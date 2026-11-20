@@ -1153,6 +1153,7 @@ const [clientMarkupConfig, setClientMarkupConfig] = useState<any>(null);
     const accessorialCharges: { accessorialDescription?: string; accessorialCharge?: number; sellCharge?: number; code?: string }[] = [];
 
     const costDetails = rawCarrier.quoteCostDetails || rawCarrier.costDetails || (!isExplicitlySelected ? matchingQuoteResult?.quoteCostDetails : undefined);
+
     if (Array.isArray(costDetails) && costDetails.length > 0) {
       costDetails.forEach((cd: any) => {
         const code = (cd.accCode || cd.code || "").trim().toUpperCase();
@@ -1199,18 +1200,24 @@ const [clientMarkupConfig, setClientMarkupConfig] = useState<any>(null);
             fuelSell = sellAmount;
           }
         } else {
-          accessorialCharges.push({
-            code: cd.accCode || cd.code || "ACC",
-            accessorialDescription: cd.accName || cd.name || cd.description || "Accessorial",
-            accessorialCharge: amount,
-            sellCharge: sellAmount !== undefined ? sellAmount : amount,
-          });
+          if (!Array.isArray(rawCarrier.accessorialCharges) || rawCarrier.accessorialCharges.length === 0) {
+            accessorialCharges.push({
+              code: cd.accCode || cd.code || "ACC",
+              accessorialDescription: cd.accName || cd.name || cd.description || "Accessorial",
+              accessorialCharge: amount,
+              sellCharge: sellAmount !== undefined && Number(sellAmount) > 0 ? Number(sellAmount) : amount,
+            });
+          }
         }
       });
-    } else if (Array.isArray(rawCarrier.accessorialCharges)) {
+    }
+
+    if (Array.isArray(rawCarrier.accessorialCharges) && rawCarrier.accessorialCharges.length > 0) {
       rawCarrier.accessorialCharges.forEach((ac: any) => {
         const amt = Number(ac.accessorialCharge ?? ac.amount) || 0;
-        const sellAmt = ac.sellCharge != null ? Number(ac.sellCharge) : (ac.sellAmount != null ? Number(ac.sellAmount) : amt);
+        const sellAmt = ac.sellCharge != null && Number(ac.sellCharge) > 0
+          ? Number(ac.sellCharge)
+          : (ac.sellAmount != null && Number(ac.sellAmount) > 0 ? Number(ac.sellAmount) : amt);
         accessorialCharges.push({
           code: ac.code || ac.accessorialCode || "ACC",
           accessorialDescription: ac.accessorialDescription || ac.description || ac.accName || "Accessorial",

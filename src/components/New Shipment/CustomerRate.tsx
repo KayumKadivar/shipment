@@ -656,7 +656,12 @@ const CustomerRate: React.FC<CustomerRateProps> = ({
       // 4. Accessorial charges
       accessorials.forEach((acc, idx) => {
         const amt = Number(acc.accessorialCharge) || 0;
-        const sellAmt = (acc as any).sellCharge !== undefined ? Number((acc as any).sellCharge) : (amt > 0 ? amt : undefined);
+        const sellAmt =
+          (acc as any).sellCharge !== undefined && Number((acc as any).sellCharge) > 0
+            ? Number((acc as any).sellCharge)
+            : amt > 0
+              ? amt
+              : undefined;
         const accId = `line-acc-${idx}`;
         if (amt > 0 && !removedLineIds.includes(accId)) {
           const customBuy = editedAmounts[accId]?.buyAmount;

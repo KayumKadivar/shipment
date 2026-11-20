@@ -408,7 +408,7 @@ export const getChargeSellDetails = (rate: CarrierRate) => {
         accessorialDescription: ac.accessorialDescription || "Accessorial",
         accessorialCharge: rate.isNetSellActive
           ? 0
-          : (ac.sellCharge !== undefined ? ac.sellCharge : (ac.accessorialCharge ?? 0)),
+          : (ac.sellCharge !== undefined && Number(ac.sellCharge) > 0 ? Number(ac.sellCharge) : (ac.accessorialCharge ?? 0)),
       })),
     };
   }
@@ -1342,6 +1342,13 @@ function Rate() {
           discountSell: rate.discountSell,
           ppsFreight: rate.ppsFreight,
           ppsFuel: rate.ppsFuel,
+          accessorialCharges: (rate.accessorialCharges || []).map((ac) => ({
+            ...ac,
+            sellCharge:
+              ac.sellCharge !== undefined && Number(ac.sellCharge) > 0
+                ? Number(ac.sellCharge)
+                : Number(ac.accessorialCharge) || 0,
+          })),
         },
         reference: refToSend,
       },

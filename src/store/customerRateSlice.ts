@@ -956,18 +956,24 @@ const customerRateSlice = createSlice({
                   }
                 }
               } else {
+                const amt = amount;
+                const sellAmt = cd.sellAmount != null && Number(cd.sellAmount) > 0
+                  ? Number(cd.sellAmount)
+                  : amt;
                 otherAccessorials.push({
                   code: cd.accCode || cd.code || "ACC",
                   accessorialDescription: cd.accName || cd.name || cd.description || "Accessorial",
-                  accessorialCharge: amount,
-                  sellCharge: cd.sellAmount != null ? Number(cd.sellAmount) : amount,
+                  accessorialCharge: amt,
+                  sellCharge: sellAmt,
                 });
               }
             });
           } else if (Array.isArray(rate.accessorialCharges)) {
             rate.accessorialCharges.forEach((ac: any) => {
               const amt = Number(ac.accessorialCharge ?? ac.amount) || 0;
-              const sellAmt = ac.sellCharge != null ? Number(ac.sellCharge) : (ac.sellAmount != null ? Number(ac.sellAmount) : amt);
+              const sellAmt = ac.sellCharge != null && Number(ac.sellCharge) > 0
+                ? Number(ac.sellCharge)
+                : (ac.sellAmount != null && Number(ac.sellAmount) > 0 ? Number(ac.sellAmount) : amt);
               otherAccessorials.push({
                 code: ac.code || ac.accessorialCode || "ACC",
                 accessorialDescription: ac.accessorialDescription || ac.description || ac.accName || "Accessorial",
@@ -1101,18 +1107,24 @@ const customerRateSlice = createSlice({
                   }
                 }
               } else {
+                const amt = amount;
+                const sellAmt = cd.sellAmount != null && Number(cd.sellAmount) > 0
+                  ? Number(cd.sellAmount)
+                  : amt;
                 otherAccessorials.push({
                   code: cd.accCode || cd.code || "ACC",
                   accessorialDescription: cd.accName || cd.name || cd.description || "Accessorial",
-                  accessorialCharge: amount,
-                  sellCharge: cd.sellAmount != null ? Number(cd.sellAmount) : amount,
+                  accessorialCharge: amt,
+                  sellCharge: sellAmt,
                 });
               }
             });
           } else if (Array.isArray(rate.accessorialCharges)) {
             rate.accessorialCharges.forEach((ac: any) => {
               const amt = Number(ac.accessorialCharge ?? ac.amount) || 0;
-              const sellAmt = ac.sellCharge != null ? Number(ac.sellCharge) : (ac.sellAmount != null ? Number(ac.sellAmount) : amt);
+              const sellAmt = ac.sellCharge != null && Number(ac.sellCharge) > 0
+                ? Number(ac.sellCharge)
+                : (ac.sellAmount != null && Number(ac.sellAmount) > 0 ? Number(ac.sellAmount) : amt);
               otherAccessorials.push({
                 code: ac.code || ac.accessorialCode || "ACC",
                 accessorialDescription: ac.accessorialDescription || ac.description || ac.accName || "Accessorial",

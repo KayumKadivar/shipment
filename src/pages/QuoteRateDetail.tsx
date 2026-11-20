@@ -372,11 +372,16 @@ function QuoteRateDetail() {
                 }
               }
             } else {
+              const amt = amount;
+              const sellAmt =
+                (cd as any).sellAmount != null && Number((cd as any).sellAmount) > 0
+                  ? Number((cd as any).sellAmount)
+                  : amt;
               otherAccessorials.push({
                 code: cd.accCode || "ACC",
                 accessorialDescription: cd.accName || cd.accCode || "Accessorial",
-                accessorialCharge: amount,
-                sellCharge: (cd as any).sellAmount != null ? Number((cd as any).sellAmount) : amount,
+                accessorialCharge: amt,
+                sellCharge: sellAmt,
               });
             }
           });
@@ -616,6 +621,13 @@ function QuoteRateDetail() {
           discountSell: rate.discountSell,
           ppsFreight: rate.ppsFreight,
           ppsFuel: rate.ppsFuel,
+          accessorialCharges: (rate.accessorialCharges || []).map((ac) => ({
+            ...ac,
+            sellCharge:
+              ac.sellCharge !== undefined && Number(ac.sellCharge) > 0
+                ? Number(ac.sellCharge)
+                : Number(ac.accessorialCharge) || 0,
+          })),
         },
         reference,
       },
